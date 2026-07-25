@@ -12,9 +12,7 @@ public class ConfigManager {
 
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
-        builder.comment("FontaineRepublic Server Configuration",
-                "Phase 0 — Core framework placeholder.",
-                "Business configuration will be added in subsequent phases.");
+        // Phase 0: empty configuration. Business entries added in subsequent phases.
         SPEC = builder.build();
     }
 
