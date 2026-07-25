@@ -1,0 +1,25 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="fontainerepublic"
+version="${version}"
+displayName="FontaineRepublic"
+description="枫丹共和国 - 国家模拟/RPG服务器核心Mod"
+authors="Fireflylover"
+logoFile=""
+
+[[dependencies.fontainerepublic]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.fontainerepublic]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.20.2)"
+    ordering="NONE"
+    side="BOTH"
