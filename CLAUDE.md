@@ -10,7 +10,7 @@ Follow:
 
 Current phase:
 
-Phase 0 Step 2
+Phase 0 Step 3
 
 Allowed without confirmation:
 
