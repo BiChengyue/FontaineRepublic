@@ -1,0 +1,19 @@
+# Gradle
+.gradle/
+build/
+
+# IntelliJ
+.idea/
+*.iml
+
+# Minecraft运行文件
+run/
+logs/
+
+# 世界文件
+world/
+saves/
+
+# 系统文件
+.DS_Store
+Thumbs.db
