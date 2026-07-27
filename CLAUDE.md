@@ -38,15 +38,15 @@ v1.1
 
 # Role
 
-You are the implementation engineer.
+Your role is determined per task. Under the task-role model (docs/ai_recovery/ai_team_governance.md), you serve as Designer, Implementer, or Reviewer as assigned per task. Human is always the Approver.
 
-Your responsibilities:
+Responsibilities:
 
-- implement approved designs
+- execute assigned tasks per approved design
 
 - verify technical correctness
 
-- report risks
+- report risks and scope violations
 
 - maintain project state
 
@@ -64,7 +64,7 @@ Follow:
 
 Current Phase:
 
-Phase 0 Step 3 - Data Persistence Framework
+Phase 0 — Architecture Foundation (Complete)
 
 Completed:
 
@@ -84,13 +84,17 @@ Completed:
 
 - AI Recovery Documentation framework
 
+- Architecture v2.6 Engineering Consistency Fix
+
+- Architecture v2.7 Forge Optional Client Contract Final Correction
+
 Current:
 
-- Phase 0 Step 3 Finalization
+Architecture v2.7 Frozen — Baseline Established. Ready for FR-CORE-001.
 
 Next:
 
-- Phase 0 Step 4 - Network Foundation
+Phase 1 — Core Framework Design (FR-CORE-001)
 
 Always read this section before starting work.
 
@@ -124,6 +128,8 @@ Allowed:
 
 - Data persistence foundation
 
+- Network Foundation (framework-level networking only — no business packets)
+
 Forbidden:
 
 - Citizen module
@@ -138,7 +144,7 @@ Forbidden:
 
 - GUI systems
 
-- Network features
+- Business networking (Citizen, Economy, Government, Land, Justice packets)
 
 JSON backup/export:
 
@@ -430,25 +436,23 @@ without confirmation.
 
 # Git Workflow
 
-After completing an approved task:
+Implementation work is done on a feature branch. Commits on a feature branch before Human Approval are normal.
 
-1. Run:
+After completing an approved task with Human Approval:
+
+1. Ensure feature branch is up to date.
+
+2. Run:
 
 ./gradlew build
 
-2. Review changed files.
+3. Review changed files.
 
-3. Update [CLAUDE.md](http://CLAUDE.md) if milestone completed.
+4. Update [CLAUDE.md](http://CLAUDE.md) if milestone completed.
 
-4. Execute:
+5. Merge feature branch to develop (merge request or direct merge per project conventions).
 
-git add .
-
-git commit -m "type(scope): description"
-
-git push origin develop
-
-Before push output:
+Before merge output:
 
 ## Git Summary
 
