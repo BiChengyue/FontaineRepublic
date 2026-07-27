@@ -58,7 +58,7 @@
 - **Decision**: Use two distinct AI roles — ChatGPT for architecture/design/review, Claude Code for implementation.
 - **Rejected alternatives**: Single AI for all tasks, human-only review
 - **Reason**: Separation of concerns improves quality. Architect AI reviews before implementation AI builds. Reduces blind spots from a single AI's context limits.
-- **Status**: **Accepted** — permanently binding
+- **Status**: **Superseded by ADR-010**
 
 ---
 
@@ -89,3 +89,13 @@
 - **Rejected alternatives**: All modules equally dependent, core as a pure utility library
 - **Reason**: Core must remain stable as business modules evolve. Business modules can depend on core, but not vice versa.
 - **Status**: **Accepted** — permanently binding
+
+---
+
+## ADR-010: Three-AI Collaboration Model
+
+- **Date**: 2026-07-26
+- **Decision**: Extend the Two-AI model (ADR-006) to a Three-AI model. Retains ADR-006's Design/Implementation Separation principle, and introduces additional governance principles. Extends by adding Codex as Repository Principal Engineer for independent repository-level review.
+- **Rejected alternatives**: Single-AI model, two-AI with human-only review, fixed-role assignment regardless of task
+- **Reason**: Three-AI model provides independent validation at each stage. Task-role allocation allows flexible distribution based on workload and expertise. Separation of review and approval prevents single-AI blind spots. Human authority prevents AI-driven scope creep.
+- **Status**: **Accepted**
