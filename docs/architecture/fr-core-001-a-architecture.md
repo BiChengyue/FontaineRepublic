@@ -1,9 +1,10 @@
 # FR-CORE-001-A Core Framework Architecture Document
 
-> **Status:** Draft Design — Revision-11 (For Independent Review)
+> **Status:** Decision-Synchronized Design — Revision-13 (Pending Human Design Freeze)
 > **Authority:** Architecture v2.7 (Frozen Baseline)
 > **This document is subordinate to Architecture v2.7. It does not modify or reinterpret the frozen baseline.**
-> **All decisions herein are proposed for Human review. Nothing in this document constitutes approval.**
+> **Decision synchronization:** DEC-001, DEC-003, DEC-004, DEC-005, and MIGRATION-01 reflect Human decisions recorded by FR-CORE-001-A-DECISION-ACTIVATION-01.
+> **Authorization boundary:** These decisions authorize architecture synchronization and implementation preparation only. Java implementation and Human Design Freeze remain separately gated.
 > **Freeze identity:** A Human Design Freeze must reference one unique Git commit or blob containing the reviewed candidate. The current draft does not claim to be frozen.
 
 ---
@@ -50,10 +51,10 @@ ModuleDefinition is an immutable record created during Mod Lifecycle registratio
 | Field | Source | Purpose |
 |-------|--------|---------|
 | `ModuleId id` | `register()` parameter | Authoritative identifier |
-| `ModuleMetadata metadata` | `register()` parameter | Immutable static description (display name, description, version). Not a runtime authority source. |
+| `ModuleMetadata metadata` | `register()` parameter | Immutable static description stored in ModuleDefinition (display name, description, version). Not runtime state and not a runtime authority source. |
 | `Set<ModuleId> requiredDependencies` | Provided at registration | Required dependency declarations — static contract |
 | `Set<ModuleId> optionalDependencies` | Provided at registration | Optional dependency declarations — static contract |
-| `int priority` | Provided at registration | Immutable static priority value owned by ModuleDefinition; consumed only by DependencyResolver if DEC-005 retains priority ordering |
+| `int priority` | Provided at registration | Immutable static priority value owned by ModuleDefinition; consumed only by DependencyResolver as the DEC-005 tiebreaker |
 | `IModuleFactory factory` | Registration | Creates a new IModule instance per server lifecycle. Never called during registration — only at server start. |
 
 **ModuleDefinition does NOT hold:**
@@ -62,18 +63,11 @@ ModuleDefinition is an immutable record created during Mod Lifecycle registratio
 - Resolved dependencies (determined per server by DependencyResolver)
 - Runtime data of any kind
 
-**Static contract ownership — proposed migration model:**
+**Static contract ownership — approved FR-CORE-001 migration model:**
 
-The registration-metadata model below is a **proposed migration** and is not authorized to replace the frozen Architecture v2.7 contract. Architecture v2.7 currently describes dependency and priority declarations through `IModule` methods. FR-CORE-001-A requires a future Human migration decision if static contract ownership changes from `IModule` methods to registration metadata.
+Architecture v2.7 currently describes dependency and priority declarations through `IModule` methods. MIGRATION-01 authorizes FR-CORE-001 to move static module contract authority to registration metadata stored in ModuleDefinition.
 
-Until that migration decision is confirmed:
-
-- Architecture v2.7 remains authoritative;
-- explicit registration metadata must not be treated as an active replacement contract;
-- implementation must not silently choose between `IModule` methods and registration metadata;
-- the registration-metadata fields and rules in this document are candidate design input only.
-
-If the migration is approved, all static contract properties are provided explicitly at registration and ModuleDefinition becomes the sole authoritative source. If it is rejected, the implementation must retain the Architecture v2.7 `IModule` declaration model and revise this document before implementation.
+Under the approved migration direction, all static contract properties are provided explicitly at registration and ModuleDefinition becomes the sole authoritative source for FR-CORE-001. This is an FR-CORE-001 migration direction, not a modification or reinterpretation of the frozen Architecture v2.7 baseline. Java implementation remains separately gated by an approved implementation task.
 
 | Property | Source | Stored In |
 |----------|--------|-----------|
@@ -131,12 +125,16 @@ Step 1: Module calls register(id, factory, metadata, requiredDependencies, optio
 
 Step 2: Registry validates:
           - ID: non-null, non-empty, valid format, no duplicate
+          - Metadata: non-null; every field designated as required by the
+            ModuleMetadata contract is non-null and non-blank
           - Dependencies: each dependency ID has valid format
           - Priority: valid integer range
 
 Step 3: On success, stores immutable ModuleDefinition with:
           id + factory + metadata + requiredDependencies + optionalDependencies + priority
 ```
+
+This is a basic validity check only. Optional descriptive fields may be empty where the existing `ModuleMetadata` contract permits it; registration validation does not introduce a new metadata field, schema, or runtime interpretation. Invalid required metadata rejects the registration, and no ModuleDefinition is stored.
 
 **No IModule instance is created during registration.** The factory is stored in ModuleDefinition and called only during server start (see 2.2). The IModule interface's `getName()`, `getRequiredDependencies()`, `getOptionalDependencies()`, and `getPriority()` methods are not used during registration — the static contract is explicit.
 
@@ -148,7 +146,7 @@ The ModuleRegistry operates in two distinct lifecycle scopes:
 
 | Phase | Action |
 |-------|--------|
-| Registration Window (FMLCommonSetupEvent) | Modules call `register(id, factory, metadata, requiredDeps, optionalDeps, priority)`. Registry validates ID uniqueness and format, dependency ID format, and priority range. No IModule instance is created. On success, stores immutable ModuleDefinition with explicit static contract. |
+| Registration Window (FMLCommonSetupEvent) | Modules call `register(id, factory, metadata, requiredDeps, optionalDeps, priority)`. Registry validates ID uniqueness and format, basic required ModuleMetadata validity, dependency ID format, and priority range. No IModule instance is created. On success, stores immutable ModuleDefinition with explicit static contract. |
 | Registration Closed (after FMLCommonSetupEvent post-queue) | Registry refuses new registrations. ModuleDefinition set is finalized for the lifetime of the mod container. No runtime state is created at this point. |
 
 **Sever Lifecycle (runs per server start — ModuleDefinitions are read-only; new containers and instances are created):**
@@ -159,7 +157,7 @@ The ModuleRegistry operates in two distinct lifecycle scopes:
 | Initialization (ServerStartingEvent) | CoreManager drives the full creation pipeline: DataManager.init() prepares persistence; DependencyResolver produces the structural order; then CoreManager processes each ModuleDefinition deterministically. If a required dependency is already unavailable, CoreManager creates a status-only RuntimeModuleContainer, records the REGISTERED → DEPENDENCY_FAILURE transition, and skips factory, validation, and init. Otherwise CoreManager calls `factory.createInstance()`, validates `instance.getName() == definition.id`, creates a RuntimeModuleContainer with `Optional.of(instance)`, and initializes it in resolved order. |
 | Active Runtime | Registry supports query API (getModuleDefinition, hasModule). |
 | Shutdown | Registry is read-only during shutdown. |
-| Post-Shutdown | RuntimeModuleContainers reach STOPPED or DEPENDENCY_FAILURE. CLEANUP → TERMINATED ownership and final disposal timing follow DEC-004; no event is assumed before Human confirmation. ModuleDefinitions remain registered for the next server lifecycle. |
+| Post-Shutdown (`ServerStoppedEvent`) | CoreManager closes RuntimeAvailabilityResult, directly discards DEPENDENCY_FAILURE containers, executes STOPPED → CLEANUP → TERMINATED for eligible containers, and disposes their runtime instances. ModuleDefinitions remain registered for the next server lifecycle. |
 
 **Key rules:**
 - Registration with a duplicate ID is rejected. The registry logs the conflict and returns a failure indicator. First registration wins; second is discarded. Duplicate ID is a **registration failure** — no ModuleDefinition is created for the rejected module.
@@ -168,7 +166,7 @@ The ModuleRegistry operates in two distinct lifecycle scopes:
 - The registry and its ModuleDefinitions persist across server starts. Server lifecycle events (start/stop) do not clear module definitions.
 - ModuleDefinition owns the immutable static priority value.
 - ModuleRegistry stores ModuleDefinitions, including each definition's priority field, but does not interpret or apply priority.
-- DependencyResolver is the only component that consumes priority for ordering, and only if DEC-005 retains priority as a tiebreaker.
+- DependencyResolver is the only component that consumes priority for ordering, as the accepted DEC-005 tiebreaker.
 - Dependency resolution does NOT occur during Mod Lifecycle. It runs per Server Lifecycle (see 2.3).
 
 #### 2.1.3 Module ID Rules
@@ -184,7 +182,7 @@ The ModuleRegistry operates in two distinct lifecycle scopes:
 ### 2.2 RuntimeModuleContainer
 
 **Responsibility:**
-Represent the per-server runtime status of a ModuleDefinition. A container stores lifecycle state, resolved dependencies, failure information, shutdown tracking, and an **explicitly optional** IModule instance. RuntimeModuleContainers are created during ServerStartingEvent and discarded only at their defined terminal/disposal boundary. For STOPPED containers, that boundary follows the cleanup event selected by DEC-004.
+Represent the per-server runtime status of a ModuleDefinition. A container stores lifecycle state, resolved dependencies, failure information, shutdown tracking, and an **explicitly optional** IModule instance. RuntimeModuleContainers are created during ServerStartingEvent. Eligible STOPPED containers complete cleanup and are discarded at ServerStoppedEvent according to DEC-004.
 
 There is at most one RuntimeModuleContainer per structurally resolvable ModuleDefinition per server start. Structurally unresolvable definitions receive no container. A container that has entered TERMINATED or DEPENDENCY_FAILURE is never reused.
 
@@ -224,10 +222,12 @@ There is at most one RuntimeModuleContainer per structurally resolvable ModuleDe
 └────────────────────────────────────────────────────────────┘
                               │
                               ▼
-Post-shutdown disposal: event ownership for STOPPED containers follows DEC-004; no event is assumed before Human confirmation.
+Post-shutdown disposal: ServerStoppedEvent owns cleanup and disposal for eligible STOPPED containers under DEC-004.
 Next server start: new containers + new instances created
 from preserved ModuleDefinitions.
 ```
+
+**Runtime creation failure propagation clarification:** When factory creation, runtime Module ID validation, or module initialization fails, CoreManager records the directly failed module according to the existing failure rule. As processing continues in deterministic resolved order, every later module whose required dependency is unavailable follows the Section 2.4 propagation algorithm and enters DEPENDENCY_FAILURE. This clarification does not change the existing dependency propagation contract or create an additional failure path.
 
 **Contents:**
 
@@ -253,6 +253,12 @@ from preserved ModuleDefinitions.
 
 `RuntimeModuleContainer` never uses `null` to represent absence. A `requireInstance()`-style internal accessor must reject DEPENDENCY_FAILURE and TERMINATED states with an explicit lifecycle error.
 
+**DEPENDENCY_FAILURE atomic publication contract:**
+- CoreManager performs status-only container construction, REGISTERED → DEPENDENCY_FAILURE transition validation, failure-record assignment, and RuntimeAvailabilityResult update as one internal atomic lifecycle operation.
+- A container with `REGISTERED + Optional.empty()` is an unpublished construction detail only. It must not be inserted into any externally queryable collection or returned by any query interface.
+- CoreManager publishes the container and its corresponding availability record only after the DEPENDENCY_FAILURE transition and failure data are complete.
+- External readers may observe either no published container for that module yet or the completed DEPENDENCY_FAILURE state. They must never observe an intermediate REGISTERED container without an instance.
+
 **State ownership model:**
 
 | Component | Role |
@@ -275,7 +281,7 @@ Given the set of registered ModuleDefinitions for the current server lifecycle, 
 - Runs **once per server lifecycle**, during ServerStartingEvent (after DataManager.init())
 - Operates on the current set of ModuleDefinitions from the registry
 - Reads dependency declarations from each ModuleDefinition (captured at registration time)
-- Reads ModuleDefinition priority only as an ordering input if DEC-005 retains priority as a tiebreaker; it does not own or mutate the stored value
+- Reads ModuleDefinition priority only as the DEC-005 ordering tiebreaker; it does not own or mutate the stored value
 - Produces an ordering valid only for the current server lifecycle
 - Does NOT run during Mod Lifecycle (FMLCommonSetupEvent)
 
@@ -493,7 +499,7 @@ For phase in [RUNTIME_CREATION, INITIALIZATION]:
 
 ## 3. Lifecycle Model
 
-The lifecycle model governs a **single Server Lifecycle** within one set of RuntimeModuleContainers and IModule instances. Shutdown brings initialized instances to STOPPED; final CLEANUP, TERMINATED, and disposal timing follow DEC-004. After the selected terminal/disposal boundary, a new server start creates fresh containers and fresh instances.
+The lifecycle model governs a **single Server Lifecycle** within one set of RuntimeModuleContainers and IModule instances. ServerStoppingEvent brings initialized instances to STOPPED through exactly-once shutdown. Under DEC-004, ServerStoppedEvent owns final CLEANUP, TERMINATED, and eligible container disposal. A new server start creates fresh containers and fresh instances.
 
 ### 3.1 State Machine
 
@@ -516,13 +522,13 @@ CLEANUP → TERM (normal lifecycle only)
 - **DUPLICATE_ID is NOT a container state.** Duplicate ID is a registration failure — no ModuleDefinition is created, no container exists for the rejected module.
 - **CoreManager is the sole shutdown invoker.** `shutdown()` is guarded by `shutdownExecuted` and may run at most once for each runtime instance.
 - **DEPENDENCY_FAILURE executes neither `init()` nor `shutdown()`.** The container may internally hold no instance (failure known in Phase 1) or an uninitialized instance (upstream init failed in Phase 2), but instance access and lifecycle invocation are forbidden in both cases.
-- **INIT_FAILURE shutdown is immediate and exactly once.** CoreManager atomically claims `shutdownExecuted`, transitions INIT_FAILURE → STOPPING, invokes `shutdown()` once for partial-resource release, and moves the container to STOPPED. ServerStoppingEvent must not invoke it again. Any later CLEANUP → TERMINATED transition is owned by the event selected through DEC-004.
+- **INIT_FAILURE shutdown is immediate and exactly once.** CoreManager atomically claims `shutdownExecuted`, transitions INIT_FAILURE → STOPPING, invokes `shutdown()` once for partial-resource release, and moves the container to STOPPED. ServerStoppingEvent must not invoke it again. ServerStoppedEvent later owns CLEANUP → TERMINATED under DEC-004.
 - **ServerStoppingEvent shuts down only successfully initialized containers** where `initializationSucceeded == true` and `shutdownExecuted == false`, in reverse successful initialization order.
 - **DEPENDENCY_FAILURE is a terminal exit, not on the CLEANUP/TERM path.** It is discarded at server stop without passing through CLEANUP or reaching TERMINATED.
-- **The CLEANUP → TERMINATED path applies only to successfully initialized modules and INIT_FAILURE modules that completed their exactly-once shutdown. Its Forge event location is not selected by this draft.**
+- **The CLEANUP → TERMINATED path applies only to successfully initialized modules and INIT_FAILURE modules that completed their exactly-once shutdown. ServerStoppedEvent owns this path under DEC-004.**
 - **A container that has reached TERMINATED or DEPENDENCY_FAILURE is never reused.** On the next server start, new containers and new IModule instances are created from the preserved ModuleDefinitions.
 
-**Cleanup ownership gate:** Cleanup execution location is determined by DEC-004. Before DEC-004 approval, no implementation assumption is made. The state machine defines `STOPPED → CLEANUP → TERMINATED` semantics, but neither `ServerStoppingEvent` nor `ServerStoppedEvent` owns that transition until Human confirmation of DEC-004.
+**Cleanup ownership:** DEC-004 assigns `STOPPED → CLEANUP → TERMINATED` to ServerStoppedEvent. ServerStoppingEvent owns shutdown only and must not execute final cleanup.
 
 ### 3.2 Server Restart Flow
 
@@ -558,7 +564,7 @@ Every Server Start (initial start and restart use the identical algorithm):
             → success: initializationSucceeded = true; state = ACTIVE
             → failure: state = INIT_FAILURE; record/propagate failure;
               CoreManager executes exactly-once shutdown immediately;
-              state = STOPPED; later cleanup location remains pending DEC-004
+              state = STOPPED; ServerStoppedEvent performs later cleanup under DEC-004
 
     ServerStoppingEvent, reverse successful initialization order:
       For each container where initializationSucceeded && !shutdownExecuted:
@@ -566,18 +572,17 @@ Every Server Start (initial start and restart use the identical algorithm):
         ACTIVE → STOPPING; call shutdown() once; state = STOPPED
       DEPENDENCY_FAILURE and already-shut-down INIT_FAILURE containers are skipped
 
-    Post-shutdown cleanup:
-      STOPPED → CLEANUP → TERMINATED is executed exactly once at the event
-      selected by DEC-004. Before Human confirmation, no Forge event owns it.
+    ServerStoppedEvent post-shutdown cleanup:
+      STOPPED → CLEANUP → TERMINATED is executed exactly once
+      for eligible containers under DEC-004.
 
 Post-shutdown boundary:
   DEPENDENCY_FAILURE containers are discarded without lifecycle calls
   CoreManager closes and discards RuntimeAvailabilityResult at ServerStoppedEvent
   independently of module-container cleanup and DEC-004
-  STOPPED containers and their instances remain available until the
-  cleanup/disposal event selected by DEC-004
-  At that selected event, eligible containers complete CLEANUP → TERMINATED and
-  eligible containers are discarded
+  STOPPED containers and their instances remain available until ServerStoppedEvent
+  At ServerStoppedEvent, eligible containers complete CLEANUP → TERMINATED and
+  are discarded
   ModuleRegistry and ModuleDefinitions remain preserved
 
 Next Server Start:
@@ -586,7 +591,7 @@ Next Server Start:
 
 **Rules:**
 - Containers in DEPENDENCY_FAILURE are discarded at server stop — no CLEANUP or TERMINATED reached
-- RuntimeAvailabilityResult is closed and discarded by CoreManager at `ServerStoppedEvent`; it is not persistent, does not cross server lifecycles, and is not tied to the module cleanup event selected through DEC-004
+- RuntimeAvailabilityResult is closed and discarded by CoreManager at `ServerStoppedEvent`; it is not persistent, does not cross server lifecycles, and is independent of module-container cleanup ownership
 - DependencyResolutionResult is also discarded — re-resolved each server start (structural graph may change as module availability changes)
 - TERMINATED containers are **never** reused. If a reference to a TERMINATED container is held by external code, it represents a stale handle.
 - DEPENDENCY_FAILURE containers are also never reused. Next server start creates new containers.
@@ -601,11 +606,11 @@ Next Server Start:
 | **REGISTERED** | Normal container has a fresh IModule instance and awaits initialization. A status-only dependency-failure container may occupy REGISTERED only inside CoreManager's atomic, unpublished transition to DEPENDENCY_FAILURE; it is never query-visible in REGISTERED without an instance. |
 | **INITIALIZING** | Module's `init()` method executing |
 | **ACTIVE** | Module fully operational |
-| **INIT_FAILURE** | Module's `init()` threw. CoreManager immediately claims and performs the exactly-once shutdown, then reaches STOPPED. CLEANUP → TERMINATED occurs later only at the event selected through DEC-004. |
+| **INIT_FAILURE** | Module's `init()` threw. CoreManager immediately claims and performs the exactly-once shutdown, then reaches STOPPED. CLEANUP → TERMINATED occurs later at ServerStoppedEvent under DEC-004. |
 | **DEPENDENCY_FAILURE** | Required dependency failed at runtime. Container exists for status tracking with `Optional.empty()` or an inaccessible uninitialized instance. No `init()` or `shutdown()` is executed. Discarded at server stop without CLEANUP or TERMINATED. |
 | **STOPPING** | Module's `shutdown()` method executing. Only modules that entered INITIALIZING reach this state. |
 | **STOPPED** | Module shutdown completed, awaiting cleanup |
-| **CLEANUP** | Post-shutdown static-state clearing after exactly-once shutdown. Applies only to modules that reached ACTIVE or INIT_FAILURE. Execution location is pending DEC-004. |
+| **CLEANUP** | Post-shutdown static-state clearing at ServerStoppedEvent after exactly-once shutdown. Applies only to modules that reached ACTIVE or INIT_FAILURE. |
 | **TERMINATED** | Normal lifecycle complete. Container and IModule instance are discarded and not reused. Reached only through CLEANUP. |
 
 ### 3.4 State Ownership
@@ -613,7 +618,7 @@ Next Server Start:
 | Component | Responsibility |
 |-----------|----------------|
 | **RuntimeModuleContainer** | Stores the current state value for this server run. Provides read-only queries. Exposes controlled state mutation methods called only by CoreManager. |
-| **CoreManager** | Sole driver of state transitions within a server run. Decides when to transition. Initiates all transition calls. Creates containers at server start and discards them at the terminal/disposal boundary selected through DEC-004. |
+| **CoreManager** | Sole driver of state transitions within a server run. Decides when to transition. Initiates all transition calls. Creates containers at server start and discards eligible containers at ServerStoppedEvent under DEC-004. |
 | **LifecycleStateMachine** (if retained) | Pure validation: evaluates whether a proposed transition is valid per transition tables (3.5, 3.6). Does not hold state. Does not initiate transitions. |
 
 **CoreManager is the only component that may mutate RuntimeModuleContainer state.**
@@ -628,7 +633,7 @@ CoreManager is the only caller of `IModule.shutdown()`. The following rules appl
 4. Before invoking `shutdown()`, CoreManager atomically changes `shutdownExecuted` from false to true. The flag remains true even if `shutdown()` throws; shutdown is never retried for that instance.
 5. ServerStoppingEvent selects only containers where `initializationSucceeded == true && shutdownExecuted == false`, in reverse successful initialization order.
 6. DEPENDENCY_FAILURE containers always have `initializationStarted == false`, `initializationSucceeded == false`, and `shutdownExecuted == false`; CoreManager never invokes lifecycle methods on them.
-7. Already-shut-down INIT_FAILURE containers are excluded from ServerStoppingEvent by `shutdownExecuted == true`; their later cleanup event remains governed by DEC-004.
+7. Already-shut-down INIT_FAILURE containers are excluded from ServerStoppingEvent by `shutdownExecuted == true`; ServerStoppedEvent performs their later cleanup under DEC-004.
 
 ### 3.5 Valid Transitions
 
@@ -664,7 +669,7 @@ CoreManager is the only caller of `IModule.shutdown()`. The following rules appl
 
 | Forge Event | Lifecycle Action | Details |
 |-------------|-----------------|---------|
-| `FMLCommonSetupEvent` | **Registration Window** | Modules call `register(id, factory, metadata, requiredDependencies, optionalDependencies, priority)`. Registry validates ID uniqueness/format, dependency ID format, and priority range. No IModule instance is created during registration — the static contract is provided explicitly as registration parameters. On success, stores immutable ModuleDefinition with the factory for later instance creation. |
+| `FMLCommonSetupEvent` | **Registration Window** | Modules call `register(id, factory, metadata, requiredDependencies, optionalDependencies, priority)`. Registry validates ID uniqueness/format, basic required ModuleMetadata validity, dependency ID format, and priority range. No IModule instance is created during registration — the static contract is provided explicitly as registration parameters. On success, stores immutable ModuleDefinition with the factory for later instance creation. |
 | `FMLCommonSetupEvent` (post-queue) | **Registration Closed** | Registration window closes. ModuleDefinition set is finalized for the lifetime of the mod container. **No runtime state is created.** **No Dependency Resolution is performed.** |
 
 **Server Lifecycle (runs per server start — ModuleDefinitions preserved, new containers and instances created each time):**
@@ -674,8 +679,8 @@ CoreManager is the only caller of `IModule.shutdown()`. The following rules appl
 | `ServerAboutToStartEvent` | **Pre-init (no module creation)** | CoreManager performs pre-server validation (configuration, environment). **No module instances created, no factory calls.** DataManager.init() has not yet run. |
 | `ServerStartingEvent` | **Persistence → Resolution → Runtime Creation → Initialization** | `DataManager.init()` prepares persistence. `DependencyResolver.resolve()` produces immutable structural order. CoreManager creates RuntimeAvailabilityResult and processes definitions in that order. If a required dependency is unavailable, it creates a status-only DEPENDENCY_FAILURE container and skips factory, validation, init, and shutdown. Otherwise it calls factory, validates only Module ID, and creates a REGISTERED container with `Optional.of(instance)`. During initialization it rechecks availability, skips DEPENDENCY_FAILURE, and applies the exactly-once init/shutdown flags. |
 | `ServerStartedEvent` | **ACTIVE confirmation** | Successfully initialized modules are ACTIVE. Failed or unavailable modules remain queryable through results/container state. |
-| `ServerStoppingEvent` | **Exactly-once shutdown** | `DataManager.saveAll()` persists data. CoreManager iterates reverse successful initialization order and calls `shutdown()` only where `initializationSucceeded == true && shutdownExecuted == false`. It atomically sets the guard before invocation and advances those containers only through STOPPED. DEPENDENCY_FAILURE and already-shut-down INIT_FAILURE containers are skipped. This event does not own CLEANUP → TERMINATED before DEC-004 is confirmed. |
-| `ServerStoppedEvent` | **Server Runtime Scope close / post-shutdown boundary** | CoreManager closes and discards RuntimeAvailabilityResult independently of RuntimeModuleContainer disposal and DEC-004. DEPENDENCY_FAILURE containers may be discarded directly with no instance access or lifecycle transition. For STOPPED containers, this draft makes no cleanup-location assumption: CLEANUP → TERMINATED executes here only if DEC-004 selects ServerStoppedEvent; otherwise ownership belongs to the Human-selected event. Module cleanup must not depend on RuntimeAvailabilityResult after this event. ModuleRegistry and immutable ModuleDefinitions remain preserved for the next lifecycle. |
+| `ServerStoppingEvent` | **Exactly-once shutdown** | `DataManager.saveAll()` persists data. CoreManager iterates reverse successful initialization order and calls `shutdown()` only where `initializationSucceeded == true && shutdownExecuted == false`. It atomically sets the guard before invocation and advances those containers only through STOPPED. DEPENDENCY_FAILURE and already-shut-down INIT_FAILURE containers are skipped. This event does not own CLEANUP → TERMINATED. |
+| `ServerStoppedEvent` | **Server Runtime Scope close / post-shutdown boundary** | CoreManager closes and discards RuntimeAvailabilityResult, directly discards DEPENDENCY_FAILURE containers with no instance access or lifecycle transition, executes CLEANUP → TERMINATED for eligible STOPPED containers, and disposes their runtime instances under DEC-004. Module cleanup must not require an active Server, World, persistence context, or RuntimeAvailabilityResult. ModuleRegistry and immutable ModuleDefinitions remain preserved for the next lifecycle. |
 
 ### 3.8 Error Handling
 
@@ -687,7 +692,7 @@ CoreManager is the only caller of `IModule.shutdown()`. The following rules appl
 | **Missing required dependency** | Structural failure. ModuleDefinition is recorded as unresolvable in DependencyResolutionResult. No container created. Log error listing missing dependency. |
 | **Circular dependency (required-only)** | Structural failure. All modules in required-only cycle are recorded as unresolvable in DependencyResolutionResult. No containers created. Log error with cycle path. Requires Human decision to break. |
 | **Circular dependency (with optional edges)** | Optional edges removed deterministically (see 2.3 Phase 2). Each removed edge logged. Non-optional cycle remains hard failure. |
-| **Init throws exception** | Set state to INIT_FAILURE and record/propagate the runtime failure. CoreManager atomically sets `shutdownExecuted = true`, transitions INIT_FAILURE → STOPPING, calls `shutdown()` once immediately for partial-resource release, and reaches STOPPED. The container is excluded from ServerStoppingEvent. Its later CLEANUP → TERMINATED location remains pending DEC-004. Required dependents enter DEPENDENCY_FAILURE and execute no lifecycle methods. |
+| **Init throws exception** | Set state to INIT_FAILURE and record/propagate the runtime failure. CoreManager atomically sets `shutdownExecuted = true`, transitions INIT_FAILURE → STOPPING, calls `shutdown()` once immediately for partial-resource release, and reaches STOPPED. The container is excluded from ServerStoppingEvent. ServerStoppedEvent later executes CLEANUP → TERMINATED under DEC-004. Required dependents enter DEPENDENCY_FAILURE and execute no lifecycle methods. |
 | **Shutdown throws exception** | Log error; retain `shutdownExecuted = true`; continue cleanup and remaining modules. Never retry shutdown for that runtime instance. |
 | **Runtime exception (post-ACTIVE)** | Module responsible for its own error handling. Framework does not terminate modules at runtime — Human must inspect logs. |
 
@@ -706,11 +711,11 @@ CoreManager is the only caller of `IModule.shutdown()`. The following rules appl
 
 ### Status
 
-> **Proposed: Option A — Forge Lifecycle Integration Only**
-> **Status: Pending Human Decision**
-> This section documents a design proposal. It does not represent approval.
+> **Decision: Forge Lifecycle Integration Only**
+> **Status: Accepted — Human Approved for FR-CORE-001-A**
+> This decision does not authorize an internal event bus, Java implementation, or Human Design Freeze.
 
-### Decision (Proposed)
+### Decision
 
 The Core Framework provides Forge lifecycle integration points only. It does NOT implement an internal event bus or cross-module event infrastructure.
 
@@ -718,7 +723,7 @@ The Core Framework provides Forge lifecycle integration points only. It does NOT
 
 | Option | Description | Pros | Cons |
 |--------|-------------|------|------|
-| **A: Forge Lifecycle Only** (proposed) | Modules communicate via direct API calls through CoreManager's query API. Forge's existing `MinecraftForge.EVENT_BUS` is used only for Forge/Minecraft lifecycle events. | Simpler, no new infrastructure, less code to maintain, leverages Forge's existing event system | Tighter coupling between modules, no dedicated cross-module notification channel |
+| **A: Forge Lifecycle Only** (accepted) | Modules communicate via direct API calls through CoreManager's query API. Forge's existing `MinecraftForge.EVENT_BUS` is used only for Forge/Minecraft lifecycle events. | Simpler, no new infrastructure, less code to maintain, leverages Forge's existing event system | Tighter coupling between modules, no dedicated cross-module notification channel |
 | **B: Internal Event Bus** | Core provides event dispatch for internal module events | Looser coupling, easier to add cross-cutting concerns (audit, logging) | New infrastructure design required, event hierarchy decisions, ordering semantics, listener lifecycle management — scope expansion beyond Phase 1 |
 
 ### Reasoning
@@ -753,11 +758,11 @@ The Core Framework provides Forge lifecycle integration points only. It does NOT
 
 ### Status
 
-> **Proposed: Option A — Separate Task**
-> **Status: Pending Human Decision**
-> This section documents a design proposal. It does not represent approval.
+> **Decision: Separate Network Foundation Task**
+> **Status: Accepted — Human Approved for FR-CORE-001-A**
+> This decision does not authorize Network Foundation implementation or Human Design Freeze.
 
-### Decision (Proposed)
+### Decision
 
 Network Foundation (SimpleChannel setup, packet skeleton, serialization utilities) is **NOT part of FR-CORE-001-A**. It is a separate implementation task that builds on the completed Core Framework. It belongs architecturally to Phase 0 per Architecture v2.7 Section 9.2 Step 4, but is not within FR-CORE-001-A's scope.
 
@@ -765,7 +770,7 @@ Network Foundation (SimpleChannel setup, packet skeleton, serialization utilitie
 
 | Option | Description | Pros | Cons |
 |--------|-------------|------|------|
-| **A: Separate Task** (proposed) | Network Foundation is a follow-up implementation task after FR-CORE-001 completes | Clear separation of concerns, Core Framework focuses on module lifecycle | Requires coordination handoff between tasks |
+| **A: Separate Task** (accepted) | Network Foundation is a follow-up implementation task after FR-CORE-001 completes | Clear separation of concerns, Core Framework focuses on module lifecycle | Requires coordination handoff between tasks |
 | **B: Include in FR-CORE-001-A** | Core Framework design includes network channel registration and packet skeleton | Single integrated design, fewer handoffs | Expands scope beyond module lifecycle, mixes concerns, delays Core Framework completion |
 
 ### Reasoning
@@ -844,11 +849,11 @@ public interface IModule {
 - All new methods have default implementations, so existing `IModule` implementors continue to compile and run without changes
 - Existing methods (`getName`, `init`, `shutdown`, `getPriority`) retain their exact signatures
 - Modules that do not provide explicit dependency lists at registration will have empty dependency lists (default), preserving their current behavior
-- **Proposed migration behavior — Pending Human Decision:** If the registration-metadata migration is approved, the IModule instance's dependency and priority methods cease to be authoritative, registration parameters become the static contract, and only `getName()` is validated at runtime. Until that decision, Architecture v2.7's IModule declaration contract remains authoritative and this proposed behavior must not be implemented.
+- **Approved FR-CORE-001 migration behavior:** Under MIGRATION-01, the IModule instance's dependency and priority methods cease to be authoritative for FR-CORE-001. Registration parameters become the static contract, and only `getName()` is validated at runtime. Architecture v2.7 remains unchanged; Java implementation requires a separate approved task.
 
 ### IModuleFactory
 
-Under the proposed migration model, modules would be registered via a factory instead of a direct instance:
+Under the approved FR-CORE-001 migration direction, modules are registered via a factory instead of a direct instance:
 
 ```java
 public interface IModuleFactory {
@@ -870,7 +875,7 @@ registry.register("core",
 
 The factory is called once per server start. **Factory-only registration is enforced.** There is no direct-instance registration path. A factory that returns the same instance across calls violates the per-server freshness contract and produces undefined behavior at server boundaries.
 
-If the migration is approved, the static contract (dependencies, priority) is provided explicitly at registration and ModuleDefinition becomes the sole authoritative source. Before Human confirmation, this sentence describes a candidate contract, not an active replacement for Architecture v2.7.
+Under MIGRATION-01, the static contract (ID, dependencies, priority, metadata, and factory) is provided explicitly at registration and ModuleDefinition is the sole authoritative source for FR-CORE-001.
 
 ### Unified Dependency Resolution
 
@@ -896,7 +901,7 @@ These are not separate sorting systems. Both modes flow through the same Depende
 
 ### Migration Strategy
 
-**Migration gate:** This strategy must not begin until Human review resolves the compatibility issue between Architecture v2.7's IModule-method declarations and the proposed registration-metadata model.
+**Migration authorization boundary:** MIGRATION-01 resolves the architecture direction for FR-CORE-001. The migration must not begin until a separate Human-authorized Java implementation task is issued.
 
 1. **Phase 1 (Core Framework implementation):** All existing core modules (core:lifecycle, core:config, core:data) are migrated to Declared Dependencies and IModuleFactory first, since they are owned by the Core Framework team.
 2. **Phase 2 (adoption period):** Business module developers add dependency declarations and factory registration when they implement their modules. No forced migration.
@@ -921,7 +926,7 @@ These are not separate sorting systems. Both modes flow through the same Depende
 - Query module state and instance at runtime (getModule, getModuleState, getModulesByState)
 - Handle init failures with proper cleanup and propagation to dependents
 - Support clean server restart: ModuleDefinitions preserved across stops, new containers and instances created on start
-- Clear static state at the lifecycle event selected through DEC-004, while preserving module definitions and factories across server lifecycles
+- Clear eligible module runtime state at ServerStoppedEvent under DEC-004, while preserving module definitions and factories across server lifecycles
 - Migrate existing modules to dependency-based ordering incrementally through the single DependencyResolver
 
 ### After FR-CORE-001 Implementation, the Following Is NOT Possible
@@ -932,7 +937,7 @@ These are not separate sorting systems. Both modes flow through the same Depende
 - Business module operations (citizen, economy, land, government — Phase 1+)
 - GUI display (Phase 8)
 - Runtime module hotswap (not a goal per Architecture v2.7)
-- Internal event bus (deferred per DEC-001 — Pending Human Decision)
+- Internal event bus (excluded from FR-CORE-001 under accepted DEC-001)
 - **Runtime module enable/disable** (removed from FR-CORE-001 scope per N-04 — requires separate DEC and task)
 - Toggle or DISABLED state (not part of Core Framework lifecycle)
 
@@ -1044,58 +1049,80 @@ Applied in FR-CORE-001-A-FIX-12 following FR-CORE-001-A-FIX-11 Freeze Review. Th
 | **R10-01** | Defined RuntimeAvailabilityResult as transient CoreManager-owned Server Runtime Scope state. CoreManager discards it at ServerStoppedEvent independently of RuntimeModuleContainer disposal and DEC-004; DEC-004 remains limited to module CLEANUP → TERMINATED event selection. |
 | **R10-02** | Separated priority ownership, storage, and use: ModuleDefinition owns the immutable value, ModuleRegistry stores the containing definition without interpreting priority, and DependencyResolver consumes it only if DEC-005 retains the tiebreaker. |
 
+### Revision-12 Decision Synchronization
+
+Applied in FR-CORE-001-A-DECISION-ACTIVATION-01 after Human approval of DEC-001, DEC-003, DEC-004, DEC-005, and MIGRATION-01. This revision synchronizes approved decisions and implementation preparation boundaries. It does not claim Human Design Freeze or Java implementation authorization.
+
+| Decision | Synchronized Result |
+|----------|---------------------|
+| **DEC-001** | Forge lifecycle integration only; no internal event bus in FR-CORE-001. |
+| **DEC-003** | Network Foundation remains a separate future task. |
+| **DEC-004** | ServerStoppingEvent owns exactly-once shutdown; ServerStoppedEvent owns cleanup, termination, and eligible runtime-container disposal. |
+| **DEC-005** | Dependency ordering is topology → priority → stable registration order. |
+| **MIGRATION-01** | ModuleDefinition owns the FR-CORE-001 static contract; IModule owns runtime behavior. Architecture v2.7 remains unchanged. |
+
+### Revision-13 Clarifications
+
+Applied in FR-CORE-001-A-FIX-13 following the Revision-12 Freeze Review. This entry records documentation clarifications only; it does not change an accepted decision, claim Human Design Freeze, or authorize Java implementation.
+
+| Finding | Clarification |
+|---------|---------------|
+| **R12-01** | Defined basic registration-time ModuleMetadata validation: metadata must be non-null and fields already designated as required by its contract must be non-null and non-blank. No metadata schema or runtime interpretation was added. |
+| **R12-02** | Defined DEPENDENCY_FAILURE construction and publication as one CoreManager-owned atomic operation. Empty REGISTERED containers remain unpublished and cannot be observed through query interfaces. |
+| **R12-04** | Clarified that direct runtime creation or initialization failures propagate to later required dependents through the existing deterministic Section 2.4 algorithm. |
+
 ### Alignment with Architecture v2.7
 
-| v2.7 Requirement | FR-CORE-001-A (Revision-11) Alignment |
+| v2.7 Requirement | FR-CORE-001-A (Revision-13) Alignment |
 |------------------|--------------------------------------|
-| Module dependencies via `getRequiredDependencies()` / `getOptionalDependencies()` (Section 3.3) | **Compatibility issue — Pending Human migration decision.** Revision-11 proposes registration metadata, which is not equivalent to preserving the current IModule-method authority. |
+| Module dependencies via `getRequiredDependencies()` / `getOptionalDependencies()` (Section 3.3) | **Approved FR-CORE-001 migration direction.** MIGRATION-01 moves static authority to ModuleDefinition for FR-CORE-001 without modifying Architecture v2.7. |
 | Topological sort for init order (Section 3.3) | Preserved with Kahn's algorithm, two-phase cycle detection, priority tiebreaker, registration order tiebreaker |
 | Reverse order for shutdown (Section 3.3) | Preserved in lifecycle state machine |
-| Priority as tiebreaker (Section 3.3) | **Pending DEC-005.** The candidate design retains it, but no implementation choice is active before Human confirmation. |
+| Priority as tiebreaker (Section 3.3) | **Accepted under DEC-005.** Priority applies only after dependency topology and before stable registration order. |
 | Unique Module ID enforcement (Section 3.3) | Preserved with strict rejection on mismatch |
 | Failure propagation (Section 3.3) | Preserved with explicit state machine transitions |
 | Server authority principle (Section 2.1) | Preserved — per-server instance creation enforces clean state |
 | Three-layer architecture (Section 3.1) | Preserved — Core Framework operates within server layer |
-| IModule interface (Section 3.3) | **Compatibility issue — Pending MIGRATION-01.** Additive methods preserve compilation, but shifting authority to registration metadata and factory registration is not treated as preserved baseline behavior. |
+| IModule interface (Section 3.3) | **Migration authorized under MIGRATION-01 for FR-CORE-001.** IModule retains runtime behavior; ModuleDefinition becomes static authority. The frozen baseline document is not edited. |
 
 **Potential future concern:** As the module system matures, explicit dependency injection through the module container may be preferred over static access patterns. This is not a deviation — it is a future refinement outside current scope.
 
 ---
 
-## 10. Open Human Decisions
+## 10. Human Decisions and Implementation Gates
 
 ### Decision Status
 
-| ID | Decision | Options | Proposed | Status |
-|----|----------|---------|----------|--------|
-| **DEC-001** | Should Core Framework implement an internal event bus? | A: Forge lifecycle only / B: Internal event bus | A | **Draft / Proposed — Pending Human Decision** |
-| **DEC-003** | Should Network Foundation be part of FR-CORE-001-A? | A: Separate task / B: Include in FR-CORE-001-A | A | **Draft / Proposed — Pending Human Decision** |
-| **DEC-002** | Runtime module enable/disable? | N/A — removed from FR-CORE-001 scope | N/A | **Removed from scope — requires separate DEC and task** |
-| **DEC-004** | Static state cleanup timing? | A: ServerStoppedEvent / B: ServerCloseEvent | A | **Open — Pending Human Decision** |
-| **DEC-005** | Role of `getPriority()` in ordering? | A: Keep as tiebreaker / B: Remove | A | **Open — Pending Human Decision** |
-| **MIGRATION-01** | Static contract authority compatibility | A: Retain Architecture v2.7 IModule-method authority / B: Authorize a future migration to registration metadata through the Human architecture process | None | **Compatibility Issue — Pending Human Decision** |
+| ID | Human Decision | Status |
+|----|----------------|--------|
+| **DEC-001** | Forge lifecycle integration only; internal Event Bus deferred to an independent architecture task. | **Accepted — Human Approved for FR-CORE-001-A** |
+| **DEC-003** | Network Foundation remains a separate future task. | **Accepted — Human Approved for FR-CORE-001-A** |
+| **DEC-002** | Runtime module enable/disable remains outside FR-CORE-001. | **Removed from scope — requires separate DEC and task** |
+| **DEC-004** | ServerStoppingEvent owns exactly-once shutdown; ServerStoppedEvent owns cleanup, termination, and eligible runtime-container disposal. | **Accepted — Human Approved for FR-CORE-001-A** |
+| **DEC-005** | Ordering is dependency topology → priority → stable registration order. | **Accepted — Human Approved for FR-CORE-001-A** |
+| **MIGRATION-01** | ModuleDefinition owns the FR-CORE-001 static contract; IModule owns runtime behavior. | **Accepted — Human Approved for FR-CORE-001-A** |
 
 ### Implementation Blockers
 
-If FR-CORE-001 implementation depends on the outcome of any Pending Human Decision, that dependency is an **explicit blocker**. The table below maps each decision to the specific implementation tasks it blocks:
+The architecture decision blockers identified in Revision-11 are resolved for implementation preparation. Java implementation remains blocked until Human issues a separate implementation authorization.
 
-| Decision | Implementation Dependency | Blocker? | What Cannot Proceed |
-|----------|--------------------------|----------|---------------------|
-| DEC-002 (enable/disable) | Removed from scope — not part of FR-CORE-001 | No | N/A — out of scope |
-| DEC-004 (cleanup timing) | Where static state cleanup logic is placed | **Yes** | The `ServerStoppedEvent` handler's static cleanup code cannot be implemented. If A (ServerStoppedEvent): cleanup is placed in the ServerStoppedEvent handler directly. If B (ServerCloseEvent): cleanup must be deferred and the ServerStoppedEvent handler restructured. Without a decision, both the handler location and the cleanup logic are undefined. |
-| DEC-005 (priority role) | Whether priority is retained as sorting tiebreaker | **Yes** | The priority comparison within `DependencyResolver.getPriority()` tiebreaker logic cannot be implemented. If A (keep): modules at the same topological level are ordered by priority value. If B (remove): priority is removed from Stable Ordering Rules and only topology + registration order are used. Without a decision, the second-level ordering is ambiguous. |
-| MIGRATION-01 (static contract authority) | Whether Architecture v2.7 IModule declarations remain authoritative or a separately authorized migration is pursued | **Yes** | ModuleDefinition registration parameters, factory registration API, migration steps, and runtime validation boundaries cannot be implemented from the proposed registration-metadata model. No default option is assumed. |
+| Decision | Implementation Dependency | Architecture Decision Blocker? | Resolved Contract |
+|----------|---------------------------|--------------------------------|-------------------|
+| DEC-002 | Runtime enable/disable | No | Outside FR-CORE-001. |
+| DEC-004 | Shutdown and cleanup event ownership | No | Shutdown at ServerStoppingEvent; cleanup and eligible container disposal at ServerStoppedEvent. |
+| DEC-005 | Dependency ordering | No | Topology → priority → stable registration order. |
+| MIGRATION-01 | Static contract and registration API | No | ModuleDefinition static authority with factory-only runtime creation. |
 
-**Decision impact summary (independent and blocked portions are identified explicitly):**
-- ModuleRegistry duplicate-ID and registration-window behavior — independent; ModuleDefinition static-contract fields remain blocked by MIGRATION-01
-- Runtime lifecycle semantics and per-server freshness requirement — independent; the proposed factory registration API remains blocked by MIGRATION-01
-- DependencyResolver graph construction and two-phase cycle detection (Section 2.3) — independent of priority
-- Topological sort algorithm (Section 2.3) — independent
-- State definitions and transition validity (Section 3.1–3.6) — independent; binding CLEANUP → TERMINATED to a Forge event remains blocked by DEC-004
-- Forge event mapping for container creation and module init/exactly-once shutdown (Section 3.7) — independent; cleanup-event ownership remains blocked by DEC-004
-- IModule migration contract and factory adaptation (Section 7) — blocked by MIGRATION-01 and must not begin before Human confirmation
+**Decision impact summary:**
+- ModuleRegistry stores immutable ModuleDefinitions containing the approved static contract.
+- Runtime lifecycle uses fresh factory-created instances per server lifecycle.
+- DependencyResolver applies topology, priority, then stable registration order.
+- CoreManager performs exactly-once shutdown at ServerStoppingEvent.
+- CoreManager performs eligible cleanup, termination, and disposal at ServerStoppedEvent.
+- Internal Event Bus and Network Foundation remain outside FR-CORE-001.
+- Java implementation must not begin without a separate Human-authorized task.
 
-**Rule:** If a Pending Human Decision remains unresolved and the implementation reaches a blocked point, the implementer must **stop and flag the blocker**. The implementation must not assume a default outcome for Pending decisions.
+**Rule:** The implementer must follow the accepted decisions exactly. Any deviation affecting lifecycle, static-contract authority, dependency ordering, module boundary, persistence, networking, or permissions requires a Deviation Alert and Human direction.
 
 ### Decision Process
 
@@ -1105,4 +1132,4 @@ Each decision record follows this lifecycle:
 Draft → Proposed → For Human Review → Human Decision → Confirmed or Rejected
 ```
 
-The current document status is **Draft / Proposed — For Human Review**. No decision in this document is final until Human confirmation is received.
+DEC-001, DEC-003, DEC-004, DEC-005, and MIGRATION-01 have reached **Confirmed** for FR-CORE-001-A architecture synchronization and implementation preparation. The architecture document remains **Pending Human Design Freeze**, and Java implementation remains unauthorized until a separate Human instruction is issued.
