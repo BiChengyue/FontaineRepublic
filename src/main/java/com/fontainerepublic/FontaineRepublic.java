@@ -4,6 +4,7 @@ import com.fontainerepublic.core.ConfigManager;
 import com.fontainerepublic.core.CoreManager;
 import com.fontainerepublic.core.DataManager;
 import com.fontainerepublic.core.module.ModuleRegistry;
+import com.fontainerepublic.core.module.test.TestModule;
 import com.mojang.logging.LogUtils;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
@@ -18,9 +19,13 @@ import org.slf4j.Logger;
 @Mod(FontaineRepublic.MOD_ID)
 public class FontaineRepublic {
     public static final String MOD_ID = "fontainerepublic";
+    private static final String RUNTIME_VALIDATION_PROPERTY =
+            "fontainerepublic.debugValidation";
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private final CoreManager coreManager = new CoreManager(new ModuleRegistry());
+    private final boolean runtimeValidationEnabled =
+            Boolean.getBoolean(RUNTIME_VALIDATION_PROPERTY);
 
     public FontaineRepublic() {
         LOGGER.info("[FontaineRepublic] Loading");
@@ -33,6 +38,13 @@ public class FontaineRepublic {
 
     private void onCommonSetup(FMLCommonSetupEvent event) {
         ConfigManager.load();
+        if (runtimeValidationEnabled) {
+            TestModule.registerAll(coreManager.moduleRegistry());
+            LOGGER.warn(
+                    "[FontaineRepublic] Runtime validation modules enabled by -D{}=true",
+                    RUNTIME_VALIDATION_PROPERTY
+            );
+        }
         event.enqueueWork(coreManager::closeRegistration);
         LOGGER.info("[FontaineRepublic] Core initialized");
     }
@@ -44,6 +56,9 @@ public class FontaineRepublic {
     private void onServerStarting(ServerStartingEvent event) {
         DataManager.init(event.getServer());
         coreManager.startRuntime();
+        if (runtimeValidationEnabled) {
+            TestModule.logAvailability(coreManager);
+        }
     }
 
     private void onServerStopping(ServerStoppingEvent event) {
