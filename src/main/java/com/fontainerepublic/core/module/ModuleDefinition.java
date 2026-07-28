@@ -19,6 +19,15 @@ public record ModuleDefinition(
         metadata = Objects.requireNonNull(metadata, "metadata");
         requiredDependencies = Set.copyOf(Objects.requireNonNull(requiredDependencies, "requiredDependencies"));
         optionalDependencies = Set.copyOf(Objects.requireNonNull(optionalDependencies, "optionalDependencies"));
+        var overlappingDependencies = requiredDependencies.stream()
+                .filter(optionalDependencies::contains)
+                .sorted()
+                .toList();
+        if (!overlappingDependencies.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Dependencies cannot be both required and optional: " + overlappingDependencies
+            );
+        }
         factory = Objects.requireNonNull(factory, "factory");
     }
 }
