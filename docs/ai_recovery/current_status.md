@@ -1,56 +1,68 @@
 # Current Status
 
-> Last updated: 2026-07-27
+> Last updated: 2026-07-29
 > Source of truth: CLAUDE.md, git history, codebase state
 
 ## Phase
 
-Phase 0 — Architecture Foundation (Complete)
+Phase 1 - Infrastructure Layer
 
 ## Current Step
 
-Architecture v2.7 Baseline Established
+FR-DATA-002 Player Identity Infrastructure has received Human Approval and is
+merged into and pushed on `develop`.
 
 ## Completed Tasks
 
 | # | Task | Commit | Date |
-|---|------|--------|------|
-| 1 | Forge project initialization | `0a91e3a` | — |
-| 2 | C1: Module Lifecycle Framework (IModule + CoreManager) | `bc25c96` | — |
-| 3 | C2: Config Manager (ForgeConfigSpec) | `41a197c` | — |
-| 4 | C3: Core System Initialization (FontaineRepublic entry point) | `932457d` | — |
-| 5 | Data Persistence Framework (ModSavedData + DataManager) | `107c215` | — |
-| 6 | Data persistence lifecycle fix | `ee4684f` | — |
-| 7 | Architecture v2.3 Consistency Fix | (not yet committed) | 2026-07-27 |
-| 8 | Architecture v2.4 Engineering Consistency Fix | (not yet committed) | 2026-07-27 |
-| 9 | Architecture v2.5 Final Consistency Fix | (not yet committed) | 2026-07-27 |
-| 10 | Architecture v2.6 Precision Fix | (not yet committed) | 2026-07-27 |
-| 11 | Architecture v2.7 Forge Optional Client Contract Final Correction | (not yet committed) | 2026-07-27 |
-| 12 | Architecture v2.7 Baseline Freeze | (not yet committed) | 2026-07-27 |
+|---|---|---|---|
+| 1 | Architecture v2.7 baseline | `256d6bd` | 2026-07-27 |
+| 2 | FR-CORE-001 Core Framework runtime baseline | `0d22129` | 2026-07-28 |
+| 3 | FR-DATA-002 Player Identity Infrastructure | `4d2876f` | 2026-07-29 |
 
-### Detail: Data Persistence Framework
+### FR-CORE-001
 
-- **ModSavedData**: SavedData subclass with per-module data isolation via `Map<String, CompoundTag>`
-- **DataManager**: Lifecycle wrapper — `init()` during `ServerStartingEvent`, `saveAll()` during `ServerStoppingEvent`
-- **Shutdown persistence**: Confirmed safe — `setDirty()` followed by `DimensionDataStorage.save()` during `ServerLevel.save()` shutdown sequence
-- **Verification**: Code review + build verification + runtime log confirmation
+- Provides the approved Core Framework runtime baseline.
+- Completion commit: `0d22129e32f1f72d9e726de4421d5e61d514f7c1`.
+
+### FR-DATA-002
+
+- Provides the shared Player Identity Infrastructure.
+- Uses UUID identity, SavedData persistence, revision control, a service layer,
+  and strict NBT validation.
+- Does not implement Citizen, Economy, Government, Court, Land, GUI, packets,
+  or client synchronization.
+- Human-approved commit:
+  `4d2876f05983bca0e7a1e79045d3cf3e5e6e571c`.
 
 ## Current Task
 
-Architecture v2.7 Frozen — Ready for FR-CORE-001
+Project state synchronization after FR-DATA-002.
 
-## Next Tasks
+## Next Task
 
-- Phase 1 — Core Framework Design (FR-CORE-001)
+FR-NET-001-A Network Foundation Architecture & Implementation Contract.
+
+FR-NET-001-A is authorized for design only. Production implementation has not
+been authorized.
+
+## Scope Boundaries
+
+- Network Foundation design must remain framework-level.
+- No business packets or feature-module implementation are authorized.
+- Citizen is not the immediate implementation task.
 
 ## Known Risks
 
-- ConfigManager has no configuration entries yet (empty ForgeConfigSpec) — will be populated in later phases
-- Data loss on hard JVM kill is unavoidable with SavedData approach (not a bug)
-- Phase 0 actively forbids: Citizen, Land, Economy, Government, Justice, GUI, Business networking
+- ConfigManager currently has no configuration entries.
+- Data loss on hard JVM termination remains an inherent SavedData limitation.
+- Network Foundation production behavior remains unimplemented and unverified.
 
-## Architecture Version
+## Project Baselines
 
+- Minecraft: 1.20.1
+- Forge: 47.4.18
+- Java: 17
 - Architecture: v2.7
 - Roadmap: v1.1
 - Phase 0 Technical Design: v1.1

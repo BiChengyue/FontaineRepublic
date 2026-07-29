@@ -64,37 +64,30 @@ Follow:
 
 Current Phase:
 
-Phase 0 — Architecture Foundation (Complete)
+Phase 1 - Infrastructure Layer
 
 Completed:
 
-- Forge Project Initialization
+- Phase 0 Architecture Foundation
 
-- C1 Module Lifecycle Framework
+- Architecture v2.7 baseline
 
-- C2 Config Manager
+- FR-CORE-001 Core Framework runtime baseline
+  (`0d22129e32f1f72d9e726de4421d5e61d514f7c1`)
 
-- C3 Core System Initialization
-
-- ModSavedData persistence layer
-
-- DataManager lifecycle management
-
-- Data persistence lifecycle review
-
-- AI Recovery Documentation framework
-
-- Architecture v2.6 Engineering Consistency Fix
-
-- Architecture v2.7 Forge Optional Client Contract Final Correction
+- FR-DATA-002 Player Identity Infrastructure
+  (`4d2876f05983bca0e7a1e79045d3cf3e5e6e571c`)
 
 Current:
 
-Architecture v2.7 Frozen — Baseline Established. Ready for FR-CORE-001.
+FR-DATA-002 received Human Approval and is merged into and pushed on `develop`.
 
 Next:
 
-Phase 1 — Core Framework Design (FR-CORE-001)
+FR-NET-001-A Network Foundation Architecture & Implementation Contract.
+
+FR-NET-001-A is authorized for design only. Production implementation has not
+been authorized.
 
 Always read this section before starting work.
 
