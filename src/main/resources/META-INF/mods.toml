@@ -9,6 +9,7 @@ displayName="FontaineRepublic"
 description="枫丹共和国 - 国家模拟/RPG服务器核心Mod"
 authors="Fireflylover"
 logoFile=""
+displayTest="IGNORE_SERVER_VERSION"
 
 [[dependencies.fontainerepublic]]
     modId="forge"

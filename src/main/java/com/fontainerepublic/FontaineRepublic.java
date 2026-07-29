@@ -6,6 +6,8 @@ import com.fontainerepublic.core.DataManager;
 import com.fontainerepublic.core.module.ModuleRegistry;
 import com.fontainerepublic.core.module.runtime.ModuleState;
 import com.fontainerepublic.core.module.test.TestModule;
+import com.fontainerepublic.common.network.NetworkBootstrap;
+import com.fontainerepublic.server.network.NetworkRuntimeModule;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
 import com.mojang.logging.LogUtils;
@@ -29,6 +31,7 @@ public class FontaineRepublic {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private final CoreManager coreManager = new CoreManager(new ModuleRegistry());
+    private final NetworkBootstrap networkBootstrap = new NetworkBootstrap(coreManager);
     private final boolean runtimeValidationEnabled =
             Boolean.getBoolean(RUNTIME_VALIDATION_PROPERTY);
 
@@ -45,6 +48,7 @@ public class FontaineRepublic {
 
     private void onCommonSetup(FMLCommonSetupEvent event) {
         ConfigManager.load();
+        NetworkRuntimeModule.register(coreManager.moduleRegistry());
         PlayerDataModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
             TestModule.registerAll(coreManager.moduleRegistry());
@@ -53,7 +57,10 @@ public class FontaineRepublic {
                     RUNTIME_VALIDATION_PROPERTY
             );
         }
-        event.enqueueWork(coreManager::closeRegistration);
+        event.enqueueWork(() -> {
+            networkBootstrap.registerProductionMessagesAndFreeze();
+            coreManager.closeRegistration();
+        });
         LOGGER.info("[FontaineRepublic] Core initialized");
     }
 

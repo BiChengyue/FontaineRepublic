@@ -63,6 +63,16 @@ tasks.register('playerDataTest', JavaExec) {
     mainClass = 'com.fontainerepublic.server.playerdata.PlayerDataTestMain'
 }
 
+tasks.register('networkFoundationTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-NET-001 network foundation validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.common.network.NetworkFoundationTestMain'
+    systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
+}
+
 tasks.named('check') {
     dependsOn tasks.named('playerDataTest')
+    dependsOn tasks.named('networkFoundationTest')
 }
