@@ -54,3 +54,15 @@ tasks.withType(ProcessResources).configureEach {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
+
+tasks.register('playerDataTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-DATA-002 player-data validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.server.playerdata.PlayerDataTestMain'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('playerDataTest')
+}

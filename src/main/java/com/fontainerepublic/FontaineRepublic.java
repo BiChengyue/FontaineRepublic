@@ -4,9 +4,14 @@ import com.fontainerepublic.core.ConfigManager;
 import com.fontainerepublic.core.CoreManager;
 import com.fontainerepublic.core.DataManager;
 import com.fontainerepublic.core.module.ModuleRegistry;
+import com.fontainerepublic.core.module.runtime.ModuleState;
 import com.fontainerepublic.core.module.test.TestModule;
+import com.fontainerepublic.server.playerdata.PlayerDataModule;
+import com.fontainerepublic.server.playerdata.api.PlayerDataService;
 import com.mojang.logging.LogUtils;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
@@ -34,10 +39,13 @@ public class FontaineRepublic {
         MinecraftForge.EVENT_BUS.addListener(this::onServerStarting);
         MinecraftForge.EVENT_BUS.addListener(this::onServerStopping);
         MinecraftForge.EVENT_BUS.addListener(this::onServerStopped);
+        MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
+        MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggedOut);
     }
 
     private void onCommonSetup(FMLCommonSetupEvent event) {
         ConfigManager.load();
+        PlayerDataModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
             TestModule.registerAll(coreManager.moduleRegistry());
             LOGGER.warn(
@@ -68,5 +76,69 @@ public class FontaineRepublic {
 
     private void onServerStopped(ServerStoppedEvent event) {
         coreManager.closeRuntime();
+    }
+
+    private void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        playerDataService().ifPresentOrElse(
+                service -> {
+                    try {
+                        service.recordLogin(
+                                player.getUUID(),
+                                player.getGameProfile().getName()
+                        );
+                    } catch (RuntimeException failed) {
+                        LOGGER.error(
+                                "[FontaineRepublic] PlayerData login failed for {} ({}): {}",
+                                player.getGameProfile().getName(),
+                                player.getUUID(),
+                                failed.getMessage(),
+                                failed
+                        );
+                    }
+                },
+                () -> LOGGER.warn(
+                        "[FontaineRepublic] PlayerData service is not available at login for {} ({})",
+                        player.getGameProfile().getName(),
+                        player.getUUID()
+                )
+        );
+    }
+
+    private void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        playerDataService().ifPresentOrElse(
+                service -> {
+                    try {
+                        service.recordLogout(player.getUUID());
+                    } catch (RuntimeException failed) {
+                        LOGGER.error(
+                                "[FontaineRepublic] PlayerData logout failed for {} ({}): {}",
+                                player.getGameProfile().getName(),
+                                player.getUUID(),
+                                failed.getMessage(),
+                                failed
+                        );
+                    }
+                },
+                () -> LOGGER.warn(
+                        "[FontaineRepublic] PlayerData service is not available at logout for {} ({})",
+                        player.getGameProfile().getName(),
+                        player.getUUID()
+                )
+        );
+    }
+
+    private java.util.Optional<PlayerDataService> playerDataService() {
+        return coreManager.getRuntimeContainer(PlayerDataModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(PlayerDataModule.class::isInstance)
+                .map(PlayerDataModule.class::cast)
+                .map(PlayerDataModule::service);
     }
 }
