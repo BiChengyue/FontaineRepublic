@@ -7,6 +7,9 @@ import com.fontainerepublic.core.module.ModuleRegistry;
 import com.fontainerepublic.core.module.runtime.ModuleState;
 import com.fontainerepublic.core.module.test.TestModule;
 import com.fontainerepublic.common.network.NetworkBootstrap;
+import com.fontainerepublic.server.command.CommandBootstrap;
+import com.fontainerepublic.server.command.CommandRuntimeResolver;
+import com.fontainerepublic.server.command.registration.CommandContributionRegistry;
 import com.fontainerepublic.server.network.NetworkRuntimeModule;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
@@ -26,12 +29,19 @@ import org.slf4j.Logger;
 @Mod(FontaineRepublic.MOD_ID)
 public class FontaineRepublic {
     public static final String MOD_ID = "fontainerepublic";
+    public static final String MOD_VERSION = "0.1.0-alpha";
     private static final String RUNTIME_VALIDATION_PROPERTY =
             "fontainerepublic.debugValidation";
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private final CoreManager coreManager = new CoreManager(new ModuleRegistry());
     private final NetworkBootstrap networkBootstrap = new NetworkBootstrap(coreManager);
+    private final CommandContributionRegistry commandContributionRegistry =
+            new CommandContributionRegistry();
+    private final CommandBootstrap commandBootstrap = new CommandBootstrap(
+            commandContributionRegistry,
+            new CommandRuntimeResolver(coreManager)
+    );
     private final boolean runtimeValidationEnabled =
             Boolean.getBoolean(RUNTIME_VALIDATION_PROPERTY);
 
@@ -44,6 +54,7 @@ public class FontaineRepublic {
         MinecraftForge.EVENT_BUS.addListener(this::onServerStopped);
         MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
         MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggedOut);
+        MinecraftForge.EVENT_BUS.addListener(commandBootstrap::onRegisterCommands);
     }
 
     private void onCommonSetup(FMLCommonSetupEvent event) {
@@ -58,6 +69,7 @@ public class FontaineRepublic {
             );
         }
         event.enqueueWork(() -> {
+            commandContributionRegistry.freeze();
             networkBootstrap.registerProductionMessagesAndFreeze();
             coreManager.closeRegistration();
         });
