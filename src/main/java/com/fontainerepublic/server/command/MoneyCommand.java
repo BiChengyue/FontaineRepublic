@@ -7,6 +7,16 @@ import com.fontainerepublic.server.economy.model.EconomyAccount;
 import com.fontainerepublic.server.economy.model.EconomyTransaction;
 import com.fontainerepublic.server.economy.persistence.EconomyLimits;
 import com.fontainerepublic.server.economy.persistence.EconomyUnavailableException;
+import com.fontainerepublic.server.playerdata.api.PlayerDirectoryService;
+import com.fontainerepublic.server.playerdata.model.GameNameNormalizer;
+import com.fontainerepublic.server.playerdata.model.PlayerNameResolution;
+import com.fontainerepublic.server.playerdata.model.PlayerNameResolutionKind;
+import com.fontainerepublic.server.registry.api.PublicRoutingResult;
+import com.fontainerepublic.server.registry.api.RoutingStatus;
+import com.fontainerepublic.server.registry.api.SubjectRegistryService;
+import com.fontainerepublic.server.registry.model.RegistryNumber;
+import com.fontainerepublic.server.registry.model.SubjectId;
+import com.fontainerepublic.server.registry.model.SubjectRecord;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -25,10 +35,15 @@ import java.util.UUID;
 
 /**
  * Approved personal money command surface (FR-ECO-001-A §6.3, scoped by
- * FR-CMD-USER-001): own balance, UUID-target ordinary payment with bounded
- * memo, and bounded own history. Deliberately absent: top / bank / treasury /
- * other-player balance / freeze / cash / issuance. Execution resolves the
- * current ACTIVE {@link EconomyService} per invocation through the
+ * FR-CMD-USER-001 and FR-CMD-USER-002): own balance, ordinary payment with
+ * bounded memo, and bounded own history. The {@code pay} target accepts a
+ * canonical UUID, an exact game name, or a public registry number
+ * ({@code TT-NNNNNN-CC}); all three routes converge on the same
+ * {@link SubjectId} through PlayerData/FR-ID services before any mutation
+ * (FR-ECO-001-C-ACCOUNT-ALIGN-01 §2.3). Deliberately absent: top / bank /
+ * treasury / other-player balance / freeze / cash / issuance / fuzzy or
+ * enumerated name input. Execution resolves the current ACTIVE
+ * {@link EconomyService} per invocation through the
  * {@link CommandRuntimeResolver} and never caches services or state.
  */
 public final class MoneyCommand {
@@ -36,6 +51,15 @@ public final class MoneyCommand {
 
     /** Bounded history page argument (1-based); guards the cursor loop. */
     private static final int MAX_HISTORY_PAGE = 1_000;
+
+    /** Bounded syntax hint for malformed target input (UUID / number / name). */
+    private static final String INVALID_TARGET_SYNTAX_MESSAGE =
+            "Payment rejected: target must be a canonical UUID, registry number "
+                    + "(TT-NNNNNN-CC), or valid game name.";
+
+    /** Bounded generic feedback for unresolvable targets; no classification detail. */
+    private static final String TARGET_UNRESOLVABLE_MESSAGE =
+            "Payment rejected: target cannot be resolved.";
 
     private MoneyCommand() {
     }
@@ -52,7 +76,7 @@ public final class MoneyCommand {
                                 runtimeResolver
                         )))
                 .then(Commands.literal("pay")
-                        .then(Commands.argument("uuid", StringArgumentType.string())
+                        .then(Commands.argument("target", StringArgumentType.string())
                                 .then(Commands.argument(
                                                 "amount",
                                                 LongArgumentType.longArg(1)
@@ -129,7 +153,7 @@ public final class MoneyCommand {
     }
 
     // ------------------------------------------------------------------
-    // /fr money pay <uuid> <amount> [memo]
+    // /fr money pay <target> <amount> [memo]
     // ------------------------------------------------------------------
 
     private static int pay(
@@ -138,16 +162,13 @@ public final class MoneyCommand {
             String rawMemo
     ) {
         CommandSourceStack source = context.getSource();
-        String uuidInput = StringArgumentType.getString(context, "uuid");
-        UUID target;
-        try {
-            target = parseCanonicalUuid(uuidInput);
-        } catch (IllegalArgumentException invalid) {
-            return CommandFeedback.failure(
-                    source,
-                    "Payment rejected: invalid target UUID '" + uuidInput
-                            + "' (canonical UUID required)."
-            );
+        String targetInput = StringArgumentType.getString(context, "target");
+
+        // Syntax layer first (no service dependency): the target must be a
+        // canonical UUID, a registry number (10 digits or TT-NNNNNN-CC), or a
+        // valid game name before anything else is resolved.
+        if (classifyTarget(targetInput).isEmpty()) {
+            return CommandFeedback.failure(source, INVALID_TARGET_SYNTAX_MESSAGE);
         }
         String memo = normalizeMemo(rawMemo);
         if (memo != null && memo.length() > EconomyLimits.DEFAULT.maxMemoLength()) {
@@ -174,12 +195,19 @@ public final class MoneyCommand {
             );
         }
         try {
-            TransferReceipt receipt = service.get().transferByPlayer(
+            PayOutcome outcome = executePay(
+                    service.get(),
+                    runtimeResolver.playerDirectoryService(),
+                    runtimeResolver.subjectRegistryService(),
                     player.getUUID(),
-                    target,
+                    targetInput,
                     LongArgumentType.getLong(context, "amount"),
                     memo
             );
+            if (outcome.receipt() == null) {
+                return CommandFeedback.failure(source, outcome.failureMessage());
+            }
+            TransferReceipt receipt = outcome.receipt();
             return CommandFeedback.success(
                     source,
                     "Payment sent: "
@@ -192,6 +220,182 @@ public final class MoneyCommand {
         } catch (RuntimeException exception) {
             return unexpected(source, "money.pay", exception);
         }
+    }
+
+    /**
+     * Pay core without a command-source binding (testable): re-resolves the
+     * exact target at execution time through the server services (suggestions
+     * are never authoritative), re-resolves the actor's own subject, and only
+     * then performs the ordinary {@link SubjectId}-keyed transfer. A failed
+     * target resolution never reaches the economy mutation.
+     */
+    static PayOutcome executePay(
+            EconomyService economy,
+            Optional<PlayerDirectoryService> directory,
+            Optional<SubjectRegistryService> registry,
+            UUID fromPlayerId,
+            String targetInput,
+            long amount,
+            String memo
+    ) {
+        TargetResolution target = resolveTarget(directory, registry, targetInput);
+        if (!target.resolved()) {
+            return PayOutcome.failed(target.failureMessage());
+        }
+        if (registry.isEmpty()) {
+            return PayOutcome.failed(TARGET_UNRESOLVABLE_MESSAGE);
+        }
+        Optional<SubjectId> self = registry.get()
+                .findSubjectForPlayer(fromPlayerId)
+                .map(SubjectRecord::subjectId);
+        if (self.isEmpty()) {
+            return PayOutcome.failed("Your account is not available.");
+        }
+        TransferReceipt receipt = economy.transfer(
+                self.get(),
+                target.subjectId(),
+                amount,
+                memo
+        );
+        return PayOutcome.success(receipt);
+    }
+
+    /** Syntax classification of the target input (no service dependency). */
+    private static Optional<TargetKind> classifyTarget(String input) {
+        if (isCanonicalUuid(input)) {
+            return Optional.of(TargetKind.UUID);
+        }
+        if (isRegistryNumberSyntax(input)) {
+            return Optional.of(TargetKind.REGISTRY_NUMBER);
+        }
+        if (GameNameNormalizer.normalize(input).isPresent()) {
+            return Optional.of(TargetKind.GAME_NAME);
+        }
+        return Optional.empty();
+    }
+
+    private static boolean isCanonicalUuid(String input) {
+        try {
+            parseCanonicalUuid(input);
+            return true;
+        } catch (IllegalArgumentException invalid) {
+            return false;
+        }
+    }
+
+    /**
+     * Accepts exactly the canonical ten-digit form or the display form
+     * {@code TT-NNNNNN-CC} at the syntax layer; the MOD 97 checksum and type
+     * rules are enforced by {@link RegistryNumber#parse} during resolution.
+     */
+    private static boolean isRegistryNumberSyntax(String input) {
+        if (input.length() == RegistryNumber.CANONICAL_LENGTH) {
+            return allAsciiDigits(input);
+        }
+        if (input.length() == RegistryNumber.DISPLAY_LENGTH
+                && input.charAt(2) == '-'
+                && input.charAt(9) == '-') {
+            return allAsciiDigits(
+                    input.substring(0, 2)
+                            + input.substring(3, 9)
+                            + input.substring(10, 12)
+            );
+        }
+        return false;
+    }
+
+    private static boolean allAsciiDigits(String input) {
+        for (int index = 0; index < input.length(); index++) {
+            char current = input.charAt(index);
+            if (current < '0' || current > '9') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Execution-time target resolution: every input kind converges on one
+     * {@link SubjectId}. Failures are bounded and never expose directory or
+     * registry classification details.
+     */
+    static TargetResolution resolveTarget(
+            Optional<PlayerDirectoryService> directory,
+            Optional<SubjectRegistryService> registry,
+            String targetInput
+    ) {
+        Optional<TargetKind> kind = classifyTarget(targetInput);
+        if (kind.isEmpty()) {
+            return TargetResolution.failed(INVALID_TARGET_SYNTAX_MESSAGE);
+        }
+        return switch (kind.get()) {
+            case UUID -> resolveUuidTarget(registry, targetInput);
+            case REGISTRY_NUMBER -> resolveNumberTarget(registry, targetInput);
+            case GAME_NAME -> resolveNameTarget(directory, registry, targetInput);
+        };
+    }
+
+    private static TargetResolution resolveUuidTarget(
+            Optional<SubjectRegistryService> registry,
+            String targetInput
+    ) {
+        if (registry.isEmpty()) {
+            return TargetResolution.failed(TARGET_UNRESOLVABLE_MESSAGE);
+        }
+        UUID targetUuid = parseCanonicalUuid(targetInput);
+        Optional<SubjectId> subject = registry.get()
+                .findSubjectForPlayer(targetUuid)
+                .map(SubjectRecord::subjectId);
+        if (subject.isEmpty()) {
+            return TargetResolution.failed(TARGET_UNRESOLVABLE_MESSAGE);
+        }
+        return TargetResolution.resolved(subject.get());
+    }
+
+    private static TargetResolution resolveNumberTarget(
+            Optional<SubjectRegistryService> registry,
+            String targetInput
+    ) {
+        RegistryNumber number;
+        try {
+            number = RegistryNumber.parse(targetInput);
+        } catch (IllegalArgumentException invalid) {
+            return TargetResolution.failed(INVALID_TARGET_SYNTAX_MESSAGE);
+        }
+        if (registry.isEmpty()) {
+            return TargetResolution.failed(TARGET_UNRESOLVABLE_MESSAGE);
+        }
+        PublicRoutingResult result = registry.get().resolveExactRegistryNumber(number);
+        if (result.status() != RoutingStatus.ROUTABLE_ACTIVE) {
+            return TargetResolution.failed(TARGET_UNRESOLVABLE_MESSAGE);
+        }
+        return TargetResolution.resolved(
+                result.subject().orElseThrow().subjectId()
+        );
+    }
+
+    private static TargetResolution resolveNameTarget(
+            Optional<PlayerDirectoryService> directory,
+            Optional<SubjectRegistryService> registry,
+            String targetInput
+    ) {
+        if (directory.isEmpty() || registry.isEmpty()) {
+            return TargetResolution.failed(TARGET_UNRESOLVABLE_MESSAGE);
+        }
+        PlayerNameResolution resolution = directory.get()
+                .resolveExactGameName(targetInput);
+        if (resolution.kind() != PlayerNameResolutionKind.UNIQUE_CURRENT) {
+            // UNKNOWN / RETIRED / AMBIGUOUS share one bounded message;
+            // INVALID_INPUT is its own bounded syntax hint.
+            return TargetResolution.failed(resolution.publicMessage());
+        }
+        Optional<SubjectId> subject = registry.get()
+                .findSubjectForPlayer(resolution.playerId().orElseThrow())
+                .map(SubjectRecord::subjectId);
+        if (subject.isEmpty()) {
+            return TargetResolution.failed(TARGET_UNRESOLVABLE_MESSAGE);
+        }
+        return TargetResolution.resolved(subject.get());
     }
 
     // ------------------------------------------------------------------
@@ -339,5 +543,58 @@ public final class MoneyCommand {
                 source,
                 "FontaineRepublic could not complete the command."
         );
+    }
+
+    /** Syntax classification of one {@code pay} target input. */
+    private enum TargetKind {
+        UUID,
+        REGISTRY_NUMBER,
+        GAME_NAME
+    }
+
+    /**
+     * Closed result of target resolution: exactly one of a resolved
+     * {@link SubjectId} or a bounded failure message.
+     */
+    record TargetResolution(SubjectId subjectId, String failureMessage) {
+
+        private static TargetResolution resolved(SubjectId subjectId) {
+            return new TargetResolution(
+                    Objects.requireNonNull(subjectId, "subjectId"),
+                    null
+            );
+        }
+
+        private static TargetResolution failed(String failureMessage) {
+            return new TargetResolution(
+                    null,
+                    Objects.requireNonNull(failureMessage, "failureMessage")
+            );
+        }
+
+        private boolean resolved() {
+            return subjectId != null;
+        }
+    }
+
+    /**
+     * Closed outcome of {@link #executePay}: exactly one of a successful
+     * {@link TransferReceipt} or a bounded failure message.
+     */
+    record PayOutcome(TransferReceipt receipt, String failureMessage) {
+
+        private static PayOutcome success(TransferReceipt receipt) {
+            return new PayOutcome(
+                    Objects.requireNonNull(receipt, "receipt"),
+                    null
+            );
+        }
+
+        private static PayOutcome failed(String failureMessage) {
+            return new PayOutcome(
+                    null,
+                    Objects.requireNonNull(failureMessage, "failureMessage")
+            );
+        }
     }
 }

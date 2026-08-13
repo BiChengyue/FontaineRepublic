@@ -21,7 +21,18 @@ import com.fontainerepublic.server.economy.model.EconomyAccount;
 import com.fontainerepublic.server.economy.model.EconomyTransaction;
 import com.fontainerepublic.server.economy.model.NotificationSummary;
 import com.fontainerepublic.server.login.LoginProvisioningHook;
+import com.fontainerepublic.server.playerdata.api.PlayerDirectoryService;
+import com.fontainerepublic.server.playerdata.model.PlayerNameResolution;
+import com.fontainerepublic.server.playerdata.model.PlayerNameResolutionKind;
+import com.fontainerepublic.server.registry.api.PublicRoutingResult;
+import com.fontainerepublic.server.registry.api.SubjectProjection;
+import com.fontainerepublic.server.registry.api.SubjectRegistryService;
+import com.fontainerepublic.server.registry.model.OwnerReference;
+import com.fontainerepublic.server.registry.model.RegistryNumber;
 import com.fontainerepublic.server.registry.model.SubjectId;
+import com.fontainerepublic.server.registry.model.SubjectRecord;
+import com.fontainerepublic.server.registry.model.SubjectStatus;
+import com.fontainerepublic.server.registry.model.SubjectType;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -40,6 +51,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -63,6 +75,7 @@ public final class CommandFoundationTestMain {
         testFeedbackBounds();
         testProductionBoundaries();
         testBusinessCommandTree();
+        testMoneyPayTargetResolution();
         testLoginProvisioningHook();
         System.out.println("[FR-CMD-001] Command foundation validation passed");
     }
@@ -500,13 +513,13 @@ public final class CommandFoundationTestMain {
         check(unavailableCapture.lastMessage().contains("Citizen runtime is unavailable"),
                 "Unavailable citizen feedback must be explicit");
 
-        // 参数校验:非法 UUID / 超长 memo 拒绝;非法数字 / 多余参数走 Brigadier 语法失败。
+        // 参数校验:畸形目标 / 超长 memo 拒绝;非法数字 / 多余参数走 Brigadier 语法失败。
         CapturingSource invalidCapture = new CapturingSource();
         CommandSourceStack invalidSource = source(invalidCapture, 0);
-        int invalidUuid = dispatcher.execute("fr money pay not-a-uuid 5", invalidSource);
-        check(invalidUuid == CommandFeedback.FAILURE, "Invalid target UUID must fail");
-        check(invalidCapture.lastMessage().contains("invalid target UUID"),
-                "Invalid UUID feedback must be explicit");
+        int invalidTarget = dispatcher.execute("fr money pay not-a-uuid 5", invalidSource);
+        check(invalidTarget == CommandFeedback.FAILURE, "Malformed target must fail");
+        check(invalidCapture.lastMessage().contains("target must be a canonical UUID"),
+                "Malformed target feedback must be explicit");
         int invalidMemo = dispatcher.execute(
                 "fr money pay 00000000-0000-0000-0000-000000000001 5 "
                         + "x".repeat(129),
@@ -529,6 +542,175 @@ public final class CommandFoundationTestMain {
                 () -> dispatcher.execute("fr money balance extra", syntaxSource));
         check(syntaxCapture.messages().isEmpty(),
                 "Rejected syntax must not emit feedback");
+    }
+
+    private static void testMoneyPayTargetResolution() {
+        UUID actorPlayer = UUID.fromString("00000000-0000-0000-0000-0000000000ac");
+        UUID targetPlayer = UUID.fromString("00000000-0000-0000-0000-0000000000ab");
+        SubjectId actorSubject = SubjectId.of(
+                UUID.fromString("22222222-2222-2222-2222-222222222222")
+        );
+        SubjectId targetSubject = SubjectId.of(
+                UUID.fromString("11111111-1111-1111-1111-111111111111")
+        );
+        RegistryNumber actorNumber = RegistryNumber.forTypeAndSerial(
+                SubjectType.NATURAL_PERSON,
+                6
+        );
+        RegistryNumber targetNumber = RegistryNumber.forTypeAndSerial(
+                SubjectType.NATURAL_PERSON,
+                7
+        );
+        RegistryNumber otherNumber = RegistryNumber.forTypeAndSerial(
+                SubjectType.NATURAL_PERSON,
+                8
+        );
+
+        StubDirectory directory = new StubDirectory(Map.of(
+                "Alpha", PlayerNameResolution.uniqueCurrent(targetPlayer),
+                "Ghost", PlayerNameResolution.unknown(),
+                "OldName", PlayerNameResolution.retired(),
+                "Shared", PlayerNameResolution.ambiguous()
+        ));
+        StubRegistry registry = new StubRegistry(
+                Map.of(
+                        targetPlayer, subject(targetSubject, targetNumber, targetPlayer),
+                        actorPlayer, subject(actorSubject, actorNumber, actorPlayer)
+                ),
+                Map.of(
+                        targetNumber, PublicRoutingResult.routable(
+                                projection(targetSubject, targetNumber)
+                        )
+                )
+        );
+        RecordingEconomy economy = new RecordingEconomy();
+
+        // 三种输入收敛到同一目标 SubjectId,且都真正到达 economy 转账边界。
+        MoneyCommand.PayOutcome byUuid = MoneyCommand.executePay(
+                economy, Optional.of(directory), Optional.of(registry),
+                actorPlayer, targetPlayer.toString(), 5, null
+        );
+        MoneyCommand.PayOutcome byName = MoneyCommand.executePay(
+                economy, Optional.of(directory), Optional.of(registry),
+                actorPlayer, "Alpha", 5, null
+        );
+        MoneyCommand.PayOutcome byNumber = MoneyCommand.executePay(
+                economy, Optional.of(directory), Optional.of(registry),
+                actorPlayer, targetNumber.display(), 5, null
+        );
+        check(byUuid.receipt() != null && byUuid.receipt().to().equals(targetSubject),
+                "UUID target must resolve and transfer to the target subject");
+        check(byName.receipt() != null && byName.receipt().to().equals(targetSubject),
+                "Exact game name must converge on the same subject");
+        check(byNumber.receipt() != null && byNumber.receipt().to().equals(targetSubject),
+                "Registry number must converge on the same subject");
+        check(economy.transfers.size() == 3,
+                "Each convergent input must reach exactly one economy transfer");
+        check(economy.transfers.stream().allMatch(transfer -> transfer.to().equals(targetSubject)),
+                "All three inputs must address the identical target subject");
+        check(economy.transfers.stream().allMatch(transfer -> transfer.from().equals(actorSubject)),
+                "Actor subject must be resolved once per transfer");
+
+        // 未知/退役/歧义统一受限反馈,绝不触碰 economy 转账。
+        int beforeFailures = economy.transfers.size();
+        for (String name : List.of("Ghost", "OldName", "Shared")) {
+            MoneyCommand.PayOutcome outcome = MoneyCommand.executePay(
+                    economy, Optional.of(directory), Optional.of(registry),
+                    actorPlayer, name, 5, null
+            );
+            check(outcome.receipt() == null, "Non-resolving name must not transfer");
+            check(
+                    outcome.failureMessage().equals(
+                            "Player name cannot be resolved uniquely."
+                    ),
+                    "UNKNOWN/RETIRED/AMBIGUOUS must share one bounded message for '"
+                            + name + "'"
+            );
+        }
+
+        // 畸形输入拒绝:含非法字符、校验失败的登记号、超长名、空串。
+        for (String malformed : List.of(
+                "not-a-uuid",
+                "1234567890",
+                "12-345678-9z",
+                "x".repeat(17),
+                ""
+        )) {
+            MoneyCommand.PayOutcome outcome = MoneyCommand.executePay(
+                    economy, Optional.of(directory), Optional.of(registry),
+                    actorPlayer, malformed, 5, null
+            );
+            check(outcome.receipt() == null, "Malformed target must not transfer");
+            check(
+                    outcome.failureMessage().contains(
+                            "target must be a canonical UUID"
+                    ),
+                    "Malformed input must produce the bounded syntax hint"
+            );
+        }
+
+        // 登记号存在但不可路由(非 ACTIVE / 未知)与目录不可用均受限反馈。
+        MoneyCommand.PayOutcome nonRoutable = MoneyCommand.executePay(
+                economy, Optional.of(directory), Optional.of(registry),
+                actorPlayer, otherNumber.display(), 5, null
+        );
+        check(nonRoutable.receipt() == null
+                        && nonRoutable.failureMessage().equals(
+                        "Payment rejected: target cannot be resolved."),
+                "Non-routable number must fail closed without classification detail");
+        MoneyCommand.PayOutcome noServices = MoneyCommand.executePay(
+                economy, Optional.empty(), Optional.empty(),
+                actorPlayer, targetPlayer.toString(), 5, null
+        );
+        check(noServices.receipt() == null
+                        && noServices.failureMessage().equals(
+                        "Payment rejected: target cannot be resolved."),
+                "Unavailable directory/registry must fail closed with bounded feedback");
+
+        // 发送方无 subject:目标解析成功后仍拒绝,且不转账。
+        MoneyCommand.PayOutcome noActor = MoneyCommand.executePay(
+                economy, Optional.of(directory), Optional.of(registry),
+                UUID.fromString("00000000-0000-0000-0000-0000000000ad"),
+                targetPlayer.toString(), 5, null
+        );
+        check(noActor.receipt() == null
+                        && noActor.failureMessage().equals(
+                        "Your account is not available."),
+                "Actor without a subject must fail closed");
+
+        // 所有失败路径合计零转账:解析失败绝不到达 economy 变更边界。
+        check(economy.transfers.size() == beforeFailures,
+                "Failed target resolution must never reach the economy mutation");
+    }
+
+    private static SubjectRecord subject(
+            SubjectId subjectId,
+            RegistryNumber number,
+            UUID ownerPlayer
+    ) {
+        return new SubjectRecord(
+                SubjectRecord.CURRENT_SCHEMA_VERSION,
+                subjectId,
+                number,
+                SubjectType.NATURAL_PERSON,
+                OwnerReference.forPlayer(ownerPlayer),
+                SubjectStatus.ACTIVE,
+                1L,
+                1_000L,
+                1_000L
+        );
+    }
+
+    private static SubjectProjection projection(
+            SubjectId subjectId,
+            RegistryNumber number
+    ) {
+        return new SubjectProjection(
+                subjectId,
+                number,
+                SubjectType.NATURAL_PERSON,
+                SubjectStatus.ACTIVE
+        );
     }
 
     private static void testLoginProvisioningHook() {
@@ -805,6 +987,142 @@ public final class CommandFoundationTestMain {
                 String memo
         ) {
             throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public List<NotificationSummary> pendingNotifications(SubjectId subjectId) {
+            return List.of();
+        }
+
+        @Override
+        public void acknowledgeNotification(SubjectId subjectId, long notificationId) {
+            // no-op stub
+        }
+
+        @Override
+        public String formatBalance(long amount) {
+            return Long.toString(amount);
+        }
+    }
+
+    private static final class StubDirectory implements PlayerDirectoryService {
+        private final Map<String, PlayerNameResolution> resolutions;
+
+        private StubDirectory(Map<String, PlayerNameResolution> resolutions) {
+            this.resolutions = Map.copyOf(resolutions);
+        }
+
+        @Override
+        public PlayerNameResolution resolveExactGameName(String input) {
+            return resolutions.getOrDefault(input, PlayerNameResolution.unknown());
+        }
+    }
+
+    private static final class StubRegistry implements SubjectRegistryService {
+        private final Map<UUID, SubjectRecord> byPlayer;
+        private final Map<RegistryNumber, PublicRoutingResult> byNumber;
+
+        private StubRegistry(
+                Map<UUID, SubjectRecord> byPlayer,
+                Map<RegistryNumber, PublicRoutingResult> byNumber
+        ) {
+            this.byPlayer = Map.copyOf(byPlayer);
+            this.byNumber = Map.copyOf(byNumber);
+        }
+
+        @Override
+        public SubjectRecord ensurePlayerSubject(UUID playerId) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public Optional<SubjectRecord> findSubjectForPlayer(UUID playerId) {
+            return Optional.ofNullable(byPlayer.get(playerId));
+        }
+
+        @Override
+        public Optional<SubjectRecord> findBySubjectId(SubjectId subjectId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public PublicRoutingResult resolveExactRegistryNumber(RegistryNumber number) {
+            return byNumber.getOrDefault(number, PublicRoutingResult.unknownOrInvalid());
+        }
+
+        @Override
+        public Optional<SubjectStatus> status(SubjectId subjectId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public SubjectRecord updateStatus(SubjectId subjectId, SubjectStatus status) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+    }
+
+    private static final class RecordingEconomy implements EconomyService {
+        private final List<TransferReceipt> transfers = new ArrayList<>();
+
+        @Override
+        public EconomyAccount ensureAccountForPlayer(UUID playerId) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public EconomyAccount ensureAccount(SubjectId subjectId) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public Optional<EconomyAccount> getAccount(SubjectId subjectId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public long getBalance(SubjectId subjectId) {
+            return 0L;
+        }
+
+        @Override
+        public EconomyPage<EconomyTransaction> getRecentTransactions(
+                SubjectId subjectId,
+                long afterId,
+                int limit
+        ) {
+            return EconomyPage.empty(afterId);
+        }
+
+        @Override
+        public TransferReceipt transfer(
+                SubjectId from,
+                SubjectId to,
+                long amount,
+                String memo
+        ) {
+            TransferReceipt receipt = new TransferReceipt(
+                    transfers.size() + 1L,
+                    2_000L,
+                    from,
+                    to,
+                    amount,
+                    memo,
+                    true
+            );
+            transfers.add(receipt);
+            return receipt;
+        }
+
+        @Override
+        public TransferReceipt transferByPlayer(
+                UUID fromPlayerId,
+                UUID toPlayerId,
+                long amount,
+                String memo
+        ) {
+            throw new UnsupportedOperationException(
+                    "command layer must transfer by resolved SubjectId"
+            );
         }
 
         @Override
