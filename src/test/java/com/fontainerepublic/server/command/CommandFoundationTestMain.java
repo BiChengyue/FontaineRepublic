@@ -75,6 +75,7 @@ public final class CommandFoundationTestMain {
         testFeedbackBounds();
         testProductionBoundaries();
         testBusinessCommandTree();
+        testHelpGuide();
         testMoneyPayTargetResolution();
         testLoginProvisioningHook();
         System.out.println("[FR-CMD-001] Command foundation validation passed");
@@ -302,8 +303,20 @@ public final class CommandFoundationTestMain {
         check(rootResult == CommandFeedback.SUCCESS, "Root command must return 1");
         check(helpResult == CommandFeedback.SUCCESS, "Help command must return 1");
         check(
-                ordinaryCapture.lastMessage().contains("Available: help"),
-                "Non-OP help must use Brigadier visibility and hide admin"
+                ordinaryCapture.messages().stream()
+                        .anyMatch(message -> message.contains("FontaineRepublic help")),
+                "Help index must identify itself"
+        );
+        check(
+                ordinaryCapture.messages().stream()
+                        .anyMatch(message -> message.contains("money")),
+                "Help index must list the money module"
+        );
+        check(
+                ordinaryCapture.messages().stream()
+                        .noneMatch(message -> message.contains("admin status")
+                                || message.contains("admin modules")),
+                "Help must not enumerate hidden admin commands"
         );
 
         ModuleId moduleId = new ModuleId("test-command-runtime");
@@ -382,22 +395,24 @@ public final class CommandFoundationTestMain {
         // Argument parsing is allowed only in the foundation-owned admin
         // child adapter (FrameworkAdminCommand), which hosts the approved
         // /fr admin bootstrap subject-hydro <uuid> <reason> command
-        // (FR-ID-BOOTSTRAP-001-A §3), and in the approved business command
+        // (FR-ID-BOOTSTRAP-001-A §3), in the approved business command
         // surfaces MoneyCommand (UUID/amount/memo/page arguments) and
         // CitizenCommand (read-only, argument-free by design,
-        // FR-CIT-001-A §5). Every other command source file must remain
-        // argument-free.
+        // FR-CIT-001-A §5), and in HelpCommand (/fr help <module>
+        // module argument, FR-CMD-GUIDE-001). Every other command source
+        // file must remain argument-free.
         for (Path file : commandFiles(commandDirectory)) {
             String fileName = file.getFileName().toString();
             if (fileName.equals("FrameworkAdminCommand.java")
                     || fileName.equals("MoneyCommand.java")
-                    || fileName.equals("CitizenCommand.java")) {
+                    || fileName.equals("CitizenCommand.java")
+                    || fileName.equals("HelpCommand.java")) {
                 continue;
             }
             check(
                     !read(file).contains("Commands.argument("),
                     "Command argument parsing is only permitted in "
-                            + "FrameworkAdminCommand/MoneyCommand/CitizenCommand: "
+                            + "FrameworkAdminCommand/MoneyCommand/CitizenCommand/HelpCommand: "
                             + file.getFileName()
             );
         }
@@ -542,6 +557,111 @@ public final class CommandFoundationTestMain {
                 () -> dispatcher.execute("fr money balance extra", syntaxSource));
         check(syntaxCapture.messages().isEmpty(),
                 "Rejected syntax must not emit feedback");
+    }
+
+    private static void testHelpGuide() throws Exception {
+        CommandContributionRegistry registry = new CommandContributionRegistry();
+        registry.freeze();
+        CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
+        bootstrap(registry, new CoreManager(new ModuleRegistry()))
+                .register(dispatcher, null, Commands.CommandSelection.ALL);
+
+        CommandNode<CommandSourceStack> help =
+                dispatcher.getRoot().getChild("fr").getChild("help");
+        check(help != null, "Help child must exist");
+        check(help.getChild("module") != null, "Help must accept a module argument");
+
+        // Index: fixed bounded lines covering every guide module, no admin leak.
+        CapturingSource indexCapture = new CapturingSource();
+        CommandSourceStack indexSource = source(indexCapture, 0);
+        int indexResult = dispatcher.execute("fr help", indexSource);
+        check(indexResult == CommandFeedback.SUCCESS, "Index help must return 1");
+        List<String> indexMessages = indexCapture.messages();
+        check(!indexMessages.isEmpty() && indexMessages.size() <= 7,
+                "Index help must stay bounded");
+        check(indexMessages.get(0).contains("FontaineRepublic help"),
+                "Index must identify itself");
+        for (String module : List.of(
+                "money", "citizen", "government", "parliament", "court", "institution")) {
+            check(indexMessages.stream().anyMatch(message -> message.contains(module)),
+                    "Index must list " + module);
+        }
+        check(indexMessages.stream().noneMatch(message -> message.contains("admin status")
+                        || message.contains("admin modules")),
+                "Index must not enumerate hidden admin commands");
+
+        // Per-module pages: bounded and mention their commands.
+        assertModulePage(dispatcher, "money", List.of("balance", "pay", "history"));
+        assertModulePage(dispatcher, "citizen", List.of("info"));
+        assertModulePage(dispatcher, "government",
+                List.of("ministry", "position", "appoint", "dismiss", "office"));
+        assertModulePage(dispatcher, "parliament",
+                List.of("proposal", "vote", "bill"));
+        assertModulePage(dispatcher, "court",
+                List.of("case", "evidence", "verdict", "review"));
+
+        // Restricted module: operator boundary stated, commands not enumerated.
+        CapturingSource restrictedCapture = new CapturingSource();
+        CommandSourceStack restrictedSource = source(restrictedCapture, 0);
+        int restrictedResult = dispatcher.execute("fr help institution", restrictedSource);
+        check(restrictedResult == CommandFeedback.SUCCESS,
+                "Institution help must return 1");
+        String restrictedJoined = String.join(" ", restrictedCapture.messages());
+        check(restrictedJoined.contains("operator"),
+                "Institution help must state the operator restriction");
+        check(!restrictedJoined.contains("facility")
+                        && !restrictedJoined.contains("terminal"),
+                "Institution help must not enumerate restricted commands");
+        for (String message : restrictedCapture.messages()) {
+            check(message.length() <= 240, "Institution help must be bounded");
+        }
+
+        // Unknown module: one bounded standard rejection, no enumeration.
+        CapturingSource unknownCapture = new CapturingSource();
+        CommandSourceStack unknownSource = source(unknownCapture, 0);
+        int unknownResult = dispatcher.execute("fr help unknown", unknownSource);
+        check(unknownResult == CommandFeedback.FAILURE, "Unknown module must fail");
+        check(unknownCapture.messages().size() == 1,
+                "Unknown module must emit exactly one bounded message");
+        check(unknownCapture.lastMessage().contains("Unknown module"),
+                "Unknown module feedback must be explicit");
+        check(unknownCapture.lastMessage().length() <= 240,
+                "Unknown module feedback must be bounded");
+
+        // Language keys: every guide key must exist in both lang files.
+        Path projectDirectory = Path.of(
+                System.getProperty(PROJECT_DIR_PROPERTY, ".")
+        ).toAbsolutePath().normalize();
+        Path langDirectory = projectDirectory.resolve(
+                "src/main/resources/assets/fontainerepublic/lang"
+        );
+        String zh = Files.readString(langDirectory.resolve("zh_cn.json"));
+        String en = Files.readString(langDirectory.resolve("en_us.json"));
+        for (String key : HelpCommand.languageKeys()) {
+            check(zh.contains(key), "zh_cn.json must define " + key);
+            check(en.contains(key), "en_us.json must define " + key);
+        }
+    }
+
+    private static void assertModulePage(
+            CommandDispatcher<CommandSourceStack> dispatcher,
+            String module,
+            List<String> expectedKeywords
+    ) throws Exception {
+        CapturingSource capture = new CapturingSource();
+        CommandSourceStack pageSource = source(capture, 0);
+        int result = dispatcher.execute("fr help " + module, pageSource);
+        check(result == CommandFeedback.SUCCESS, module + " help must return 1");
+        List<String> messages = capture.messages();
+        check(!messages.isEmpty() && messages.size() <= 10,
+                module + " help must stay bounded");
+        for (String message : messages) {
+            check(message.length() <= 240, module + " help lines must be bounded");
+        }
+        for (String keyword : expectedKeywords) {
+            check(messages.stream().anyMatch(message -> message.contains(keyword)),
+                    module + " help must mention " + keyword);
+        }
     }
 
     private static void testMoneyPayTargetResolution() {
