@@ -113,3 +113,13 @@
 - **修复**：派发命令加 `--output-format text -p`（纯文本/只输出最终结果）。
 - **验证**：v1.21.2 探针成功（EXIT=0，子进程正确创建/校验/删除文件，~10s）。
 - 已更新 `tools/dispatch-task.ps1` 与运行手册 §4.2；错误结论已从台账移除。
+
+## 2026-08-13 | FR-CORE-002 正式派发 + FR-CIT-001-A 设计
+
+- 设计批并入 develop（fast-forward 至 0e6f974），实现工作树同步到含全部批准文档的基线。
+- 正式派发 FR-CORE-002-IMPL：reasonix-cli v1.21.2 + `--output-format text -p` +
+  `--dir` 工作树，后台运行（会话 20260813-071701，直连 opencode.ai 172.65.90.21:443
+  Established，等待模型首响应中；out.log 将在结束时汇总输出）。
+- 产出 FR-CIT-001-A 公民模块设计候选（路线图 Phase 3 前置设计）：
+  公民身份/政治等级基础设施，与 FR-ID 主体登记、PlayerData、权限系统边界清晰；
+  rank 永不等于技术权限；权威变更走 FR-CORE-002 门。
