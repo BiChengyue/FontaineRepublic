@@ -116,6 +116,37 @@ Saving players / Saving worlds / All chunks are saved (主世界/DIM-1/DIM1)
 
 **通过条件：** 现场门控生效、供给恒等式成立、冻结双向拒绝。
 
+## 4.6 紧急权限真机核验（FR-EMG + FR-EMG-ECO-001，依赖 FR-EMG-CMD-001 命令面）
+
+进入控制台执行（仅本地专用服务器控制台可 bootstrap/recover）：
+
+```text
+/fr admin emergency bootstrap <水神UUID> <理由>   -> ACTIVE（config revision 1）
+/fr admin emergency status                       -> phase=ACTIVE、摘要、记录数
+/fr admin emergency preview economy issue 1.0.0 PLAYER_UUID <目标UUID> DEBUG <理由> amount 100
+                                                 -> 单次 token + 到期时间
+/fr admin emergency confirm <token>              -> 成功（attempt id）
+/fr money balance                                -> 目标玩家余额 +100、供给 +100
+/fr admin emergency preview economy reclaim 1.0.0 PLAYER_UUID <目标UUID> DEBUG <理由> amount 999
+                                                 -> INSUFFICIENT_FUNDS 拒绝
+/fr admin emergency inspect <attemptId>          -> 有界脱敏摘要（无明文金额/原因）
+```
+
+再验：
+
+- token 二次 confirm -> 拒绝（单次）；等待 >30s 后 confirm -> 过期拒绝；
+- 命令方块/RCON/函数来源执行 -> 服务端拒绝（即使解析到达回调）；
+- `/fr admin emergency stage <新UUID> <理由>` 后重启 -> STAGED 接受或漂移 fail
+  closed；`recover` 仅控制台可修复；
+- 重启后 `/fr admin emergency status` 记录数与 watermark 不倒退；
+- 存储失败路径（如需）：注入失败后 confirm 拒绝且余额/供给/receipt 不变。
+
+**需 Human 决策确认（政策）：** 紧急 issue/reclaim 不经过官方冻结门，可对冻结
+账户执行（FR-EMG-ECO-001-REVIEW-01 F-002）——请确认这是预期 break-glass 行为。
+
+**通过条件：** 上述命令面全部可用；来源门槛与 token 生命周期生效；供给恒等成立；
+receipt/watermark 持久化且可 inspect。
+
 ## 5. 崩溃窗口测试（可选，进阶）
 
 - 进服后运行数秒，直接强制结束服务器进程（任务管理器结束）；
