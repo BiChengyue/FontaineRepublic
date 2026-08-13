@@ -206,3 +206,13 @@
   FR-ID-BOOTSTRAP-001-REVIEW-01（验收 11/12 PASS，唯一 NOT TESTED = 真机控制台路径）；
   并入 develop（`f0cfe69`）。阻断项 F-004 关闭。
 - 恢复推进：派发 FR-CIT-001-IMPL（公民模块）。
+
+## 2026-08-13 | 公民模块交付 + 审查通过 + 土地派发
+
+- 公民子进程完成实现并**自行提交** `7adcd42`（19 文件 +2352 行），最终报告首次落盘
+  （dispatch-logs/fr-cit-001-20260813/fr-cit-001-impl.out.log，含实现评估/风险/接口摘要）。
+- Reviewer 独立复跑 citizenFoundationTest + 完整构建全绿；审查报告
+  FR-CIT-001-REVIEW-01（验收 8/9 PASS；"rank 无权限映射"经反射+源码禁词双重守卫）；
+  并入 develop（`e3db90f`）。
+- 派发 FR-LAND-001-IMPL（土地模块，wave fr-land-001-20260813）；
+  FR-ECO-001-IMPL 就绪工件已备（实现顺序最后一环）。

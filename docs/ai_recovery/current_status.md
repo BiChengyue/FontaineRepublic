@@ -20,7 +20,9 @@ runtime verification pending).
 Infrastructure stage complete (FR-CORE-002 + FR-AUD-001 + FR-ID-001, all
 implemented, independently reviewed Level 1-2, merged into develop).
 Per Human instruction on 2026-08-13, further implementation dispatch is
-**paused** pending Human confirmation and Level 3 runtime verification.
+resumed (Human: "批准阻断项实施；可以继续工作"). FR-ID-BOOTSTRAP-001
+(original-person binding) and FR-CIT-001 (citizen module) implemented,
+reviewed Level 1-2, and merged into develop.
 
 ## Completed Tasks
 
@@ -71,10 +73,10 @@ Per Human instruction on 2026-08-13, further implementation dispatch is
 
 ## Current Task
 
-Infrastructure stage review complete (FR-INFRA-STAGE-REVIEW-01, CONDITIONAL
-PASS). **Paused** per Human instruction: no new implementation dispatch.
-Pending: Human confirmation of the stage; Level 3 runtime verification;
-design-candidate reviews (FR-CIT-001-A / FR-LAND-001-A / FR-ID-BOOTSTRAP-001-A).
+FR-LAND-001-IMPL dispatched (land module). After review: FR-ECO-001-IMPL
+(economy player services, prep ready). Pending alongside: Level 3 runtime
+verification for all implemented modules (checklist:
+docs/development/LEVEL3-RUNTIME-VERIFICATION-CHECKLIST.md).
 
 ## Next Task
 
