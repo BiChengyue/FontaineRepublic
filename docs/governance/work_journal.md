@@ -530,3 +530,21 @@
   fr-client-001-impl-a，分支 codex/fr-client-001-impl-a）。
 - 待交付后：独立审查 → 完整构建 → 并入 develop → Human 早间真机核验
   （服务器面 + 客户端网络面）。
+## 2026-08-14（深夜）| 客户端 Stage A 交付 + 审查通过 + 并入 develop
+
+- 派发 FR-CLIENT-001-IMPL-A（wave fr-client-001-a-20260814）：子进程完成
+  协议 v2、生产消息账本（ID 0-2 S2C 展示包）、DistExecutor.safe 侧隔离、
+  ClientNetworkExecutor/非权威展示缓存、economy 发送接线（notifier + 装饰器 +
+  network 依赖）后达轮次上限退出（无提交，报告详尽）。
+- Reviewer 修复：writeCollection 参数顺序、EVENT_BUS.addListener 重载、
+  侧隔离扫描（import 检查 + safe-supplier 顺序）、业务 token 扫描豁免账本
+  文件、注释避词；补写 ClientPresentationFoundationTestMain（8 组用例）与
+  build.gradle 接线。
+- 验证：`clientPresentationFoundationTest` 通过；完整 `gradlew build`
+  BUILD SUCCESSFUL（29 tasks）。
+- 审查报告 FR-CLIENT-001-IMPL-A-REVIEW-01（PASS → ROUTE TO HUMAN）；提交
+  `68f5746` 并入 develop（merge `862fb3e`）。
+- 全栈冒烟（tmp/smoke-client-a-20260814）：**Channel fontainerepublic:main
+  protocol 2 frozen with 3 production messages**；12 模块全部初始化；
+  专用服务器未加载 client/ 类；Ready、干净关停、ExitCode=0。
+- 下一步：Stage B（GUI/HUD/表单，材料已备）→ Human 早间连服核验。

@@ -149,8 +149,11 @@ central bank on-site duties, crash window) per
 docs/development/LEVEL3-RUNTIME-VERIFICATION-CHECKLIST.md §4.6. Client UI mod
 enters the staged implementation phase per Human's established sequence:
 Stage A (S2C presentation network surface, FR-CLIENT-001-IMPL-A) dispatched
-2026-08-14; Stage B (GUI/HUD) follows; Stage C is real-machine verification
-with Human. The Level 3 server verification still awaits Human.
+2026-08-14, implemented, independently reviewed (Level 1-2, full build green,
+protocol v2 + 3-message ledger, dedicated-server smoke clean with no client
+classloading), and merged into develop. Stage B (GUI/HUD) materials are
+prepared; Stage C is real-machine verification with Human. The Level 3 server
+verification still awaits Human.
 
 ## Phase 2 Design Candidates (added 2026-08-02)
 

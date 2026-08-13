@@ -106,15 +106,18 @@ independently reviewed (Level 1-2), and merged into `develop`; full-stack
 smoke passes with 12 modules. FR-EMG-CMD-001 (`/fr admin emergency`
 preview/confirm/inspect/status/bootstrap/stage/recover adapter) is also
 implemented, reviewed, merged, and smoke-verified — the paused server-side
-task queue is complete.
+task queue is complete. FR-CLIENT-001-IMPL-A (client S2C presentation network
+surface: protocol v2, ledger IDs 0-2, DistExecutor side isolation, economy
+send wiring) is implemented, reviewed, merged, and smoke-verified; Stage B
+(GUI/HUD) is next.
 
 Next:
 
-Coordinate real-machine (Level 3) verification of the server surface with
-Human (emergency bootstrap/preview/confirm, central-bank on-site, crash
-window), then the UI-enabled client mod (FR Client, Beta/GUI) per the approved
-sequence. See docs/governance/continuous_development_ops.md for the operating
-handbook.
+Complete client Stage B (GUI/HUD/forms) per FR-CLIENT-001-IMPL-B, then
+coordinate real-machine (Level 3) verification of the server surface and the
+client network surface with Human (emergency bootstrap/preview/confirm,
+central-bank on-site, crash window, FR client connect). See
+docs/governance/continuous_development_ops.md for the operating handbook.
 
 Always read this section before starting work.
 
