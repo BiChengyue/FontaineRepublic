@@ -30,6 +30,8 @@ Level 1-2, and merged into develop. FR-CMD-USER-001 (economy/citizen commands
 + login hooks) implemented, reviewed Level 1-2, and merged — the player-facing
 layer is complete. FR-CMD-USER-002 (transfer by UUID / exact name / registry
 number) implemented, reviewed Level 1-2, and merged.
+FR-INST-002 (shared institution access boundary: facilities/terminals/on-site
+contexts) implemented, reviewed Level 1-2, and merged.
 
 ## Completed Tasks
 
@@ -81,10 +83,10 @@ number) implemented, reviewed Level 1-2, and merged.
 ## Current Task
 
 Approved implementation sequence complete (7 modules) plus FR-DATA-003 and
-FR-CMD-USER-001/002, all implemented, reviewed Level 1-2, merged into develop.
-Next candidates: FR-INST-002-A (shared institution access boundary, design
-candidate drafted), institution workflows, and Level 3 runtime verification
-for all implemented modules (checklist:
+FR-CMD-USER-001/002 and FR-INST-002, all implemented, reviewed Level 1-2,
+merged into develop. Next candidates: institution workflows (Parliament/
+Government/Court/Central Bank business modules), and Level 3 runtime
+verification for all implemented modules (checklist:
 docs/development/LEVEL3-RUNTIME-VERIFICATION-CHECKLIST.md).
 
 ## Next Task
