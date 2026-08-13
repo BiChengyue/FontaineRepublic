@@ -104,6 +104,16 @@ Player guide published at `docs/guide/player-guide.md`; in-game `/fr help`
 per-module expansion (FR-CMD-GUIDE-001) dispatched. Client UI mod remains the
 final phase per Human directive.
 
+## Awaiting Human Decisions
+
+1. Legacy v0 save handling (migration design candidate FR-DATA-MIGRATION-001-A
+   ready; fresh-world path recommended);
+2. Push develop to origin (local is 103 commits ahead);
+3. Central Bank official duties (open policy questions);
+4. Parliament extensions (guardian review/referendum/amendment);
+5. Client UI mod start signal;
+6. Workspace stray-directory cleanup confirmation.
+
 ## Next Task
 
 Human directives (2026-08-13): after feature development completes, provide
