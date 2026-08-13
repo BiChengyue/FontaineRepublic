@@ -58,3 +58,15 @@
   改为 SubjectId，登记号为唯一公开路由号，UUID 仍是身份认证键；解决审查
   F-001；紧急动作信封保留 PLAYER_UUID 但计划绑定 SubjectId。
 - 同步 CLAUDE.md / current_status.md 台账。
+
+## 2026-08-13 | FR-CMD-001-REVIEW-04 命令基础独立审查
+
+- 复核 2026-08-02 运行时证据包（server-nogui03 / server-reload04 两轮：
+  meta、命令账本、服务端/客户端日志），并重新运行 commandFoundationTest +
+  networkFoundationTest（BUILD SUCCESSFUL，两者均通过，日志
+  `tmp/foundation-tests-20260813.log`）。
+- 产出 `docs/ai_recovery/evidence/FR-CMD-001-REVIEW-04-AUDIT-REPORT.md`：
+  20 项验收标准全部 PASS；权限门（OP 2 级）、/fr 根/help/admin status/modules 输出、
+  无 Mod 客户端平价、网络通道协商、reload 行为、数据与世界保存均有日志证据。
+- 结论：FR-CMD-001 / FR-NET-001 基础验证通过，ROUTE TO HUMAN；
+  3 项低severity建议（OP 后 help 复测、证据来源、非 OP 反馈风格）列入后续。

@@ -108,6 +108,9 @@ approved. Committed on `codex/fr-inst-001-a-design`.
 
 - ConfigManager currently has no configuration entries.
 - Data loss on hard JVM termination remains an inherent SavedData limitation.
+- Phase 1 infrastructure (FR-CMD-001 / FR-NET-001) passed independent review
+  on 2026-08-13 (FR-CMD-001-REVIEW-04); remaining gaps are low-severity
+  suggestions only.
 - Phase 2 design candidates passed independent review (conditional) but await
   Human confirmation; two blockers remain: account-key alignment (resolved by
   FR-ECO-001-C-ACCOUNT-ALIGN-01 candidate) and the FR-CORE-002 durability gate.
