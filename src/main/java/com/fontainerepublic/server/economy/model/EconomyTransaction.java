@@ -59,19 +59,19 @@ public record EconomyTransaction(
                 requireParticipant(from, "from");
                 requireParticipant(to, "to");
             }
-            case DEPOSIT -> {
+            case DEPOSIT, ISSUE -> {
                 requireParticipant(to, "to");
                 if (from != null) {
                     throw new IllegalArgumentException(
-                            "A DEPOSIT has no source participant (system to account)"
+                            "A " + type + " has no source participant (system to account)"
                     );
                 }
             }
-            case WITHDRAWAL -> {
+            case WITHDRAWAL, RECLAIM -> {
                 requireParticipant(from, "from");
                 if (to != null) {
                     throw new IllegalArgumentException(
-                            "A WITHDRAWAL has no destination participant (account to system)"
+                            "A " + type + " has no destination participant (account to system)"
                     );
                 }
             }

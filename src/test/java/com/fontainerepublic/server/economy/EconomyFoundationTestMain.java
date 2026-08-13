@@ -813,17 +813,19 @@ public final class EconomyFoundationTestMain {
         require(Set.of(TransactionType.values()).equals(Set.of(
                         TransactionType.TRANSFER,
                         TransactionType.DEPOSIT,
-                        TransactionType.WITHDRAWAL)),
-                "TransactionType exposes exactly TRANSFER/DEPOSIT/WITHDRAWAL "
-                        + "— the official central-bank types only");
+                        TransactionType.WITHDRAWAL,
+                        TransactionType.ISSUE,
+                        TransactionType.RECLAIM)),
+                "TransactionType exposes exactly the approved player, official, "
+                        + "and emergency (ISSUE/RECLAIM) types");
 
         for (Class<?> type : List.of(EconomyService.class, EconomyModule.class)) {
             for (Method method : type.getDeclaredMethods()) {
                 String name = method.getName().toLowerCase(java.util.Locale.ROOT);
                 for (String forbidden : List.of(
                         "top", "leaderboard", "atm", "interest", "tax",
-                        "cash", "gui", "screen", "hud", "packet", "issue",
-                        "reclaim", "c2s", "setbalance"
+                        "cash", "gui", "screen", "hud", "packet", "c2s",
+                        "setbalance"
                 )) {
                     require(!name.contains(forbidden),
                             "no forbidden surface method in " + type.getSimpleName()
@@ -832,8 +834,11 @@ public final class EconomyFoundationTestMain {
             }
         }
 
-        // Source-level scan: no leaderboard/ATM/cash/GUI/C2S/network/emergency
-        // code exists in the economy production sources (comments excluded).
+        // Source-level scan: no leaderboard/ATM/cash/GUI/C2S/network surface
+        // and no shared-emergency-infrastructure duplication exists in the
+        // economy production sources (comments excluded). The authorized
+        // emergency catalogue (ISSUE/RECLAIM provider) is expected and is not
+        // a forbidden surface.
         Path projectDirectory = Path.of(
                 System.getProperty(PROJECT_DIR_PROPERTY, ".")
         ).toAbsolutePath().normalize();
@@ -852,7 +857,7 @@ public final class EconomyFoundationTestMain {
         for (String forbidden : List.of(
                 "top", "leaderboard", "atm", "interest", "tax", "cash",
                 "gui", "screen", "hud", "packet", "NetworkMessage",
-                "SimpleChannel", "issue", "reclaim", "c2s", "setBalance",
+                "SimpleChannel", "c2s", "setBalance",
                 "setOp", "isOp", "getPermission"
         )) {
             require(
@@ -1468,10 +1473,12 @@ public final class EconomyFoundationTestMain {
                     continue;
                 }
                 String name = method.getName().toLowerCase(java.util.Locale.ROOT);
-                // bounded participant projections are exempt: they are exact
-                // lookups scoped to one subject, never a bulk listing
+                // bounded participant projections and the bounded permanent
+                // emergency receipt page are exempt: they are exact lookups
+                // or bounded reconciliation pages, never a bulk listing
                 if (name.equals("pendingnotifications")
-                        || name.equals("participanttransactions")) {
+                        || name.equals("participanttransactions")
+                        || name.equals("receiptsafter")) {
                     continue;
                 }
                 Class<?> returnType = method.getReturnType();

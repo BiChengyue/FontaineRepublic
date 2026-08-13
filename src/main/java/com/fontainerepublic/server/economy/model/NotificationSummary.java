@@ -14,6 +14,12 @@ import java.util.Objects;
  * {@code notificationId} is the acknowledgement key; the referenced
  * transaction may already have been pruned from the bounded operational
  * buffer, so only its id is retained.</p>
+ *
+ * <p>{@code from} identifies the sender subject of an ordinary incoming
+ * transfer. It is {@code null} for a system-originated movement — the
+ * emergency {@code ISSUE}/{@code RECLAIM} notification (FR-ECO-001-C §6/§12)
+ * — mirroring the {@code null} system participant of the underlying
+ * transaction.</p>
  */
 public record NotificationSummary(
         int schemaVersion,
@@ -44,7 +50,7 @@ public record NotificationSummary(
                     "timestamp must be a positive epoch millisecond"
             );
         }
-        from = Objects.requireNonNull(from, "from");
+        // from is null for system-originated movements (emergency ISSUE/RECLAIM).
         if (amount <= 0) {
             throw new IllegalArgumentException("Amount must be positive");
         }

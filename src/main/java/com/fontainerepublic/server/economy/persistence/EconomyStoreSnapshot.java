@@ -1,6 +1,7 @@
 package com.fontainerepublic.server.economy.persistence;
 
 import com.fontainerepublic.server.economy.model.EconomyAccount;
+import com.fontainerepublic.server.economy.model.EconomyEmergencyReceipt;
 import com.fontainerepublic.server.economy.model.EconomyTransaction;
 import com.fontainerepublic.server.economy.model.NotificationSummary;
 import com.fontainerepublic.server.registry.model.SubjectId;
@@ -23,7 +24,9 @@ import java.util.Objects;
  *   <li>treasury balance is non-negative;</li>
  *   <li>total digital supply {@code = sum(accounts) + treasury} is reconciled
  *       without overflow (FR-ECO-001-C §3.4/§7);</li>
- *   <li>every pending notification belongs to an existing account.</li>
+ *   <li>every pending notification belongs to an existing account;</li>
+ *   <li>every permanent emergency success receipt has a positive, strictly
+ *       ascending {@code sequence} matching its map key.</li>
  * </ul>
  * <p>Duplicates, mismatches, or any inconsistent field reject the whole
  * snapshot (fail closed).</p>
@@ -35,7 +38,8 @@ public record EconomyStoreSnapshot(
         long treasuryBalance,
         Map<SubjectId, EconomyAccount> accounts,
         Map<Long, EconomyTransaction> transactions,
-        Map<SubjectId, List<NotificationSummary>> pendingNotifications
+        Map<SubjectId, List<NotificationSummary>> pendingNotifications,
+        Map<Long, EconomyEmergencyReceipt> emergencyReceipts
 ) {
 
     public static final int CURRENT_STORE_VERSION = 1;
@@ -60,6 +64,9 @@ public record EconomyStoreSnapshot(
         transactions = preserveOrder(Objects.requireNonNull(transactions, "transactions"));
         pendingNotifications = preserveOrder(
                 Objects.requireNonNull(pendingNotifications, "pendingNotifications")
+        );
+        emergencyReceipts = preserveOrder(
+                Objects.requireNonNull(emergencyReceipts, "emergencyReceipts")
         );
 
         long supply = treasuryBalance;
@@ -120,6 +127,26 @@ public record EconomyStoreSnapshot(
                 throw invalid("Pending notification list must not be empty");
             }
         }
+
+        long previousSequence = 0L;
+        for (Map.Entry<Long, EconomyEmergencyReceipt> entry
+                : emergencyReceipts.entrySet()) {
+            Long key = entry.getKey();
+            EconomyEmergencyReceipt receipt = entry.getValue();
+            if (!key.equals(receipt.sequence())) {
+                throw invalid(
+                        "Emergency receipt key " + key + " does not match record sequence "
+                                + receipt.sequence()
+                );
+            }
+            if (receipt.sequence() <= previousSequence) {
+                throw invalid(
+                        "Emergency receipt sequences must be strictly ascending; found "
+                                + receipt.sequence() + " after " + previousSequence
+                );
+            }
+            previousSequence = receipt.sequence();
+        }
     }
 
     /** Computes the current total digital supply. */
@@ -129,6 +156,15 @@ public record EconomyStoreSnapshot(
             supply = addExact(supply, account.balance(), "total digital supply");
         }
         return supply;
+    }
+
+    /** Highest permanent emergency receipt sequence (0 when none). */
+    public long highestReceiptSequence() {
+        long highest = 0L;
+        for (EconomyEmergencyReceipt receipt : emergencyReceipts.values()) {
+            highest = Math.max(highest, receipt.sequence());
+        }
+        return highest;
     }
 
     private static long addExact(long left, long right, String what) {
