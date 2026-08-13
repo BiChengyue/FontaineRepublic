@@ -473,3 +473,6 @@
   FR-EMG；wave `fr-emg-eco-001-20260814`，reasonix v1.21.2 + deepseek-v4-flash，
   `--output-format text -p`，--dir 指向工作树）。
 - 待交付后：独立审查 → 完整构建 → 并入 develop → 更新台账/日志。
+- 起草 FR-EMG-CMD-001 三件套（`/fr admin emergency` 命令适配器：preview/confirm/
+  inspect/status + 运行时解析 + 来源映射）并提交 `f692d00`；待 FR-EMG-ECO-001
+  落地后按序派发。
