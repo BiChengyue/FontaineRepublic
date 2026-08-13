@@ -1,0 +1,21 @@
+# FontaineRepublic project-local Reasonix configuration.
+# Resolution order: flag > ./reasonix.toml > <Reasonix home>/config.toml > built-in defaults.
+# Providers (deepseek / opencode-go) and API keys come from the global config and .env.
+
+default_model = "opencode-go/deepseek-v4-flash"
+language      = "zh"
+
+[agent]
+temperature = 0.0
+reasoning_language = "zh"
+
+[permissions]
+mode = "ask"
+
+[sandbox]
+workspace_root = "D:\\MC\\FontaineRepublic"
+bash    = "off"
+network = true
+
+[skills]
+paths = [".reasonix/skills"]

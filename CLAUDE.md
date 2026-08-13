@@ -1,4 +1,4 @@
-# # FontaineRepublic Project Rules
+﻿# # FontaineRepublic Project Rules
 
 ## Project Identity
 
@@ -64,7 +64,7 @@ Follow:
 
 Current Phase:
 
-Phase 1 - Infrastructure Layer
+Phase 1 - Infrastructure Layer (implementation complete; pending review/merge)
 
 Completed:
 
@@ -78,16 +78,25 @@ Completed:
 - FR-DATA-002 Player Identity Infrastructure
   (`4d2876f05983bca0e7a1e79045d3cf3e5e6e571c`)
 
+- FR-NET-001 Network Foundation
+  (`e3e8da019665ced81553db442d103fa85d0cfe9c`)
+
+- FR-CMD-001 Command Foundation
+  (`f9e1806398723867e9cd1dc48ddcc04aeeb7be3e`)
+
 Current:
 
-FR-DATA-002 received Human Approval and is merged into and pushed on `develop`.
+Phase 1 infrastructure (FR-CORE-001 / FR-DATA-002 / FR-NET-001 / FR-CMD-001)
+is merged into `develop`. Phase 2 design candidates were produced on
+2026-08-02 on `codex/fr-inst-001-a-design` (FR-INST-001-A/B, FR-ECO-001-A/B/C,
+FR-EMG-001-A, FR-ID-001-A) and await independent review.
 
 Next:
 
-FR-NET-001-A Network Foundation Architecture & Implementation Contract.
-
-FR-NET-001-A is authorized for design only. Production implementation has not
-been authorized.
+Review the Phase 2 design candidates, then dispatch approved implementation
+(Audit -> Citizen -> Land -> Economy per roadmap) through the Reasonix
+opencode-go/deepseek-v4-flash pipeline. See
+docs/governance/continuous_development_ops.md for the operating handbook.
 
 Always read this section before starting work.
 
@@ -505,5 +514,5 @@ Minecraft SavedData / NBT
 
 Business modules access data through approved Core APIs.
 
-Do not directly manipulate other modules' storage.
+Do not directly manipulate other modules'' storage.
 
