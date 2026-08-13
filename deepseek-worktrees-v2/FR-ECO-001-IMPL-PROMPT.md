@@ -14,7 +14,8 @@
 - 工作目录：`D:\MC\FontaineRepublic\deepseek-worktrees-v2\fr-eco-001-impl`（从 develop 创建）
 - 必读（按顺序）：运行手册 -> CLAUDE.md -> current_status.md ->
   FR-ECO-001-A/B/C、FR-ECO-001-C-ACCOUNT-ALIGN-01、FR-ID-001-A（账户键与路由）、
-  任务卡 FR-ECO-001-IMPL、FR-CORE-002 实现任务文档（commitModuleData 契约）
+  任务卡 FR-ECO-001-IMPL、`docs/development/FR-ECO-001-java-implementation-task.md`、
+  FR-CORE-002 实现任务文档（commitModuleData 契约）
 
 ## 3. 执行约束
 
