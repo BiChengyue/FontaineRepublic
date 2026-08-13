@@ -98,6 +98,12 @@ Also pending: Level 3 runtime verification for all implemented modules
 (checklist:
 docs/development/LEVEL3-RUNTIME-VERIFICATION-CHECKLIST.md).
 
+## Player Guidance
+
+Player guide published at `docs/guide/player-guide.md`; in-game `/fr help`
+per-module expansion (FR-CMD-GUIDE-001) dispatched. Client UI mod remains the
+final phase per Human directive.
+
 ## Next Task
 
 Human directives (2026-08-13): after feature development completes, provide
