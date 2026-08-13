@@ -310,3 +310,12 @@
   带 UI 的客户端模组实现可视化操作（FR Client Features，Beta/GUI）。
 - 已写入运行手册（开发方向 + 任务队列）与状态台账：引导随功能稳定交付（命令层先行），
   客户端模组按架构 v2.7 可选客户端合约最后实施。
+
+## 2026-08-13 | FR-JUS-001 实现缺陷发现 + 修复派发
+
+- 司法子进程完成实现但未提交；Reviewer 独立复跑 `justiceFoundationTest` **失败**：
+  `admitEvidence` 把一切已有裁定视为终局，错误拒绝 REJECTED -> ADMITTED。
+- 设计语义（FR-JUS-001-A §3.2）：驳回非终局、采纳才终局；测试即验收。
+- 记录 Finding 并派发修复 FR-JUS-001-FIX-01（wave fr-jus-001-fix-20260813，
+  含精确问题描述/修复要求/验证命令）。
+- 另注：NetworkProtocol 改动仅为编译警告抑制（@SuppressWarnings），无行为变化。
