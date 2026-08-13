@@ -601,3 +601,14 @@
   无 client 类加载/Unsafe Referent；Ready、干净关停、ExitCode=0。
 - 客户端阶段：A（网络面）✓、B-1（GUI）✓、B-2（公民卡+历史）✓；
   剩余：B-3（机构/土地视图，需公共信息查询面）、Stage C（真机目视核验）。
+## 2026-08-14（深夜）| 指南补客户端章节 + Stage B-3a 派发（政府/议会视图）
+
+- 玩家指南新增 §五.5（FR Client 用法：/frclient 各子命令、展示/转发边界、
+  登出清缓存）并提交 `e65e530`。
+- 撰写 B-3 设计候选（政府/议会/法院复用既有公开投影；土地需新增只读投影
+  待 B-3b 设计审查）与 B-3a 三件套（协议 v4、账本追加 GovernmentInfoPacket(5)/
+  ParliamentInfoPacket(6)、InstitutionPresentationSync 登录快照发送、两个
+  新界面）。
+- 派发 FR-CLIENT-001-IMPL-B3a（wave fr-client-001-b3a-20260814，工作树
+  fr-client-001-impl-b3a）。
+- 待交付后：独立审查 → 完整构建 → 并入 develop → 与早间真机核验一并验收。
