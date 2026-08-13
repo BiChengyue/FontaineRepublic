@@ -95,9 +95,10 @@ docs/development/LEVEL3-RUNTIME-VERIFICATION-CHECKLIST.md).
 
 ## Next Task
 
-After FR-CORE-002: Audit module (FR-AUD-001-A) implementation, then Citizen,
-Land, Economy per roadmap order — each dispatched through the Reasonix
-opencode-go/deepseek-v4-flash pipeline and independently reviewed.
+Human directives (2026-08-13): after feature development completes, provide
+player guidance; finally, develop the UI-enabled client mod (FR Client,
+visual operations, Beta/GUI phase per architecture v2.7 optional-client
+contract). Recorded in the ops handbook task queue.
 
 ## Phase 2 Design Candidates (added 2026-08-02)
 

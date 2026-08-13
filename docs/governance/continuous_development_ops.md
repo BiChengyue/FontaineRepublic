@@ -57,6 +57,14 @@
 
 实现顺序（路线图推荐）：Audit → Citizen → Land → Economy → Resource → City → Government → Parliament → Justice → AI/GUI(Beta)。
 
+用户追加方向（2026-08-13 确认）：
+
+1. **功能开发完成后提供引导**：面向玩家的上手引导/说明（游戏内引导 + 文档），
+   在功能集稳定后交付；命令层先行（/fr help 体系），可视化引导随客户端模组。
+2. **最后开发带 UI 的客户端模组**（FR Client Features，Beta/GUI 阶段）：
+   可视化操作（余额/土地/议会/司法等界面、HUD、通知），严格按架构 v2.7 可选客户端合约
+   （仅展示/输入转发、服务端权威、无 FR 包时命令/聊天平价、DistExecutor + package 隔离）。
+
 ---
 
 ## 4. 派发手册（Dispatch Playbook）
@@ -107,10 +115,13 @@ powershell -File tools\dispatch-task.ps1 -TaskName <task> -PromptFile <TASK>-PRO
 ## 5. 任务队列（Next Steps）
 
 1. ✅ FR-PM-001/002 状态同步与持续开发基础设施（reasonix.toml、运行手册、工作日志）
-2. ⏳ 审阅 8/2 产出的 6 份 Phase 2 设计候选，给出批准建议
-3. ⏳ 待批准后派发实现：Audit → Citizen（身份）→ Land（土地）→ Economy（经济）
-4. ⏳ 每模块完成：审查 → 用户测试（必须时）→ 合并 develop → 推送 origin
-5. ⏳ 待办：develop 落后推送（FR-CMD-001 未推送 origin）
+2. ✅ 审阅 Phase 2 设计候选并获 Human 批准（FR-PHASE2-HUMAN-APPROVAL-01）
+3. ✅ 实现：Core/ID/Bootstrap/Citizen/Land/Economy/PlayerDirectory/命令/机构边界/政府/议会
+   （司法进行中）
+4. ⏳ 功能完成后的玩家引导（/fr help 体系 + 文档；可视化引导随客户端）
+5. ⏳ 最后：带 UI 的客户端模组（FR Client，可视化操作，Beta/GUI 阶段）
+6. ⏳ 每模块完成：审查 → 用户测试（必须时）→ 合并 develop → 推送 origin
+7. ⏳ 待办：develop 领先 origin（推送待用户确认）
 
 ---
 
