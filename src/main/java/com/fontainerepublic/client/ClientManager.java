@@ -1,0 +1,84 @@
+package com.fontainerepublic.client;
+
+import com.fontainerepublic.client.gui.FrMainScreen;
+import com.fontainerepublic.client.gui.guide.GuideScreen;
+import com.fontainerepublic.client.gui.money.MoneyScreen;
+import com.fontainerepublic.client.gui.notifications.NotificationScreen;
+import com.fontainerepublic.client.hud.FrHudRenderer;
+import com.mojang.brigadier.CommandDispatcher;
+import net.minecraft.client.Minecraft;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraftforge.client.event.RegisterClientCommandsEvent;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.client.event.RenderGuiEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * FR client entry (FR-CLIENT-001-IMPL-B): registers the {@code /frclient}
+ * client command surface and the balance/notification HUD. This class lives
+ * in {@code client/} and is referenced from the main mod class only inside a
+ * {@code DistExecutor.safeRunWhenOn(Dist.CLIENT, ...)} supplier, so a
+ * dedicated server never loads it. All screens are thin views over the
+ * non-authoritative presentation cache; every mutation path re-enters the
+ * server command surface.
+ */
+public final class ClientManager {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ClientManager.class);
+
+    private static boolean initialized;
+
+    private ClientManager() {
+    }
+
+    /** Idempotent client-side initialization (safe side isolated). */
+    public static void init() {
+        if (initialized) {
+            return;
+        }
+        synchronized (ClientManager.class) {
+            if (initialized) {
+                return;
+            }
+            MinecraftForge.EVENT_BUS.addListener(ClientManager::onRegisterClientCommands);
+            MinecraftForge.EVENT_BUS.addListener(FrHudRenderer::onRenderGui);
+            initialized = true;
+            LOGGER.debug("[FR Client] ClientManager initialized (/frclient + HUD)");
+        }
+    }
+
+    private static void onRegisterClientCommands(RegisterClientCommandsEvent event) {
+        CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
+        dispatcher.register(Commands.literal("frclient")
+                .executes(context -> openMain())
+                .then(Commands.literal("money")
+                        .executes(context -> openMoney()))
+                .then(Commands.literal("notifications")
+                        .executes(context -> openNotifications()))
+                .then(Commands.literal("guide")
+                        .executes(context -> openGuide())));
+        LOGGER.debug("[FR Client] /frclient client command registered");
+    }
+
+    private static int openMain() {
+        Minecraft.getInstance().setScreen(new FrMainScreen());
+        return 1;
+    }
+
+    private static int openMoney() {
+        Minecraft.getInstance().setScreen(new MoneyScreen());
+        return 1;
+    }
+
+    private static int openNotifications() {
+        Minecraft.getInstance().setScreen(new NotificationScreen());
+        return 1;
+    }
+
+    private static int openGuide() {
+        Minecraft.getInstance().setScreen(new GuideScreen());
+        return 1;
+    }
+}

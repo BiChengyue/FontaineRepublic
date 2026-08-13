@@ -229,6 +229,15 @@ tasks.register('clientPresentationFoundationTest', JavaExec) {
     systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
 }
 
+tasks.register('clientGuiFoundationTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-CLIENT-001-IMPL-B client GUI/HUD foundation validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.client.ClientGuiFoundationTestMain'
+    systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
+}
+
 tasks.named('check') {
     dependsOn tasks.named('playerDataTest')
     dependsOn tasks.named('playerDirectoryFoundationTest')
@@ -250,4 +259,5 @@ tasks.named('check') {
     dependsOn tasks.named('emergencyCommandFoundationTest')
     dependsOn tasks.named('economyEmergencyFoundationTest')
     dependsOn tasks.named('clientPresentationFoundationTest')
+    dependsOn tasks.named('clientGuiFoundationTest')
 }
