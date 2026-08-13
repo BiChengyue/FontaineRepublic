@@ -17,7 +17,7 @@ import com.fontainerepublic.server.government.persistence.GovernmentUnavailableE
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.institutionaccess.api.OnSiteContext;
 import com.fontainerepublic.server.institutionaccess.model.CapabilityClass;
-import com.fontainerepublic.server.institutionaccess.model.TerminalId;
+import com.fontainerepublic.server.institutionaccess.model.ZoneId;
 import com.fontainerepublic.server.institutionaccess.persistence.InstitutionAccessUnavailableException;
 import com.fontainerepublic.server.registry.model.OwnerReference;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -40,7 +40,7 @@ import java.util.UUID;
  * administration, on-site-gated appointment/dismissal, and exact office
  * lookup. Never enumerates the store; output is bounded. Appoint/dismiss
  * issue a fresh {@code ONSITE_OFFICIAL_DUTY} on-site context from the
- * authoritative player position at the given terminal, and the service
+ * authoritative player position at the given zone, and the service
  * revalidates that context at its final mutation boundary. Execution resolves
  * the current ACTIVE {@link GovernmentService} per invocation through the
  * {@link CommandRuntimeResolver} and never caches services or state.
@@ -50,8 +50,8 @@ import java.util.UUID;
  * /fr government ministry list
  * /fr government position create &lt;ministryId&gt; &lt;title&gt;
  * /fr government position list &lt;ministryId&gt;
- * /fr government appoint &lt;positionId&gt; &lt;holderUuid&gt; &lt;terminalId&gt;
- * /fr government dismiss &lt;positionId&gt; &lt;reason&gt; &lt;terminalId&gt;
+ * /fr government appoint &lt;positionId&gt; &lt;holderUuid&gt; &lt;zoneId&gt;
+ * /fr government dismiss &lt;positionId&gt; &lt;reason&gt; &lt;zoneId&gt;
  * /fr government office &lt;positionId&gt;
  * </pre>
  */
@@ -108,7 +108,7 @@ public final class GovernmentCommand {
                                                 StringArgumentType.string()
                                         )
                                         .then(Commands.argument(
-                                                        "terminalId",
+                                                        "zoneId",
                                                         StringArgumentType.string()
                                                 )
                                                 .executes(context -> appoint(
@@ -124,7 +124,7 @@ public final class GovernmentCommand {
                                                 StringArgumentType.string()
                                         )
                                         .then(Commands.argument(
-                                                        "terminalId",
+                                                        "zoneId",
                                                         StringArgumentType.string()
                                                 )
                                                 .executes(context -> dismiss(
@@ -333,9 +333,9 @@ public final class GovernmentCommand {
         if (holderUuid == null) {
             return CommandFeedback.FAILURE;
         }
-        TerminalId terminalId = parseTerminalId(source,
-                StringArgumentType.getString(context, "terminalId"));
-        if (terminalId == null) {
+        ZoneId zoneId = parseZoneId(source,
+                StringArgumentType.getString(context, "zoneId"));
+        if (zoneId == null) {
             return CommandFeedback.FAILURE;
         }
         Optional<InstitutionAccessService> access = runtimeResolver
@@ -348,7 +348,7 @@ public final class GovernmentCommand {
         }
         try {
             OnSiteContext onSite = issueOfficialContext(
-                    source, access.get(), actor, terminalId
+                    source, access.get(), actor, zoneId
             );
             AppointmentReceipt receipt = service.get().appoint(
                     actor, positionId, OwnerReference.forPlayer(holderUuid), onSite
@@ -392,9 +392,9 @@ public final class GovernmentCommand {
             return CommandFeedback.FAILURE;
         }
         String reason = StringArgumentType.getString(context, "reason");
-        TerminalId terminalId = parseTerminalId(source,
-                StringArgumentType.getString(context, "terminalId"));
-        if (terminalId == null) {
+        ZoneId zoneId = parseZoneId(source,
+                StringArgumentType.getString(context, "zoneId"));
+        if (zoneId == null) {
             return CommandFeedback.FAILURE;
         }
         Optional<InstitutionAccessService> access = runtimeResolver
@@ -407,7 +407,7 @@ public final class GovernmentCommand {
         }
         try {
             OnSiteContext onSite = issueOfficialContext(
-                    source, access.get(), actor, terminalId
+                    source, access.get(), actor, zoneId
             );
             AppointmentReceipt receipt = service.get().dismiss(
                     actor, positionId, reason, onSite
@@ -435,7 +435,7 @@ public final class GovernmentCommand {
 
     /**
      * Issues a fresh {@code ONSITE_OFFICIAL_DUTY} context from the
-     * authoritative server player position at the given terminal (FR-INST-001-A
+     * authoritative server player position at the given zone (FR-INST-001-A
      * §6.3). The service revalidates this context at its final mutation
      * boundary.
      */
@@ -443,7 +443,7 @@ public final class GovernmentCommand {
             CommandSourceStack source,
             InstitutionAccessService access,
             UUID playerId,
-            TerminalId terminalId
+            ZoneId zoneId
     ) {
         ServerPlayer player = source.getPlayer();
         if (player == null) {
@@ -454,7 +454,7 @@ public final class GovernmentCommand {
         }
         return access.issueOnSiteContext(
                 playerId,
-                terminalId,
+                zoneId,
                 CapabilityClass.ONSITE_OFFICIAL_DUTY,
                 player.level().dimension().location().toString(),
                 player.blockPosition().getX(),
@@ -549,12 +549,12 @@ public final class GovernmentCommand {
         return PositionId.of(parsed);
     }
 
-    private static TerminalId parseTerminalId(CommandSourceStack source, String input) {
-        UUID parsed = parseCanonicalUuid(source, input, "terminalId");
+    private static ZoneId parseZoneId(CommandSourceStack source, String input) {
+        UUID parsed = parseCanonicalUuid(source, input, "zoneId");
         if (parsed == null) {
             return null;
         }
-        return TerminalId.of(parsed);
+        return ZoneId.of(parsed);
     }
 
     private static UUID parseCanonicalUuid(

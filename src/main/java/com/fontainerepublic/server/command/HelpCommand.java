@@ -68,7 +68,7 @@ public final class HelpCommand {
     private static final Page BANK_PAGE = new Page(
             "bank.title",
             "bank: central-bank official duties "
-                    + "(on-site duty at a central-bank terminal).",
+                    + "(on-site duty at a central-bank zone).",
             List.of(
                     new Entry(
                             "bank.balance",
@@ -76,21 +76,21 @@ public final class HelpCommand {
                     ),
                     new Entry(
                             "bank.deposit",
-                            "  /fr bank deposit <target> <amount> <terminalId> [reason] "
+                            "  /fr bank deposit <target> <amount> <zoneId> [reason] "
                                     + "- official issuance"
                     ),
                     new Entry(
                             "bank.withdraw",
-                            "  /fr bank withdraw <target> <amount> <terminalId> [reason] "
+                            "  /fr bank withdraw <target> <amount> <zoneId> [reason] "
                                     + "- official withdrawal"
                     ),
                     new Entry(
                             "bank.freeze",
-                            "  /fr bank freeze <target> <terminalId> [reason] - freeze an account"
+                            "  /fr bank freeze <target> <zoneId> [reason] - freeze an account"
                     ),
                     new Entry(
                             "bank.unfreeze",
-                            "  /fr bank unfreeze <target> <terminalId> [reason] - unfreeze an account"
+                            "  /fr bank unfreeze <target> <zoneId> [reason] - unfreeze an account"
                     )
             )
     );
@@ -109,7 +109,7 @@ public final class HelpCommand {
     private static final Page GOVERNMENT_PAGE = new Page(
             "government.title",
             "government: ministries, positions and appointments "
-                    + "(on-site duty at a government terminal).",
+                    + "(on-site duty at a government zone).",
             List.of(
                     new Entry(
                             "government.ministry",
@@ -122,12 +122,12 @@ public final class HelpCommand {
                     ),
                     new Entry(
                             "government.appoint",
-                            "  /fr government appoint <positionId> <holderUuid> <terminalId> "
+                            "  /fr government appoint <positionId> <holderUuid> <zoneId> "
                                     + "- appoint a holder"
                     ),
                     new Entry(
                             "government.dismiss",
-                            "  /fr government dismiss <positionId> <reason> <terminalId> "
+                            "  /fr government dismiss <positionId> <reason> <zoneId> "
                                     + "- dismiss a holder"
                     ),
                     new Entry(
@@ -140,18 +140,18 @@ public final class HelpCommand {
     private static final Page PARLIAMENT_PAGE = new Page(
             "parliament.title",
             "parliament: proposals, votes and bills "
-                    + "(on-site duty at a parliament terminal).",
+                    + "(on-site duty at a parliament zone).",
             List.of(
                     new Entry(
                             "parliament.proposal",
-                            "  /fr parliament proposal submit <title> <normLevel> <terminalId> "
+                            "  /fr parliament proposal submit <title> <normLevel> <zoneId> "
                                     + "<fullText> | list [afterSeq] [limit] - proposals"
                     ),
                     new Entry(
                             "parliament.vote",
-                            "  /fr parliament vote open <proposalId> <terminalId> "
-                                    + "| cast <voteId> <choice> <terminalId> "
-                                    + "| close <voteId> <terminalId> - votes"
+                            "  /fr parliament vote open <proposalId> <zoneId> "
+                                    + "| cast <voteId> <choice> <zoneId> "
+                                    + "| close <voteId> <zoneId> - votes"
                     ),
                     new Entry(
                             "parliament.bill",
@@ -163,28 +163,28 @@ public final class HelpCommand {
     private static final Page COURT_PAGE = new Page(
             "court.title",
             "court: cases, evidence and verdicts "
-                    + "(on-site duty at a court terminal).",
+                    + "(on-site duty at a court zone).",
             List.of(
                     new Entry(
                             "court.case",
-                            "  /fr court case file <caseType> <title> <terminalId> "
+                            "  /fr court case file <caseType> <title> <zoneId> "
                                     + "<description> | list [afterSeq] [limit] "
                                     + "| show <caseId> - cases"
                     ),
                     new Entry(
                             "court.evidence",
-                            "  /fr court evidence submit <caseId> <description> <terminalId> "
+                            "  /fr court evidence submit <caseId> <description> <zoneId> "
                                     + "| list <caseId> [afterSeq] [limit] - evidence"
                     ),
                     new Entry(
                             "court.verdict",
-                            "  /fr court verdict issue <caseId> <outcome> <terminalId> "
+                            "  /fr court verdict issue <caseId> <outcome> <zoneId> "
                                     + "<reasoning> | show <verdictId> - verdicts"
                     ),
                     new Entry(
                             "court.review",
-                            "  /fr court review request <caseId> <terminalId> "
-                                    + "| decide <caseId> <terminalId> - review"
+                            "  /fr court review request <caseId> <zoneId> "
+                                    + "| decide <caseId> <zoneId> - review"
                     )
             )
     );

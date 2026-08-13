@@ -11,16 +11,20 @@ import com.fontainerepublic.server.institutionaccess.api.FacilityReceipt;
 import com.fontainerepublic.server.institutionaccess.api.FacilityRegistrationRequest;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.institutionaccess.api.OnSiteContext;
-import com.fontainerepublic.server.institutionaccess.api.TerminalChangeKind;
-import com.fontainerepublic.server.institutionaccess.api.TerminalReceipt;
-import com.fontainerepublic.server.institutionaccess.api.TerminalRegistrationRequest;
 import com.fontainerepublic.server.institutionaccess.api.ValidationResult;
+import com.fontainerepublic.server.institutionaccess.api.ZoneChangeKind;
+import com.fontainerepublic.server.institutionaccess.api.ZoneReceipt;
+import com.fontainerepublic.server.institutionaccess.api.ZoneRegistrationRequest;
 import com.fontainerepublic.server.institutionaccess.model.CapabilityClass;
 import com.fontainerepublic.server.institutionaccess.model.Facility;
 import com.fontainerepublic.server.institutionaccess.model.FacilityId;
-import com.fontainerepublic.server.institutionaccess.model.Terminal;
-import com.fontainerepublic.server.institutionaccess.model.TerminalId;
+import com.fontainerepublic.server.institutionaccess.model.FacilityState;
 import com.fontainerepublic.server.institutionaccess.model.WorkflowKind;
+import com.fontainerepublic.server.institutionaccess.model.Zone;
+import com.fontainerepublic.server.institutionaccess.model.ZoneId;
+import com.fontainerepublic.server.institutionaccess.model.ZoneKind;
+import com.fontainerepublic.server.institutionaccess.model.ZoneRegion;
+import com.fontainerepublic.server.institutionaccess.model.ZoneState;
 import com.fontainerepublic.server.institutionaccess.persistence.InstitutionAccessRepository;
 import com.fontainerepublic.server.institutionaccess.persistence.InstitutionAccessUnavailableException;
 import com.fontainerepublic.server.land.api.LandService;
@@ -35,7 +39,7 @@ import java.util.function.LongSupplier;
 
 /**
  * Runtime implementation of {@link InstitutionAccessService}
- * (FR-INST-002-A §4/§5).
+ * (FR-INST-002-A §4/§5, revised to zones by FR-INST-002-B).
  *
  * <p>The service is a thin, owner-thread-scoped facade over the single-writer
  * {@link InstitutionAccessRepository}. It consumes FR-LAND spatial data
@@ -45,11 +49,11 @@ import java.util.function.LongSupplier;
  * context registry with mandatory final mutation-time revalidation that
  * cannot be disabled.</p>
  *
- * <p>Workflow selection (FR-INST-001-B §3): {@code ONSITE_PUBLIC_SERVICE}
- * selects the public workflow; {@code ONSITE_OFFICIAL_DUTY} selects the
- * official routine workflow on a normal terminal and the high-risk workflow
- * on a secure terminal (which additionally requires an already-valid
- * official routine session).</p>
+ * <p>Workflow selection (FR-INST-001-B §3, FR-INST-002-B §4): a PUBLIC zone
+ * serves the public workflow, an OFFICIAL zone the official routine
+ * workflow, and a SECURE zone the high-risk workflow (which additionally
+ * requires an already-valid official routine session). On-site presence is
+ * zone containment: the player must be inside the registered zone region.</p>
  */
 public final class DefaultInstitutionAccessService implements InstitutionAccessService {
 
@@ -212,94 +216,134 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
     }
 
     // ------------------------------------------------------------------
-    // terminal directory
+    // zone directory
     // ------------------------------------------------------------------
 
     @Override
-    public TerminalReceipt registerTerminal(
-            UUID actor,
-            TerminalRegistrationRequest request
-    ) {
+    public ZoneReceipt addZone(UUID actor, ZoneRegistrationRequest request) {
         Objects.requireNonNull(actor, "actor");
         Objects.requireNonNull(request, "request");
         requireResolvableActor(actor);
         Facility facility = repository.requireFacility(request.facilityId());
-        if (facility.state() != com.fontainerepublic.server.institutionaccess.model.FacilityState.ACTIVE) {
+        if (facility.state() != FacilityState.ACTIVE) {
             throw unavailable(
                     InstitutionAccessUnavailableException.CODE_FACILITY_NOT_ACTIVE,
                     "Facility " + request.facilityId() + " is not ACTIVE; "
-                            + "terminals may only be registered on an ACTIVE facility"
+                            + "zones may only be added to an ACTIVE facility"
             );
         }
-        verifyTerminalInsideFacilityRegion(facility, request);
-        if (repository.findByPosition(
-                request.position().dimension(),
-                request.position().x(),
-                request.position().y(),
-                request.position().z()
-        ).isPresent()) {
-            throw unavailable(
-                    InstitutionAccessUnavailableException.CODE_INVALID_REQUEST,
-                    "A terminal is already anchored at "
-                            + request.position().dimension() + " "
-                            + request.position().x() + " " + request.position().y()
-                            + " " + request.position().z()
-            );
-        }
-        Terminal terminal = repository.registerTerminal(
+        verifyZoneRegion(facility, request.region());
+        verifyKindCapabilities(request.kind(), request.capabilitySet());
+        Zone zone = repository.addZone(
                 request.facilityId(),
                 facility.institutionType(),
-                request.position(),
-                request.capabilitySet(),
-                request.secure()
+                request.kind(),
+                request.region(),
+                request.capabilitySet()
         );
-        audit(actor, "terminal.register", "terminal",
-                terminal.terminalId().canonicalKey(),
-                "Registered " + terminal.institutionType() + " terminal "
-                        + terminal.terminalId() + " on facility "
-                        + terminal.facilityId()
-                        + (terminal.secure() ? " (secure)" : ""));
-        return new TerminalReceipt(
-                TerminalChangeKind.TERMINAL_REGISTERED,
-                terminal,
+        audit(actor, "zone.add", "zone",
+                zone.zoneId().canonicalKey(),
+                "Added " + zone.kind() + " zone " + zone.zoneId()
+                        + " on facility " + zone.facilityId());
+        return new ZoneReceipt(
+                ZoneChangeKind.ZONE_ADDED,
+                zone,
                 true,
                 now()
         );
     }
 
     @Override
-    public TerminalReceipt suspendTerminal(UUID actor, TerminalId terminalId) {
+    public ZoneReceipt removeZone(UUID actor, ZoneId zoneId) {
         Objects.requireNonNull(actor, "actor");
-        Objects.requireNonNull(terminalId, "terminalId");
+        Objects.requireNonNull(zoneId, "zoneId");
         requireResolvableActor(actor);
-        Terminal before = repository.requireTerminal(terminalId);
-        Terminal after = repository.suspendTerminal(terminalId);
-        if (!after.equals(before)) {
-            contexts.invalidateByTerminal(terminalId);
-            audit(actor, "terminal.suspend", "terminal",
-                    terminalId.canonicalKey(),
-                    "Suspended terminal " + terminalId);
-        }
-        return new TerminalReceipt(
-                TerminalChangeKind.TERMINAL_SUSPENDED, after, !after.equals(before), now()
+        Zone removed = repository.removeZone(zoneId);
+        contexts.invalidateByZone(zoneId);
+        audit(actor, "zone.remove", "zone",
+                zoneId.canonicalKey(),
+                "Removed zone " + zoneId);
+        return new ZoneReceipt(
+                ZoneChangeKind.ZONE_REMOVED,
+                null,
+                true,
+                now()
         );
     }
 
     @Override
-    public TerminalReceipt disableTerminal(UUID actor, TerminalId terminalId) {
+    public ZoneReceipt resizeZone(UUID actor, ZoneId zoneId, ZoneRegion newRegion) {
         Objects.requireNonNull(actor, "actor");
-        Objects.requireNonNull(terminalId, "terminalId");
+        Objects.requireNonNull(zoneId, "zoneId");
+        Objects.requireNonNull(newRegion, "newRegion");
         requireResolvableActor(actor);
-        Terminal before = repository.requireTerminal(terminalId);
-        Terminal after = repository.disableTerminal(terminalId);
+        Zone before = repository.requireZone(zoneId);
+        Facility facility = repository.requireFacility(before.facilityId());
+        verifyZoneRegion(facility, newRegion);
+        Zone after = repository.resizeZone(zoneId, newRegion);
         if (!after.equals(before)) {
-            contexts.invalidateByTerminal(terminalId);
-            audit(actor, "terminal.disable", "terminal",
-                    terminalId.canonicalKey(),
-                    "Disabled terminal " + terminalId);
+            contexts.invalidateByZone(zoneId);
+            audit(actor, "zone.resize", "zone",
+                    zoneId.canonicalKey(),
+                    "Resized zone " + zoneId);
         }
-        return new TerminalReceipt(
-                TerminalChangeKind.TERMINAL_DISABLED, after, !after.equals(before), now()
+        return new ZoneReceipt(
+                ZoneChangeKind.ZONE_RESIZED, after, !after.equals(before), now()
+        );
+    }
+
+    @Override
+    public ZoneReceipt setZoneKind(UUID actor, ZoneId zoneId, ZoneKind newKind) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(zoneId, "zoneId");
+        Objects.requireNonNull(newKind, "newKind");
+        requireResolvableActor(actor);
+        Zone before = repository.requireZone(zoneId);
+        verifyKindCapabilities(newKind, before.capabilitySet());
+        Zone after = repository.setZoneKind(zoneId, newKind);
+        if (!after.equals(before)) {
+            contexts.invalidateByZone(zoneId);
+            audit(actor, "zone.set-kind", "zone",
+                    zoneId.canonicalKey(),
+                    "Set zone " + zoneId + " kind to " + newKind);
+        }
+        return new ZoneReceipt(
+                ZoneChangeKind.ZONE_KIND_CHANGED, after, !after.equals(before), now()
+        );
+    }
+
+    @Override
+    public ZoneReceipt suspendZone(UUID actor, ZoneId zoneId) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(zoneId, "zoneId");
+        requireResolvableActor(actor);
+        Zone before = repository.requireZone(zoneId);
+        Zone after = repository.suspendZone(zoneId);
+        if (!after.equals(before)) {
+            contexts.invalidateByZone(zoneId);
+            audit(actor, "zone.suspend", "zone",
+                    zoneId.canonicalKey(),
+                    "Suspended zone " + zoneId);
+        }
+        return new ZoneReceipt(
+                ZoneChangeKind.ZONE_SUSPENDED, after, !after.equals(before), now()
+        );
+    }
+
+    @Override
+    public ZoneReceipt activateZone(UUID actor, ZoneId zoneId) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(zoneId, "zoneId");
+        requireResolvableActor(actor);
+        Zone before = repository.requireZone(zoneId);
+        Zone after = repository.activateZone(zoneId);
+        if (!after.equals(before)) {
+            audit(actor, "zone.activate", "zone",
+                    zoneId.canonicalKey(),
+                    "Activated zone " + zoneId);
+        }
+        return new ZoneReceipt(
+                ZoneChangeKind.ZONE_ACTIVATED, after, !after.equals(before), now()
         );
     }
 
@@ -310,7 +354,7 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
     @Override
     public OnSiteContext issueOnSiteContext(
             UUID playerId,
-            TerminalId terminalId,
+            ZoneId zoneId,
             CapabilityClass capability,
             String playerDimension,
             int x,
@@ -318,29 +362,29 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
             int z
     ) {
         Objects.requireNonNull(playerId, "playerId");
-        Objects.requireNonNull(terminalId, "terminalId");
+        Objects.requireNonNull(zoneId, "zoneId");
         Objects.requireNonNull(capability, "capability");
         Objects.requireNonNull(playerDimension, "playerDimension");
         requireResolvableActor(playerId);
 
-        Terminal terminal = repository.requireTerminal(terminalId);
-        if (terminal.state() != com.fontainerepublic.server.institutionaccess.model.TerminalState.ACTIVE) {
+        Zone zone = repository.requireZone(zoneId);
+        if (zone.state() != ZoneState.ACTIVE) {
             throw unavailable(
-                    InstitutionAccessUnavailableException.CODE_TERMINAL_NOT_ACTIVE,
-                    "Terminal " + terminalId + " is not ACTIVE"
+                    InstitutionAccessUnavailableException.CODE_ZONE_NOT_ACTIVE,
+                    "Zone " + zoneId + " is not ACTIVE"
             );
         }
-        Facility facility = repository.requireFacility(terminal.facilityId());
-        if (facility.state() != com.fontainerepublic.server.institutionaccess.model.FacilityState.ACTIVE) {
+        Facility facility = repository.requireFacility(zone.facilityId());
+        if (facility.state() != FacilityState.ACTIVE) {
             throw unavailable(
                     InstitutionAccessUnavailableException.CODE_FACILITY_NOT_ACTIVE,
                     "Facility " + facility.facilityId() + " is not ACTIVE"
             );
         }
-        if (facility.institutionType() != terminal.institutionType()) {
+        if (facility.institutionType() != zone.institutionType()) {
             throw unavailable(
                     InstitutionAccessUnavailableException.CODE_INSTITUTION_MISMATCH,
-                    "Terminal " + terminalId + " institution type does not match "
+                    "Zone " + zoneId + " institution type does not match "
                             + "facility " + facility.facilityId()
             );
         }
@@ -351,24 +395,31 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
                             + "classes; got " + capability
             );
         }
-        if (!terminal.capabilitySet().contains(capability)) {
+        if (!zone.capabilitySet().contains(capability)) {
             throw unavailable(
                     InstitutionAccessUnavailableException.CODE_CAPABILITY_NOT_ALLOWED,
-                    "Terminal " + terminalId + " does not allow " + capability
+                    "Zone " + zoneId + " does not allow " + capability
             );
         }
-        if (!terminal.position().dimension().equals(playerDimension)) {
+        if (!zone.kind().allowedCapabilities().contains(capability)) {
+            throw unavailable(
+                    InstitutionAccessUnavailableException.CODE_KIND_CAPABILITY_MISMATCH,
+                    "Capability " + capability + " does not match the "
+                            + zone.kind() + " zone kind of " + zoneId
+            );
+        }
+        if (!zone.region().dimension().equals(playerDimension)) {
             throw unavailable(
                     InstitutionAccessUnavailableException.CODE_DIMENSION_MISMATCH,
                     "Player dimension " + playerDimension
-                            + " does not match terminal dimension "
-                            + terminal.position().dimension()
+                            + " does not match zone dimension "
+                            + zone.region().dimension()
             );
         }
         LandParcel parcel = requireParcel(facility.parcelId());
-        requireTerminalInsideRegion(parcel, terminal);
+        requireZoneInsideRegion(parcel, zone);
 
-        WorkflowKind workflow = workflowFor(capability, terminal.secure());
+        WorkflowKind workflow = workflowFor(zone.kind(), capability);
         if (workflow == WorkflowKind.HIGH_RISK
                 && contexts.findActive(playerId, WorkflowKind.OFFICIAL_ROUTINE).isEmpty()) {
             throw unavailable(
@@ -382,20 +433,20 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
         long now = now();
         long lifetime = lifetimeMillis(workflow);
         long expiry = checkedExpiry(now, lifetime);
-        verifyPresenceRange(workflow, terminal, parcel, playerDimension, x, y, z);
+        verifyPresenceInZone(zone, playerDimension, x, y, z);
 
         OnSiteContext context = new OnSiteContext(
                 UUID.randomUUID(),
                 playerId,
                 facility.institutionType(),
                 facility.facilityId(),
-                terminalId,
+                zoneId,
                 workflow,
                 capability,
                 now,
                 expiry,
                 facility.facilityRevision(),
-                terminal.terminalRevision(),
+                zone.zoneRevision(),
                 playerDimension,
                 x,
                 y,
@@ -435,25 +486,23 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
         }
 
         Facility facility = repository.findByFacilityId(context.facilityId()).orElse(null);
-        if (facility == null
-                || facility.state() != com.fontainerepublic.server.institutionaccess.model.FacilityState.ACTIVE) {
+        if (facility == null || facility.state() != FacilityState.ACTIVE) {
             return ValidationResult.invalid(ValidationResult.REASON_FACILITY_NOT_ACTIVE);
         }
         if (facility.facilityRevision() != context.facilityRevision()) {
             return ValidationResult.invalid(ValidationResult.REASON_FACILITY_REVISION);
         }
-        Terminal terminal = repository.findByTerminalId(context.terminalId()).orElse(null);
-        if (terminal == null
-                || terminal.state() != com.fontainerepublic.server.institutionaccess.model.TerminalState.ACTIVE) {
-            return ValidationResult.invalid(ValidationResult.REASON_TERMINAL_NOT_ACTIVE);
+        Zone zone = repository.findByZoneId(context.zoneId()).orElse(null);
+        if (zone == null || zone.state() != ZoneState.ACTIVE) {
+            return ValidationResult.invalid(ValidationResult.REASON_ZONE_NOT_ACTIVE);
         }
-        if (terminal.terminalRevision() != context.terminalRevision()) {
-            return ValidationResult.invalid(ValidationResult.REASON_TERMINAL_REVISION);
+        if (zone.zoneRevision() != context.zoneRevision()) {
+            return ValidationResult.invalid(ValidationResult.REASON_ZONE_REVISION);
         }
-        if (!terminal.position().dimension().equals(dimension)) {
+        if (!zone.region().dimension().equals(dimension)) {
             return ValidationResult.invalid(ValidationResult.REASON_DIMENSION_MISMATCH);
         }
-        if (!terminal.capabilitySet().contains(context.capability())) {
+        if (!zone.capabilitySet().contains(context.capability())) {
             return ValidationResult.invalid(ValidationResult.REASON_CAPABILITY_MISMATCH);
         }
 
@@ -464,13 +513,12 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
             parcel = null;
         }
         if (parcel == null) {
-            return ValidationResult.invalid(ValidationResult.REASON_TERMINAL_NOT_IN_REGION);
+            return ValidationResult.invalid(ValidationResult.REASON_ZONE_NOT_IN_REGION);
         }
-        if (!isInsideParcel(parcel, terminal.position().dimension(),
-                terminal.position().x(), terminal.position().y(), terminal.position().z())) {
-            return ValidationResult.invalid(ValidationResult.REASON_TERMINAL_NOT_IN_REGION);
+        if (!zone.region().inside(parcel)) {
+            return ValidationResult.invalid(ValidationResult.REASON_ZONE_NOT_IN_REGION);
         }
-        if (!presenceOk(context.workflowKind(), terminal, parcel, dimension, x, y, z)) {
+        if (!presenceOk(zone, dimension, x, y, z)) {
             return ValidationResult.invalid(ValidationResult.REASON_PLAYER_OUT_OF_RANGE);
         }
 
@@ -515,9 +563,9 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
     }
 
     @Override
-    public Optional<Terminal> getTerminal(TerminalId terminalId) {
-        Objects.requireNonNull(terminalId, "terminalId");
-        return repository.findByTerminalId(terminalId);
+    public Optional<Zone> getZone(ZoneId zoneId) {
+        Objects.requireNonNull(zoneId, "zoneId");
+        return repository.findByZoneId(zoneId);
     }
 
     // ------------------------------------------------------------------
@@ -537,9 +585,10 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
     /**
      * Bounded presence evaluation of one active context. Returns true when
      * the player position still satisfies the workflow constraints; returns
-     * false (and invalidates the context) when the player left range, changed
-     * dimension, expired, or hit an official idle/hard limit. Never consumes
-     * single-use authorizations — only the final mutation boundary does.
+     * false (and invalidates the context) when the player left the zone,
+     * changed dimension, expired, or hit an official idle/hard limit. Never
+     * consumes single-use authorizations — only the final mutation boundary
+     * does.
      */
     public boolean evaluatePresence(
             OnSiteContext context,
@@ -548,7 +597,8 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
             int y,
             int z,
             long now
-    ) {        if (!contexts.isActive(context.contextId())) {
+    ) {
+        if (!contexts.isActive(context.contextId())) {
             return false;
         }
         if (now > context.expiryTime()) {
@@ -556,8 +606,8 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
             return false;
         }
         Facility facility = repository.findByFacilityId(context.facilityId()).orElse(null);
-        Terminal terminal = repository.findByTerminalId(context.terminalId()).orElse(null);
-        if (facility == null || terminal == null) {
+        Zone zone = repository.findByZoneId(context.zoneId()).orElse(null);
+        if (facility == null || zone == null) {
             contexts.invalidate(context.contextId());
             return false;
         }
@@ -566,8 +616,7 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
             contexts.invalidate(context.contextId());
             return false;
         }
-        if (!isInsideParcel(parcel, terminal.position().dimension(),
-                terminal.position().x(), terminal.position().y(), terminal.position().z())) {
+        if (!zone.region().inside(parcel)) {
             contexts.invalidate(context.contextId());
             return false;
         }
@@ -582,7 +631,7 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
                 return false;
             }
         }
-        if (!presenceOk(context.workflowKind(), terminal, parcel, dimension, x, y, z)) {
+        if (!presenceOk(zone, dimension, x, y, z)) {
             contexts.invalidate(context.contextId());
             return false;
         }
@@ -603,102 +652,89 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
     // internals
     // ------------------------------------------------------------------
 
-    private void verifyTerminalInsideFacilityRegion(
-            Facility facility,
-            TerminalRegistrationRequest request
-    ) {
+    private void verifyZoneRegion(Facility facility, ZoneRegion region) {
         LandParcel parcel = requireParcel(facility.parcelId());
-        if (!request.position().dimension().equals(parcel.dimension())) {
+        if (!region.dimension().equals(parcel.dimension())) {
             throw unavailable(
-                    InstitutionAccessUnavailableException.CODE_TERMINAL_OUTSIDE_REGION,
-                    "Terminal dimension " + request.position().dimension()
+                    InstitutionAccessUnavailableException.CODE_ZONE_OUTSIDE_REGION,
+                    "Zone dimension " + region.dimension()
                             + " does not match facility parcel dimension "
                             + parcel.dimension()
             );
         }
-        if (!isInsideParcel(parcel, request.position().dimension(),
-                request.position().x(), request.position().y(), request.position().z())) {
+        if (!region.inside(parcel)) {
             throw unavailable(
-                    InstitutionAccessUnavailableException.CODE_TERMINAL_OUTSIDE_REGION,
-                    "Terminal position is outside the parcel region of facility "
+                    InstitutionAccessUnavailableException.CODE_ZONE_OUTSIDE_REGION,
+                    "Zone region is outside the parcel region of facility "
                             + facility.facilityId()
+            );
+        }
+        if (region.sizeX() > config.maxZoneXSize()
+                || region.sizeY() > config.maxZoneYSize()
+                || region.sizeZ() > config.maxZoneZSize()) {
+            throw unavailable(
+                    InstitutionAccessUnavailableException.CODE_ZONE_SIZE_EXCEEDED,
+                    "Zone region exceeds the small-size budget "
+                            + "(max " + config.maxZoneXSize() + "x"
+                            + config.maxZoneYSize() + "x" + config.maxZoneZSize()
+                            + "): " + region.sizeX() + "x" + region.sizeY()
+                            + "x" + region.sizeZ()
             );
         }
     }
 
-    private void requireTerminalInsideRegion(LandParcel parcel, Terminal terminal) {
-        if (!isInsideParcel(parcel, terminal.position().dimension(),
-                terminal.position().x(), terminal.position().y(), terminal.position().z())) {
+    private void verifyKindCapabilities(
+            ZoneKind kind,
+            Set<CapabilityClass> capabilitySet
+    ) {
+        if (!kind.allowedCapabilities().containsAll(capabilitySet)) {
             throw unavailable(
-                    InstitutionAccessUnavailableException.CODE_TERMINAL_OUTSIDE_REGION,
-                    "Terminal " + terminal.terminalId()
+                    InstitutionAccessUnavailableException.CODE_KIND_CAPABILITY_MISMATCH,
+                    "Capability set " + capabilitySet + " is not a subset of "
+                            + "the " + kind + " zone kind's allowed classes "
+                            + kind.allowedCapabilities()
+            );
+        }
+    }
+
+    private void requireZoneInsideRegion(LandParcel parcel, Zone zone) {
+        if (!zone.region().inside(parcel)) {
+            throw unavailable(
+                    InstitutionAccessUnavailableException.CODE_ZONE_OUTSIDE_REGION,
+                    "Zone " + zone.zoneId()
                             + " is no longer inside its facility's parcel region"
             );
         }
     }
 
-    private void verifyPresenceRange(
-            WorkflowKind workflow,
-            Terminal terminal,
-            LandParcel parcel,
+    private void verifyPresenceInZone(
+            Zone zone,
             String playerDimension,
             int x,
             int y,
             int z
     ) {
-        if (!presenceOk(workflow, terminal, parcel, playerDimension, x, y, z)) {
+        if (!presenceOk(zone, playerDimension, x, y, z)) {
             throw unavailable(
                     InstitutionAccessUnavailableException.CODE_PLAYER_OUT_OF_RANGE,
-                    "Player is not within the " + workflow
-                            + " presence range of terminal "
-                            + terminal.terminalId()
+                    "Player is not inside the region of zone " + zone.zoneId()
             );
         }
     }
 
-    private boolean presenceOk(
-            WorkflowKind workflow,
-            Terminal terminal,
-            LandParcel parcel,
-            String playerDimension,
-            int x,
-            int y,
-            int z
-    ) {
-        if (workflow == WorkflowKind.OFFICIAL_ROUTINE) {
-            // Official routine presence is the registered internal work zone
-            // (the facility parcel region in this task); the terminal anchors
-            // the interaction that issued the session.
-            return isInsideParcel(parcel, playerDimension, x, y, z);
-        }
-        return terminal.position().dimension().equals(playerDimension)
-                && distanceSquared(terminal, x, y, z)
-                <= workflowDistance(workflow) * (long) workflowDistance(workflow);
+    /** On-site presence is zone containment: same dimension and inside the
+     *  bounded zone region. */
+    private boolean presenceOk(Zone zone, String dimension, int x, int y, int z) {
+        return zone.region().dimension().equals(dimension)
+                && zone.region().contains(x, y, z);
     }
 
-    private boolean isInsideParcel(
-            LandParcel parcel,
-            String dimension,
-            int x,
-            int y,
-            int z
-    ) {
-        return parcel.dimension().equals(dimension)
-                && parcel.region().contains(x, y, z);
-    }
-
-    private long distanceSquared(Terminal terminal, int x, int y, int z) {
-        long dx = (long) terminal.position().x() - x;
-        long dy = (long) terminal.position().y() - y;
-        long dz = (long) terminal.position().z() - z;
-        return dx * dx + dy * dy + dz * dz;
-    }
-
-    private WorkflowKind workflowFor(CapabilityClass capability, boolean secureTerminal) {
-        if (capability == CapabilityClass.ONSITE_PUBLIC_SERVICE) {
-            return WorkflowKind.PUBLIC;
-        }
-        return secureTerminal ? WorkflowKind.HIGH_RISK : WorkflowKind.OFFICIAL_ROUTINE;
+    private WorkflowKind workflowFor(ZoneKind kind, CapabilityClass capability) {
+        return switch (kind) {
+            case PUBLIC -> WorkflowKind.PUBLIC;
+            case OFFICIAL -> WorkflowKind.OFFICIAL_ROUTINE;
+            case SECURE -> WorkflowKind.HIGH_RISK;
+        };
     }
 
     private long lifetimeMillis(WorkflowKind workflow) {
@@ -706,14 +742,6 @@ public final class DefaultInstitutionAccessService implements InstitutionAccessS
             case PUBLIC -> config.publicContextLifetimeMillis();
             case OFFICIAL_ROUTINE -> config.officialHardLimitMillis();
             case HIGH_RISK -> config.highRiskLifetimeMillis();
-        };
-    }
-
-    private int workflowDistance(WorkflowKind workflow) {
-        return switch (workflow) {
-            case PUBLIC -> config.publicDistanceBlocks();
-            case OFFICIAL_ROUTINE -> 0;
-            case HIGH_RISK -> config.highRiskDistanceBlocks();
         };
     }
 

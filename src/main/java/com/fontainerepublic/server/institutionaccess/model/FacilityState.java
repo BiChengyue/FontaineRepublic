@@ -10,7 +10,7 @@ package com.fontainerepublic.server.institutionaccess.model;
  *   <li>{@link #RELOCATING} — old facility blocked while controlled relocation
  *       occurs.</li>
  *   <li>{@link #DISABLED} — facility invalid or administratively withdrawn
- *       (terminal state; no transition out of it).</li>
+ *       (final state; no transition out of it).</li>
  * </ul>
  */
 public enum FacilityState {

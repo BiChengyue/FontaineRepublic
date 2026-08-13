@@ -36,7 +36,7 @@ import java.util.UUID;
  * Infrastructure module binding the shared institution access boundary to one
  * server runtime (FR-INST-002-A).
  *
- * <p>Owns the facility/terminal directory (consuming FR-LAND parcels
+ * <p>Owns the facility/zone directory (consuming FR-LAND parcels
  * read-only), the server-runtime on-site contexts, the bounded presence
  * monitor, and the lifecycle event handlers for the four institutions.
  * Depends on {@code land} (spatial data), {@code audit} (authoritative
@@ -65,7 +65,7 @@ public final class InstitutionAccessModule implements IModule {
                 new ModuleMetadata(
                         "Institution Access",
                         "1.0.0",
-                        Optional.of("Shared facility/terminal/on-site-context boundary"),
+                        Optional.of("Shared facility/zone/on-site-context boundary"),
                         Optional.of("FontaineRepublic")
                 ),
                 Set.of(
@@ -94,10 +94,10 @@ public final class InstitutionAccessModule implements IModule {
                 new InstitutionAccessNbtCodec()
         );
         LOGGER.info(
-                "[InstitutionAccess] Directory loaded (revision={}, facilities={}, terminals={})",
+                "[InstitutionAccess] Directory loaded (revision={}, facilities={}, zones={})",
                 repository.snapshot().storeRevision(),
                 repository.size(),
-                repository.terminalCount()
+                repository.zoneCount()
         );
     }
 
@@ -137,10 +137,10 @@ public final class InstitutionAccessModule implements IModule {
         MinecraftForge.EVENT_BUS.register(presenceMonitor);
         MinecraftForge.EVENT_BUS.register(lifecycleHandlers);
         LOGGER.info(
-                "[InstitutionAccess] Runtime initialized (revision={}, facilities={}, terminals={})",
+                "[InstitutionAccess] Runtime initialized (revision={}, facilities={}, zones={})",
                 repository.snapshot().storeRevision(),
                 repository.size(),
-                repository.terminalCount()
+                repository.zoneCount()
         );
     }
 

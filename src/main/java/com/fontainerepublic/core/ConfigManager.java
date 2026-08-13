@@ -40,9 +40,6 @@ public class ConfigManager {
     /** Default server-owned transfer cooldown in milliseconds. */
     public static final int DEFAULT_ECONOMY_TRANSFER_COOLDOWN_MILLIS = 1000;
 
-    /** Default public workflow terminal distance in blocks (FR-INST-001-B §3.1). */
-    public static final int DEFAULT_INSTITUTION_PUBLIC_DISTANCE_BLOCKS = 6;
-
     /** Default public workflow context lifetime in milliseconds (2 minutes). */
     public static final long DEFAULT_INSTITUTION_PUBLIC_CONTEXT_LIFETIME_MILLIS = 120_000L;
 
@@ -52,11 +49,17 @@ public class ConfigManager {
     /** Default official routine hard session limit in milliseconds (60 minutes). */
     public static final long DEFAULT_INSTITUTION_OFFICIAL_HARD_LIMIT_MILLIS = 3_600_000L;
 
-    /** Default high-risk workflow terminal distance in blocks (FR-INST-001-B §3.3). */
-    public static final int DEFAULT_INSTITUTION_HIGH_RISK_DISTANCE_BLOCKS = 6;
-
     /** Default high-risk single-use authorization lifetime in milliseconds (30 seconds). */
     public static final long DEFAULT_INSTITUTION_HIGH_RISK_LIFETIME_MILLIS = 30_000L;
+
+    /** Default small-size x budget of an institution zone (FR-INST-002-B §2). */
+    public static final int DEFAULT_INSTITUTION_MAX_ZONE_X_SIZE = 16;
+
+    /** Default small-size y budget of an institution zone (FR-INST-002-B §2). */
+    public static final int DEFAULT_INSTITUTION_MAX_ZONE_Y_SIZE = 8;
+
+    /** Default small-size z budget of an institution zone (FR-INST-002-B §2). */
+    public static final int DEFAULT_INSTITUTION_MAX_ZONE_Z_SIZE = 16;
 
     /** Default bounded presence-check interval in ticks (1 second at 20 TPS). */
     public static final int DEFAULT_INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS = 20;
@@ -74,12 +77,13 @@ public class ConfigManager {
     private static final ForgeConfigSpec.BooleanValue ECONOMY_CURRENCY_GROUPING;
     private static final ForgeConfigSpec.IntValue ECONOMY_TRANSFER_COOLDOWN_MILLIS;
 
-    private static final ForgeConfigSpec.IntValue INSTITUTION_PUBLIC_DISTANCE_BLOCKS;
     private static final ForgeConfigSpec.LongValue INSTITUTION_PUBLIC_CONTEXT_LIFETIME_MILLIS;
     private static final ForgeConfigSpec.LongValue INSTITUTION_OFFICIAL_IDLE_TIMEOUT_MILLIS;
     private static final ForgeConfigSpec.LongValue INSTITUTION_OFFICIAL_HARD_LIMIT_MILLIS;
-    private static final ForgeConfigSpec.IntValue INSTITUTION_HIGH_RISK_DISTANCE_BLOCKS;
     private static final ForgeConfigSpec.LongValue INSTITUTION_HIGH_RISK_LIFETIME_MILLIS;
+    private static final ForgeConfigSpec.IntValue INSTITUTION_MAX_ZONE_X_SIZE;
+    private static final ForgeConfigSpec.IntValue INSTITUTION_MAX_ZONE_Y_SIZE;
+    private static final ForgeConfigSpec.IntValue INSTITUTION_MAX_ZONE_Z_SIZE;
     private static final ForgeConfigSpec.IntValue INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS;
 
     static {
@@ -188,17 +192,6 @@ public class ConfigManager {
                         + "(FR-INST-001-B §3). The final mutation-time "
                         + "revalidation has no switch and cannot be disabled."
         ).push("institution");
-        INSTITUTION_PUBLIC_DISTANCE_BLOCKS = builder
-                .comment(
-                        "Public workflow terminal distance in blocks. "
-                                + "Range [1, 256]."
-                )
-                .defineInRange(
-                        "publicDistanceBlocks",
-                        DEFAULT_INSTITUTION_PUBLIC_DISTANCE_BLOCKS,
-                        1,
-                        256
-                );
         INSTITUTION_PUBLIC_CONTEXT_LIFETIME_MILLIS = builder
                 .comment(
                         "Public workflow context maximum lifetime in "
@@ -232,17 +225,6 @@ public class ConfigManager {
                         60_000,
                         86_400_000
                 );
-        INSTITUTION_HIGH_RISK_DISTANCE_BLOCKS = builder
-                .comment(
-                        "High-risk workflow terminal distance in blocks. "
-                                + "Range [1, 256]."
-                )
-                .defineInRange(
-                        "highRiskDistanceBlocks",
-                        DEFAULT_INSTITUTION_HIGH_RISK_DISTANCE_BLOCKS,
-                        1,
-                        256
-                );
         INSTITUTION_HIGH_RISK_LIFETIME_MILLIS = builder
                 .comment(
                         "High-risk single-use authorization lifetime in "
@@ -253,6 +235,39 @@ public class ConfigManager {
                         DEFAULT_INSTITUTION_HIGH_RISK_LIFETIME_MILLIS,
                         1_000,
                         600_000
+                );
+        INSTITUTION_MAX_ZONE_X_SIZE = builder
+                .comment(
+                        "Small-size x budget of an institution zone in blocks "
+                                + "(FR-INST-002-B §2). Range [1, 1024]."
+                )
+                .defineInRange(
+                        "maxZoneXSize",
+                        DEFAULT_INSTITUTION_MAX_ZONE_X_SIZE,
+                        1,
+                        1024
+                );
+        INSTITUTION_MAX_ZONE_Y_SIZE = builder
+                .comment(
+                        "Small-size y budget of an institution zone in blocks "
+                                + "(FR-INST-002-B §2). Range [1, 256]."
+                )
+                .defineInRange(
+                        "maxZoneYSize",
+                        DEFAULT_INSTITUTION_MAX_ZONE_Y_SIZE,
+                        1,
+                        256
+                );
+        INSTITUTION_MAX_ZONE_Z_SIZE = builder
+                .comment(
+                        "Small-size z budget of an institution zone in blocks "
+                                + "(FR-INST-002-B §2). Range [1, 1024]."
+                )
+                .defineInRange(
+                        "maxZoneZSize",
+                        DEFAULT_INSTITUTION_MAX_ZONE_Z_SIZE,
+                        1,
+                        1024
                 );
         INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS = builder
                 .comment(
@@ -382,18 +397,9 @@ public class ConfigManager {
     }
 
     /**
-     * Configured public workflow terminal distance; falls back to the default
+     * Configured public workflow context lifetime; falls back to the default
      * when the config is not loaded yet.
      */
-    public static int institutionPublicDistanceBlocks() {
-        try {
-            return INSTITUTION_PUBLIC_DISTANCE_BLOCKS.get();
-        } catch (IllegalStateException notLoaded) {
-            return DEFAULT_INSTITUTION_PUBLIC_DISTANCE_BLOCKS;
-        }
-    }
-
-    /** Configured public workflow context lifetime; falls back to the default. */
     public static long institutionPublicContextLifetimeMillis() {
         try {
             return INSTITUTION_PUBLIC_CONTEXT_LIFETIME_MILLIS.get();
@@ -420,12 +426,33 @@ public class ConfigManager {
         }
     }
 
-    /** Configured high-risk workflow terminal distance; falls back to the default. */
-    public static int institutionHighRiskDistanceBlocks() {
+    /** Configured small-size x budget of an institution zone; falls back to
+     *  the default when the config is not loaded yet. */
+    public static int institutionMaxZoneXSize() {
         try {
-            return INSTITUTION_HIGH_RISK_DISTANCE_BLOCKS.get();
+            return INSTITUTION_MAX_ZONE_X_SIZE.get();
         } catch (IllegalStateException notLoaded) {
-            return DEFAULT_INSTITUTION_HIGH_RISK_DISTANCE_BLOCKS;
+            return DEFAULT_INSTITUTION_MAX_ZONE_X_SIZE;
+        }
+    }
+
+    /** Configured small-size y budget of an institution zone; falls back to
+     *  the default when the config is not loaded yet. */
+    public static int institutionMaxZoneYSize() {
+        try {
+            return INSTITUTION_MAX_ZONE_Y_SIZE.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_INSTITUTION_MAX_ZONE_Y_SIZE;
+        }
+    }
+
+    /** Configured small-size z budget of an institution zone; falls back to
+     *  the default when the config is not loaded yet. */
+    public static int institutionMaxZoneZSize() {
+        try {
+            return INSTITUTION_MAX_ZONE_Z_SIZE.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_INSTITUTION_MAX_ZONE_Z_SIZE;
         }
     }
 

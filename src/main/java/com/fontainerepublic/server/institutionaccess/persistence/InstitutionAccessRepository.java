@@ -3,14 +3,16 @@ package com.fontainerepublic.server.institutionaccess.persistence;
 import com.fontainerepublic.core.DataManager;
 import com.fontainerepublic.core.DurableCommitResult;
 import com.fontainerepublic.core.DurableCommitStatus;
+import com.fontainerepublic.server.institutionaccess.model.CapabilityClass;
 import com.fontainerepublic.server.institutionaccess.model.Facility;
 import com.fontainerepublic.server.institutionaccess.model.FacilityId;
 import com.fontainerepublic.server.institutionaccess.model.FacilityState;
 import com.fontainerepublic.server.institutionaccess.model.InstitutionType;
-import com.fontainerepublic.server.institutionaccess.model.Terminal;
-import com.fontainerepublic.server.institutionaccess.model.TerminalId;
-import com.fontainerepublic.server.institutionaccess.model.TerminalPosition;
-import com.fontainerepublic.server.institutionaccess.model.TerminalState;
+import com.fontainerepublic.server.institutionaccess.model.Zone;
+import com.fontainerepublic.server.institutionaccess.model.ZoneId;
+import com.fontainerepublic.server.institutionaccess.model.ZoneKind;
+import com.fontainerepublic.server.institutionaccess.model.ZoneRegion;
+import com.fontainerepublic.server.institutionaccess.model.ZoneState;
 import com.fontainerepublic.server.land.model.ParcelId;
 import net.minecraft.nbt.CompoundTag;
 
@@ -23,7 +25,7 @@ import java.util.function.Supplier;
 
 /**
  * Single-writer repository owning the {@code "institution-access"} NBT
- * namespace (FR-INST-002-A §3).
+ * namespace (FR-INST-002-B §2, store v2).
  *
  * <p>This class is the sole production owner of
  * {@link DataManager#getModuleData(String)} /
@@ -33,13 +35,14 @@ import java.util.function.Supplier;
  * snapshot, increments {@code StoreRevision} once and each changed record
  * revision once, and publishes the new in-memory state only after the
  * FR-CORE-002 durable gate reports {@code COMMITTED}. A failed write has no
- * side effects: no facility, no terminal, no revision change, and no
- * downstream event.</p>
+ * side effects: no facility, no zone, no revision change, and no downstream
+ * event.</p>
  *
  * <p>On an empty namespace the repository starts with a fresh, empty store
  * (revision 0). A present namespace is decoded strictly and fail-closed:
- * unknown fields, inconsistent ids, shared parcels or anchored positions, or
- * newer versions reject the whole load. Exact lookups only — no bulk
+ * unknown fields, inconsistent ids, shared parcels, or newer versions reject
+ * the whole load; a v1 store (the removed terminal model) fails closed with
+ * an explicit migration requirement. Exact lookups only — no bulk
  * enumeration API is exposed.</p>
  */
 public final class InstitutionAccessRepository {
@@ -48,17 +51,17 @@ public final class InstitutionAccessRepository {
     public static final String MODULE_DATA_KEY = "institution-access";
 
     private static final int MAX_FACILITY_ID_ATTEMPTS = 8;
-    private static final int MAX_TERMINAL_ID_ATTEMPTS = 8;
+    private static final int MAX_ZONE_ID_ATTEMPTS = 8;
 
     private final InstitutionAccessStore store;
     private final InstitutionAccessNbtCodec codec;
     private final InstitutionAccessLimits limits;
     private final Supplier<UUID> facilityIdSource;
-    private final Supplier<UUID> terminalIdSource;
+    private final Supplier<UUID> zoneIdSource;
     private final Thread ownerThread;
 
     private final LinkedHashMap<FacilityId, Facility> facilities = new LinkedHashMap<>();
-    private final LinkedHashMap<TerminalId, Terminal> terminals = new LinkedHashMap<>();
+    private final LinkedHashMap<ZoneId, Zone> zones = new LinkedHashMap<>();
     private long storeRevision;
 
     /**
@@ -82,13 +85,13 @@ public final class InstitutionAccessRepository {
             InstitutionAccessNbtCodec codec,
             InstitutionAccessLimits limits,
             Supplier<UUID> facilityIdSource,
-            Supplier<UUID> terminalIdSource
+            Supplier<UUID> zoneIdSource
     ) {
         this.store = Objects.requireNonNull(store, "store");
         this.codec = Objects.requireNonNull(codec, "codec");
         this.limits = Objects.requireNonNull(limits, "limits");
         this.facilityIdSource = Objects.requireNonNull(facilityIdSource, "facilityIdSource");
-        this.terminalIdSource = Objects.requireNonNull(terminalIdSource, "terminalIdSource");
+        this.zoneIdSource = Objects.requireNonNull(zoneIdSource, "zoneIdSource");
         this.ownerThread = Thread.currentThread();
 
         CompoundTag loaded = store.load().copy();
@@ -121,18 +124,18 @@ public final class InstitutionAccessRepository {
         );
     }
 
-    public Optional<Terminal> findByTerminalId(TerminalId terminalId) {
+    public Optional<Zone> findByZoneId(ZoneId zoneId) {
         requireOwnerThread();
         return Optional.ofNullable(
-                terminals.get(Objects.requireNonNull(terminalId, "terminalId"))
+                zones.get(Objects.requireNonNull(zoneId, "zoneId"))
         );
     }
 
-    public Terminal requireTerminal(TerminalId terminalId) {
-        return findByTerminalId(terminalId).orElseThrow(
+    public Zone requireZone(ZoneId zoneId) {
+        return findByZoneId(zoneId).orElseThrow(
                 () -> new InstitutionAccessUnavailableException(
-                        InstitutionAccessUnavailableException.CODE_TERMINAL_NOT_FOUND,
-                        "No terminal exists for " + terminalId
+                        InstitutionAccessUnavailableException.CODE_ZONE_NOT_FOUND,
+                        "No zone exists for " + zoneId
                 )
         );
     }
@@ -146,33 +149,21 @@ public final class InstitutionAccessRepository {
                 .findFirst();
     }
 
-    /** The terminal anchored at the given position, if any (anti-clone). */
-    public Optional<Terminal> findByPosition(String dimension, int x, int y, int z) {
-        requireOwnerThread();
-        Objects.requireNonNull(dimension, "dimension");
-        return terminals.values().stream()
-                .filter(terminal -> terminal.position().dimension().equals(dimension)
-                        && terminal.position().x() == x
-                        && terminal.position().y() == y
-                        && terminal.position().z() == z)
-                .findFirst();
-    }
-
     public int size() {
         requireOwnerThread();
         return facilities.size();
     }
 
-    public int terminalCount() {
+    public int zoneCount() {
         requireOwnerThread();
-        return terminals.size();
+        return zones.size();
     }
 
-    public int terminalCountOf(FacilityId facilityId) {
+    public int zoneCountOf(FacilityId facilityId) {
         requireOwnerThread();
         Objects.requireNonNull(facilityId, "facilityId");
-        return (int) terminals.values().stream()
-                .filter(terminal -> terminal.facilityId().equals(facilityId))
+        return (int) zones.values().stream()
+                .filter(zone -> zone.facilityId().equals(facilityId))
                 .count();
     }
 
@@ -182,7 +173,7 @@ public final class InstitutionAccessRepository {
                 InstitutionAccessStoreSnapshot.CURRENT_STORE_VERSION,
                 storeRevision,
                 facilities,
-                terminals
+                zones
         );
     }
 
@@ -224,7 +215,7 @@ public final class InstitutionAccessRepository {
                 InstitutionAccessStoreSnapshot.CURRENT_STORE_VERSION,
                 storeRevision + 1,
                 next,
-                terminals
+                zones
         ));
         return facility;
     }
@@ -276,7 +267,7 @@ public final class InstitutionAccessRepository {
     }
 
     /**
-     * Disables a facility (terminal state; idempotent when already disabled).
+     * Disables a facility (final state; idempotent when already disabled).
      * Revision +1 exactly once on change. All anchored contexts are
      * invalidated by the caller on revision change.
      */
@@ -290,90 +281,141 @@ public final class InstitutionAccessRepository {
     }
 
     /**
-     * Registers a terminal anchored to a facility: server-assigned immutable
-     * id, state ACTIVE, revision 1, integrity bound to the anchored position.
-     * One complete replacement snapshot; committed only after the gate. The
-     * caller must have verified facility existence/type/region and position
-     * uniqueness.
+     * Adds a zone to a facility: server-assigned immutable id, state ACTIVE,
+     * revision 1, kind/region/capability set applied. One complete
+     * replacement snapshot; committed only after the gate. The caller must
+     * have verified facility existence/type/region and the capability/kind
+     * match.
      */
-    public Terminal registerTerminal(
+    public Zone addZone(
             FacilityId facilityId,
             InstitutionType institutionType,
-            TerminalPosition position,
-            Set<com.fontainerepublic.server.institutionaccess.model.CapabilityClass> capabilitySet,
-            boolean secure
+            ZoneKind kind,
+            ZoneRegion region,
+            Set<CapabilityClass> capabilitySet
     ) {
         requireOwnerThread();
         Objects.requireNonNull(facilityId, "facilityId");
         Objects.requireNonNull(institutionType, "institutionType");
-        Objects.requireNonNull(position, "position");
+        Objects.requireNonNull(kind, "kind");
+        Objects.requireNonNull(region, "region");
         Objects.requireNonNull(capabilitySet, "capabilitySet");
-        if (terminals.size() >= limits.maxTerminals()) {
-            throw capacity("Terminal count would exceed the budget of "
-                    + limits.maxTerminals());
+        if (zones.size() >= limits.maxZones()) {
+            throw capacity("Zone count would exceed the budget of "
+                    + limits.maxZones());
         }
-        if (terminalCountOf(facilityId) >= limits.maxTerminalsPerFacility()) {
-            throw capacity("Terminal count of " + facilityId
+        if (zoneCountOf(facilityId) >= limits.maxZonesPerFacility()) {
+            throw capacity("Zone count of " + facilityId
                     + " would exceed the budget of "
-                    + limits.maxTerminalsPerFacility());
+                    + limits.maxZonesPerFacility());
         }
         requireStoreRevisionSpace();
 
-        TerminalId terminalId = assignTerminalId();
-        Terminal terminal = new Terminal(
-                Terminal.CURRENT_SCHEMA_VERSION,
-                terminalId,
+        ZoneId zoneId = assignZoneId();
+        Zone zone = new Zone(
+                Zone.CURRENT_SCHEMA_VERSION,
+                zoneId,
                 facilityId,
                 institutionType,
-                position,
+                kind,
+                region,
                 capabilitySet,
-                TerminalState.ACTIVE,
-                secure,
-                position.integrityDigest(),
+                ZoneState.ACTIVE,
                 1
         );
-        LinkedHashMap<TerminalId, Terminal> next = new LinkedHashMap<>(terminals);
-        next.put(terminalId, terminal);
+        LinkedHashMap<ZoneId, Zone> next = new LinkedHashMap<>(zones);
+        next.put(zoneId, zone);
         commitAndPublish(new InstitutionAccessStoreSnapshot(
                 InstitutionAccessStoreSnapshot.CURRENT_STORE_VERSION,
                 storeRevision + 1,
                 facilities,
                 next
         ));
-        return terminal;
+        return zone;
     }
 
     /**
-     * Suspends a terminal: {@code ACTIVE} becomes {@code SUSPENDED} (no-op
-     * when already suspended; {@code DISABLED} is rejected). Revision +1
-     * exactly once on change.
+     * Removes a zone from the directory. Revision +1 exactly once. Anchored
+     * contexts are invalidated by the caller.
      */
-    public Terminal suspendTerminal(TerminalId terminalId) {
+    public Zone removeZone(ZoneId zoneId) {
         requireOwnerThread();
-        Terminal current = requireTerminal(terminalId);
-        if (current.state() == TerminalState.SUSPENDED) {
+        Zone current = requireZone(zoneId);
+        LinkedHashMap<ZoneId, Zone> next = new LinkedHashMap<>(zones);
+        next.remove(zoneId);
+        commitAndPublish(new InstitutionAccessStoreSnapshot(
+                InstitutionAccessStoreSnapshot.CURRENT_STORE_VERSION,
+                storeRevision + 1,
+                facilities,
+                next
+        ));
+        return current;
+    }
+
+    /**
+     * Resizes a zone onto a new region. Revision +1 exactly once on change.
+     * The caller must have verified the region stays inside the facility
+     * parcel and within the small-size budget.
+     */
+    public Zone resizeZone(ZoneId zoneId, ZoneRegion newRegion) {
+        requireOwnerThread();
+        Objects.requireNonNull(newRegion, "newRegion");
+        Zone current = requireZone(zoneId);
+        rejectDisabledZone(current);
+        return replaceZoneAndPublish(current.withRegion(newRegion));
+    }
+
+    /**
+     * Re-kinds a zone. Revision +1 exactly once on change. The caller must
+     * have verified the capability set matches the new kind.
+     */
+    public Zone setZoneKind(ZoneId zoneId, ZoneKind newKind) {
+        requireOwnerThread();
+        Objects.requireNonNull(newKind, "newKind");
+        Zone current = requireZone(zoneId);
+        if (current.kind() == newKind) {
             return current;
         }
-        if (current.state() == TerminalState.DISABLED) {
+        rejectDisabledZone(current);
+        return replaceZoneAndPublish(current.withKind(newKind));
+    }
+
+    /**
+     * Suspends a zone: {@code ACTIVE} becomes {@code SUSPENDED} (no-op when
+     * already suspended; {@code DISABLED} is rejected). Revision +1 exactly
+     * once on change.
+     */
+    public Zone suspendZone(ZoneId zoneId) {
+        requireOwnerThread();
+        Zone current = requireZone(zoneId);
+        if (current.state() == ZoneState.SUSPENDED) {
+            return current;
+        }
+        if (current.state() == ZoneState.DISABLED) {
             throw invalidTransition(
-                    "Cannot suspend a disabled terminal " + terminalId
+                    "Cannot suspend a disabled zone " + zoneId
             );
         }
-        return replaceTerminalAndPublish(current.withState(TerminalState.SUSPENDED));
+        return replaceZoneAndPublish(current.withState(ZoneState.SUSPENDED));
     }
 
     /**
-     * Disables a terminal (terminal state; idempotent when already disabled).
-     * Revision +1 exactly once on change. Anchored contexts are invalidated
-     * by the caller on revision change.
+     * Activates a zone: {@code SUSPENDED} becomes {@code ACTIVE} (no-op when
+     * already active; {@code DISABLED} is rejected). Revision +1 exactly
+     * once on change.
      */
-    public Terminal disableTerminal(TerminalId terminalId) {
+    public Zone activateZone(ZoneId zoneId) {
         requireOwnerThread();
-        Terminal current = requireTerminal(terminalId);
-        if (current.state() == TerminalState.DISABLED) {
+        Zone current = requireZone(zoneId);
+        if (current.state() == ZoneState.ACTIVE) {
             return current;
         }
-        return replaceTerminalAndPublish(current.withState(TerminalState.DISABLED));
+        if (current.state() == ZoneState.DISABLED) {
+            throw invalidTransition(
+                    "Cannot activate a disabled zone " + zoneId
+            );
+        }
+        return replaceZoneAndPublish(current.withState(ZoneState.ACTIVE));
     }
 
     // ------------------------------------------------------------------
@@ -387,14 +429,14 @@ public final class InstitutionAccessRepository {
                 InstitutionAccessStoreSnapshot.CURRENT_STORE_VERSION,
                 storeRevision + 1,
                 next,
-                terminals
+                zones
         ));
         return updated;
     }
 
-    private Terminal replaceTerminalAndPublish(Terminal updated) {
-        LinkedHashMap<TerminalId, Terminal> next = new LinkedHashMap<>(terminals);
-        next.put(updated.terminalId(), updated);
+    private Zone replaceZoneAndPublish(Zone updated) {
+        LinkedHashMap<ZoneId, Zone> next = new LinkedHashMap<>(zones);
+        next.put(updated.zoneId(), updated);
         commitAndPublish(new InstitutionAccessStoreSnapshot(
                 InstitutionAccessStoreSnapshot.CURRENT_STORE_VERSION,
                 storeRevision + 1,
@@ -409,6 +451,14 @@ public final class InstitutionAccessRepository {
             throw invalidTransition(
                     "Facility " + facility.facilityId()
                             + " is disabled and cannot be changed"
+            );
+        }
+    }
+
+    private void rejectDisabledZone(Zone zone) {
+        if (zone.state() == ZoneState.DISABLED) {
+            throw invalidTransition(
+                    "Zone " + zone.zoneId() + " is disabled and cannot be changed"
             );
         }
     }
@@ -431,21 +481,21 @@ public final class InstitutionAccessRepository {
         );
     }
 
-    private TerminalId assignTerminalId() {
-        for (int attempt = 0; attempt < MAX_TERMINAL_ID_ATTEMPTS; attempt++) {
-            UUID candidate = terminalIdSource.get();
+    private ZoneId assignZoneId() {
+        for (int attempt = 0; attempt < MAX_ZONE_ID_ATTEMPTS; attempt++) {
+            UUID candidate = zoneIdSource.get();
             if (candidate == null) {
-                throw new IllegalStateException("TerminalId source returned null");
+                throw new IllegalStateException("ZoneId source returned null");
             }
-            TerminalId terminalId = TerminalId.of(candidate);
-            if (!terminals.containsKey(terminalId)) {
-                return terminalId;
+            ZoneId zoneId = ZoneId.of(candidate);
+            if (!zones.containsKey(zoneId)) {
+                return zoneId;
             }
         }
         throw new InstitutionAccessUnavailableException(
                 InstitutionAccessUnavailableException.CODE_CAPACITY_EXCEEDED,
-                "Unable to allocate a fresh terminal id after "
-                        + MAX_TERMINAL_ID_ATTEMPTS + " attempts"
+                "Unable to allocate a fresh zone id after "
+                        + MAX_ZONE_ID_ATTEMPTS + " attempts"
         );
     }
 
@@ -502,8 +552,8 @@ public final class InstitutionAccessRepository {
     private void publish(InstitutionAccessStoreSnapshot snapshot) {
         facilities.clear();
         facilities.putAll(snapshot.facilities());
-        terminals.clear();
-        terminals.putAll(snapshot.terminals());
+        zones.clear();
+        zones.putAll(snapshot.zones());
         storeRevision = snapshot.storeRevision();
     }
 
@@ -512,9 +562,9 @@ public final class InstitutionAccessRepository {
             throw capacity("Loaded facility count " + snapshot.facilities().size()
                     + " exceeds the budget of " + limits.maxFacilities());
         }
-        if (snapshot.terminals().size() > limits.maxTerminals()) {
-            throw capacity("Loaded terminal count " + snapshot.terminals().size()
-                    + " exceeds the budget of " + limits.maxTerminals());
+        if (snapshot.zones().size() > limits.maxZones()) {
+            throw capacity("Loaded zone count " + snapshot.zones().size()
+                    + " exceeds the budget of " + limits.maxZones());
         }
     }
 

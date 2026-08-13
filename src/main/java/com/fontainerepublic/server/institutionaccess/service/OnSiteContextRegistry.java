@@ -2,8 +2,8 @@ package com.fontainerepublic.server.institutionaccess.service;
 
 import com.fontainerepublic.server.institutionaccess.api.OnSiteContext;
 import com.fontainerepublic.server.institutionaccess.model.FacilityId;
-import com.fontainerepublic.server.institutionaccess.model.TerminalId;
 import com.fontainerepublic.server.institutionaccess.model.WorkflowKind;
+import com.fontainerepublic.server.institutionaccess.model.ZoneId;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -200,12 +200,12 @@ final class OnSiteContextRegistry {
         });
     }
 
-    /** Invalidates every context anchored to a terminal. */
-    void invalidateByTerminal(TerminalId terminalId) {
-        Objects.requireNonNull(terminalId, "terminalId");
+    /** Invalidates every context anchored to a zone. */
+    void invalidateByZone(ZoneId zoneId) {
+        Objects.requireNonNull(zoneId, "zoneId");
         byId.values().forEach(entry -> {
             if (entry.status == Status.ACTIVE
-                    && entry.context.terminalId().equals(terminalId)) {
+                    && entry.context.zoneId().equals(zoneId)) {
                 entry.status = Status.INVALIDATED;
                 total--;
             }

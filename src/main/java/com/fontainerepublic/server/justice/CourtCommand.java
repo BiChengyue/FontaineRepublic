@@ -5,7 +5,7 @@ import com.fontainerepublic.server.command.CommandRuntimeResolver;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.institutionaccess.api.OnSiteContext;
 import com.fontainerepublic.server.institutionaccess.model.CapabilityClass;
-import com.fontainerepublic.server.institutionaccess.model.TerminalId;
+import com.fontainerepublic.server.institutionaccess.model.ZoneId;
 import com.fontainerepublic.server.institutionaccess.persistence.InstitutionAccessUnavailableException;
 import com.fontainerepublic.server.justice.api.CaseDraft;
 import com.fontainerepublic.server.justice.api.CaseProjection;
@@ -51,15 +51,15 @@ import java.util.UUID;
  * the {@link CommandRuntimeResolver} and never caches services or state.
  *
  * <pre>
- * /fr court case file &lt;caseType&gt; &lt;title&gt; &lt;terminalId&gt; &lt;description&gt;
+ * /fr court case file &lt;caseType&gt; &lt;title&gt; &lt;zoneId&gt; &lt;description&gt;
  * /fr court case list [afterSeq] [limit]
  * /fr court case show &lt;caseId&gt;
- * /fr court evidence submit &lt;caseId&gt; &lt;description&gt; &lt;terminalId&gt;
+ * /fr court evidence submit &lt;caseId&gt; &lt;description&gt; &lt;zoneId&gt;
  * /fr court evidence list &lt;caseId&gt; [afterSeq] [limit]
- * /fr court verdict issue &lt;caseId&gt; &lt;outcome&gt; &lt;terminalId&gt; &lt;reasoning&gt;
+ * /fr court verdict issue &lt;caseId&gt; &lt;outcome&gt; &lt;zoneId&gt; &lt;reasoning&gt;
  * /fr court verdict show &lt;verdictId&gt;
- * /fr court review request &lt;caseId&gt; &lt;terminalId&gt;
- * /fr court review decide &lt;caseId&gt; &lt;terminalId&gt;
+ * /fr court review request &lt;caseId&gt; &lt;zoneId&gt;
+ * /fr court review decide &lt;caseId&gt; &lt;zoneId&gt;
  * </pre>
  */
 public final class CourtCommand {
@@ -95,7 +95,7 @@ public final class CourtCommand {
         return Commands.literal("file")
                 .then(Commands.argument("caseType", StringArgumentType.string())
                         .then(Commands.argument("title", StringArgumentType.string())
-                                .then(Commands.argument("terminalId", StringArgumentType.string())
+                                .then(Commands.argument("zoneId", StringArgumentType.string())
                                         .then(Commands.argument("description", StringArgumentType.greedyString())
                                                 .executes(context -> caseFile(
                                                         context, runtimeResolver
@@ -153,7 +153,7 @@ public final class CourtCommand {
         return Commands.literal("submit")
                 .then(Commands.argument("caseId", StringArgumentType.string())
                         .then(Commands.argument("description", StringArgumentType.string())
-                                .then(Commands.argument("terminalId", StringArgumentType.string())
+                                .then(Commands.argument("zoneId", StringArgumentType.string())
                                         .executes(context -> evidenceSubmit(
                                                 context, runtimeResolver
                                         )))));
@@ -201,7 +201,7 @@ public final class CourtCommand {
         return Commands.literal("issue")
                 .then(Commands.argument("caseId", StringArgumentType.string())
                         .then(Commands.argument("outcome", StringArgumentType.string())
-                                .then(Commands.argument("terminalId", StringArgumentType.string())
+                                .then(Commands.argument("zoneId", StringArgumentType.string())
                                         .then(Commands.argument("reasoning", StringArgumentType.greedyString())
                                                 .executes(context -> verdictIssue(
                                                         context, runtimeResolver
@@ -231,7 +231,7 @@ public final class CourtCommand {
     ) {
         return Commands.literal("request")
                 .then(Commands.argument("caseId", StringArgumentType.string())
-                        .then(Commands.argument("terminalId", StringArgumentType.string())
+                        .then(Commands.argument("zoneId", StringArgumentType.string())
                                 .executes(context -> reviewRequest(
                                         context, runtimeResolver
                                 ))));
@@ -242,7 +242,7 @@ public final class CourtCommand {
     ) {
         return Commands.literal("decide")
                 .then(Commands.argument("caseId", StringArgumentType.string())
-                        .then(Commands.argument("terminalId", StringArgumentType.string())
+                        .then(Commands.argument("zoneId", StringArgumentType.string())
                                 .executes(context -> reviewDecide(
                                         context, runtimeResolver
                                 ))));
@@ -272,10 +272,10 @@ public final class CourtCommand {
             return CommandFeedback.FAILURE;
         }
         String title = StringArgumentType.getString(context, "title");
-        TerminalId terminalId = parseTerminalId(
-                source, StringArgumentType.getString(context, "terminalId")
+        ZoneId zoneId = parseZoneId(
+                source, StringArgumentType.getString(context, "zoneId")
         );
-        if (terminalId == null) {
+        if (zoneId == null) {
             return CommandFeedback.FAILURE;
         }
         String description = StringArgumentType.getString(context, "description");
@@ -292,7 +292,7 @@ public final class CourtCommand {
                     source,
                     access.get(),
                     actor,
-                    terminalId,
+                    zoneId,
                     CapabilityClass.ONSITE_PUBLIC_SERVICE
             );
             CaseReceipt receipt = service.get().fileCase(
@@ -427,10 +427,10 @@ public final class CourtCommand {
             return CommandFeedback.FAILURE;
         }
         String description = StringArgumentType.getString(context, "description");
-        TerminalId terminalId = parseTerminalId(
-                source, StringArgumentType.getString(context, "terminalId")
+        ZoneId zoneId = parseZoneId(
+                source, StringArgumentType.getString(context, "zoneId")
         );
-        if (terminalId == null) {
+        if (zoneId == null) {
             return CommandFeedback.FAILURE;
         }
         Optional<InstitutionAccessService> access =
@@ -446,7 +446,7 @@ public final class CourtCommand {
                     source,
                     access.get(),
                     actor,
-                    terminalId,
+                    zoneId,
                     CapabilityClass.ONSITE_PUBLIC_SERVICE
             );
             EvidenceReceipt receipt = service.get().submitEvidence(
@@ -548,10 +548,10 @@ public final class CourtCommand {
         if (outcome == null) {
             return CommandFeedback.FAILURE;
         }
-        TerminalId terminalId = parseTerminalId(
-                source, StringArgumentType.getString(context, "terminalId")
+        ZoneId zoneId = parseZoneId(
+                source, StringArgumentType.getString(context, "zoneId")
         );
-        if (terminalId == null) {
+        if (zoneId == null) {
             return CommandFeedback.FAILURE;
         }
         String reasoning = StringArgumentType.getString(context, "reasoning");
@@ -568,7 +568,7 @@ public final class CourtCommand {
                     source,
                     access.get(),
                     actor,
-                    terminalId,
+                    zoneId,
                     CapabilityClass.ONSITE_OFFICIAL_DUTY
             );
             VerdictReceipt receipt = service.get().issueVerdict(
@@ -654,10 +654,10 @@ public final class CourtCommand {
         if (caseId == null) {
             return CommandFeedback.FAILURE;
         }
-        TerminalId terminalId = parseTerminalId(
-                source, StringArgumentType.getString(context, "terminalId")
+        ZoneId zoneId = parseZoneId(
+                source, StringArgumentType.getString(context, "zoneId")
         );
-        if (terminalId == null) {
+        if (zoneId == null) {
             return CommandFeedback.FAILURE;
         }
         Optional<InstitutionAccessService> access =
@@ -673,7 +673,7 @@ public final class CourtCommand {
                     source,
                     access.get(),
                     actor,
-                    terminalId,
+                    zoneId,
                     CapabilityClass.ONSITE_PUBLIC_SERVICE
             );
             CaseReceipt receipt = service.get().requestReview(
@@ -713,10 +713,10 @@ public final class CourtCommand {
         if (caseId == null) {
             return CommandFeedback.FAILURE;
         }
-        TerminalId terminalId = parseTerminalId(
-                source, StringArgumentType.getString(context, "terminalId")
+        ZoneId zoneId = parseZoneId(
+                source, StringArgumentType.getString(context, "zoneId")
         );
-        if (terminalId == null) {
+        if (zoneId == null) {
             return CommandFeedback.FAILURE;
         }
         Optional<InstitutionAccessService> access =
@@ -732,7 +732,7 @@ public final class CourtCommand {
                     source,
                     access.get(),
                     actor,
-                    terminalId,
+                    zoneId,
                     CapabilityClass.ONSITE_OFFICIAL_DUTY
             );
             CaseReceipt receipt = service.get().decideReview(
@@ -823,12 +823,12 @@ public final class CourtCommand {
         return VerdictId.of(parsed);
     }
 
-    private static TerminalId parseTerminalId(CommandSourceStack source, String input) {
-        UUID parsed = parseCanonicalUuid(source, input, "terminalId");
+    private static ZoneId parseZoneId(CommandSourceStack source, String input) {
+        UUID parsed = parseCanonicalUuid(source, input, "zoneId");
         if (parsed == null) {
             return null;
         }
-        return TerminalId.of(parsed);
+        return ZoneId.of(parsed);
     }
 
     private static UUID parseCanonicalUuid(
@@ -857,7 +857,7 @@ public final class CourtCommand {
 
     /**
      * Issues a fresh on-site context of the given capability from the
-     * authoritative server player position at the given terminal (FR-INST-001-A
+     * authoritative server player position at the given zone (FR-INST-001-A
      * §6.3). The service revalidates this context at its final mutation
      * boundary.
      */
@@ -865,7 +865,7 @@ public final class CourtCommand {
             CommandSourceStack source,
             InstitutionAccessService access,
             UUID playerId,
-            TerminalId terminalId,
+            ZoneId zoneId,
             CapabilityClass capability
     ) {
         ServerPlayer player = source.getPlayer();
@@ -877,7 +877,7 @@ public final class CourtCommand {
         }
         return access.issueOnSiteContext(
                 playerId,
-                terminalId,
+                zoneId,
                 capability,
                 player.level().dimension().location().toString(),
                 player.blockPosition().getX(),

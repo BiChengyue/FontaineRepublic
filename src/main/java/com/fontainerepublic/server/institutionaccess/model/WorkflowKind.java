@@ -5,13 +5,13 @@ package com.fontainerepublic.server.institutionaccess.model;
  * (FR-INST-001-B §3).
  *
  * <ul>
- *   <li>{@link #PUBLIC} — citizen public workflow near a registered public
- *       terminal: 6 blocks, 2 minutes, single-use.</li>
+ *   <li>{@link #PUBLIC} — citizen public workflow inside a registered PUBLIC
+ *       zone: 2 minutes, single-use.</li>
  *   <li>{@link #OFFICIAL_ROUTINE} — official routine duties inside a
- *       registered internal work zone: 10-minute idle timeout, 60-minute hard
+ *       registered OFFICIAL zone: 10-minute idle timeout, 60-minute hard
  *       session limit.</li>
- *   <li>{@link #HIGH_RISK} — state-authority actions at a registered secure
- *       terminal: 6 blocks, 30 seconds, single-use, requires a valid official
+ *   <li>{@link #HIGH_RISK} — state-authority actions inside a registered
+ *       SECURE zone: 30 seconds, single-use, requires a valid official
  *       routine session.</li>
  * </ul>
  */

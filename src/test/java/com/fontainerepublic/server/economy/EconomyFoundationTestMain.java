@@ -29,16 +29,18 @@ import com.fontainerepublic.server.institutionaccess.api.FacilityReceipt;
 import com.fontainerepublic.server.institutionaccess.api.FacilityRegistrationRequest;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.institutionaccess.api.OnSiteContext;
-import com.fontainerepublic.server.institutionaccess.api.TerminalReceipt;
-import com.fontainerepublic.server.institutionaccess.api.TerminalRegistrationRequest;
 import com.fontainerepublic.server.institutionaccess.api.ValidationResult;
+import com.fontainerepublic.server.institutionaccess.api.ZoneReceipt;
+import com.fontainerepublic.server.institutionaccess.api.ZoneRegistrationRequest;
 import com.fontainerepublic.server.institutionaccess.model.CapabilityClass;
 import com.fontainerepublic.server.institutionaccess.model.Facility;
 import com.fontainerepublic.server.institutionaccess.model.FacilityId;
 import com.fontainerepublic.server.institutionaccess.model.InstitutionType;
-import com.fontainerepublic.server.institutionaccess.model.Terminal;
-import com.fontainerepublic.server.institutionaccess.model.TerminalId;
 import com.fontainerepublic.server.institutionaccess.model.WorkflowKind;
+import com.fontainerepublic.server.institutionaccess.model.Zone;
+import com.fontainerepublic.server.institutionaccess.model.ZoneId;
+import com.fontainerepublic.server.institutionaccess.model.ZoneKind;
+import com.fontainerepublic.server.institutionaccess.model.ZoneRegion;
 import com.fontainerepublic.server.land.model.ParcelId;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
@@ -1993,7 +1995,7 @@ public final class EconomyFoundationTestMain {
                 playerId,
                 InstitutionType.CENTRAL_BANK,
                 FacilityId.of(UUID.randomUUID()),
-                TerminalId.of(UUID.randomUUID()),
+                ZoneId.of(UUID.randomUUID()),
                 WorkflowKind.OFFICIAL_ROUTINE,
                 CapabilityClass.ONSITE_OFFICIAL_DUTY,
                 1_000L,
@@ -2072,24 +2074,39 @@ public final class EconomyFoundationTestMain {
         }
 
         @Override
-        public TerminalReceipt registerTerminal(UUID actor, TerminalRegistrationRequest request) {
+        public ZoneReceipt addZone(UUID actor, ZoneRegistrationRequest request) {
             throw unsupported();
         }
 
         @Override
-        public TerminalReceipt suspendTerminal(UUID actor, TerminalId terminalId) {
+        public ZoneReceipt removeZone(UUID actor, ZoneId zoneId) {
             throw unsupported();
         }
 
         @Override
-        public TerminalReceipt disableTerminal(UUID actor, TerminalId terminalId) {
+        public ZoneReceipt resizeZone(UUID actor, ZoneId zoneId, ZoneRegion newRegion) {
+            throw unsupported();
+        }
+
+        @Override
+        public ZoneReceipt setZoneKind(UUID actor, ZoneId zoneId, ZoneKind newKind) {
+            throw unsupported();
+        }
+
+        @Override
+        public ZoneReceipt suspendZone(UUID actor, ZoneId zoneId) {
+            throw unsupported();
+        }
+
+        @Override
+        public ZoneReceipt activateZone(UUID actor, ZoneId zoneId) {
             throw unsupported();
         }
 
         @Override
         public OnSiteContext issueOnSiteContext(
                 UUID playerId,
-                TerminalId terminalId,
+                ZoneId zoneId,
                 CapabilityClass capability,
                 String playerDimension,
                 int x,
@@ -2115,7 +2132,7 @@ public final class EconomyFoundationTestMain {
         }
 
         @Override
-        public java.util.Optional<Terminal> getTerminal(TerminalId terminalId) {
+        public java.util.Optional<Zone> getZone(ZoneId zoneId) {
             throw unsupported();
         }
 
