@@ -632,3 +632,15 @@
   无 client 类加载/ERROR；Ready、干净关停、ExitCode=0。
 - 客户端阶段：A/B-1/B-2/B-3a ✓；剩余 B-3b（法院/土地，土地需新只读投影 +
   设计审查）与 Stage C（真机目视核验，含全部 /frclient 界面）。
+## 2026-08-14（深夜）| 客户端 Stage B-3b 派发（法院 + 土地视图）
+
+- B-3b 设计决策（§5.1）：法院复用 `JusticeService.cases()`；土地因 FR-LAND
+  "无批量地块列表"契约，改为**单值公共概况聚合** `LandService.publicSummary()`
+  （parcelCount/totalArea/zone 分布/storeRevision，非列表）；个人权益视图留待
+  后续阶段。
+- 撰写 B-3b 三件套并提交 `5abe43d`：协议 v5、账本追加 JusticeInfoPacket(7)/
+  LandInfoPacket(8)、InstitutionPresentationSync 扩展登录发送、CourtScreen/
+  LandScreen。
+- 派发 FR-CLIENT-001-IMPL-B3b（wave fr-client-001-b3b-20260814，工作树
+  fr-client-001-impl-b3b）。
+- 待交付后：独立审查 → 完整构建 → 并入 develop → 与早间真机核验一并验收。
