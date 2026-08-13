@@ -12,6 +12,7 @@ import com.fontainerepublic.server.command.CommandRuntimeResolver;
 import com.fontainerepublic.server.command.registration.CommandContributionRegistry;
 import com.fontainerepublic.server.audit.AuditModule;
 import com.fontainerepublic.server.citizen.CitizenModule;
+import com.fontainerepublic.server.land.LandModule;
 import com.fontainerepublic.server.network.NetworkRuntimeModule;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
@@ -68,6 +69,7 @@ public class FontaineRepublic {
         AuditModule.register(coreManager.moduleRegistry());
         SubjectRegistryModule.register(coreManager.moduleRegistry());
         CitizenModule.register(coreManager.moduleRegistry());
+        LandModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
             TestModule.registerAll(coreManager.moduleRegistry());
             LOGGER.warn(
@@ -92,6 +94,7 @@ public class FontaineRepublic {
         coreManager.startRuntime();
         bindSubjectRegistryPlayerData();
         bindCitizenServices();
+        bindLandServices();
         if (runtimeValidationEnabled) {
             TestModule.logAvailability(coreManager);
         }
@@ -124,6 +127,22 @@ public class FontaineRepublic {
                 .flatMap(container -> container.instance())
                 .filter(CitizenModule.class::isInstance)
                 .map(CitizenModule.class::cast)
+                .ifPresent(module -> module.bindServices(playerData, subjectRegistry));
+    }
+
+    /**
+     * Binds the authoritative PlayerData and subject-registry services to the
+     * land module after the runtime start (dependency order is guaranteed by
+     * module resolution, but the service references are only resolvable once
+     * containers exist).
+     */
+    private void bindLandServices() {
+        PlayerDataService playerData = playerDataService().orElse(null);
+        SubjectRegistryService subjectRegistry = subjectRegistryService().orElse(null);
+        coreManager.getRuntimeContainer(LandModule.MODULE_ID)
+                .flatMap(container -> container.instance())
+                .filter(LandModule.class::isInstance)
+                .map(LandModule.class::cast)
                 .ifPresent(module -> module.bindServices(playerData, subjectRegistry));
     }
 
