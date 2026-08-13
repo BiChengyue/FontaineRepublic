@@ -10,7 +10,10 @@ import com.fontainerepublic.server.citizen.CitizenModule;
 import com.fontainerepublic.server.citizen.api.CitizenService;
 import com.fontainerepublic.server.economy.EconomyModule;
 import com.fontainerepublic.server.economy.api.EconomyService;
+import com.fontainerepublic.server.playerdata.PlayerDataModule;
+import com.fontainerepublic.server.playerdata.api.PlayerDirectoryService;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
+import com.fontainerepublic.server.registry.api.SubjectRegistryService;
 import com.fontainerepublic.server.registry.service.SubjectBootstrapService;
 
 import java.util.Comparator;
@@ -70,6 +73,30 @@ public final class CommandRuntimeResolver {
                 .filter(SubjectRegistryModule.class::isInstance)
                 .map(SubjectRegistryModule.class::cast)
                 .map(SubjectRegistryModule::bootstrapService);
+    }
+
+    /**
+     * Execution-time resolution of the read-only exact-name player directory
+     * (FR-DATA-003; resolved per invocation, never cached).
+     */
+    public Optional<PlayerDirectoryService> playerDirectoryService() {
+        return coreManager.getRuntimeContainer(PlayerDataModule.MODULE_ID)
+                .flatMap(container -> container.instance())
+                .filter(PlayerDataModule.class::isInstance)
+                .map(PlayerDataModule.class::cast)
+                .map(PlayerDataModule::directoryService);
+    }
+
+    /**
+     * Execution-time resolution of the subject registry service (FR-ID-001;
+     * resolved per invocation, never cached).
+     */
+    public Optional<SubjectRegistryService> subjectRegistryService() {
+        return coreManager.getRuntimeContainer(SubjectRegistryModule.MODULE_ID)
+                .flatMap(container -> container.instance())
+                .filter(SubjectRegistryModule.class::isInstance)
+                .map(SubjectRegistryModule.class::cast)
+                .map(SubjectRegistryModule::service);
     }
 
     /**
