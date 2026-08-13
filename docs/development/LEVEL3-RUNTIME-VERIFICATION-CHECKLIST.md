@@ -179,6 +179,8 @@ receipt/watermark 持久化且可 inspect。
 
 ## 结果回传格式
 
+> 非技术向快速操作单见 docs/guide/morning-test-sheet.md。
+
 ```text
 启动日志：通过/不通过（附关键行）
 落盘：通过/不通过（附文件大小与退出码）
