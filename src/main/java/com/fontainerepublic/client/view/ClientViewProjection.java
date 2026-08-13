@@ -4,6 +4,8 @@ import com.fontainerepublic.client.net.ClientPresentationCache;
 import com.fontainerepublic.common.network.display.BalanceSyncPacket;
 import com.fontainerepublic.common.network.display.CitizenInfoPacket;
 import com.fontainerepublic.common.network.display.GovernmentInfoPacket;
+import com.fontainerepublic.common.network.display.JusticeInfoPacket;
+import com.fontainerepublic.common.network.display.LandInfoPacket;
 import com.fontainerepublic.common.network.display.NotificationPacket;
 import com.fontainerepublic.common.network.display.ParliamentInfoPacket;
 import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
@@ -247,5 +249,43 @@ public final class ClientViewProjection {
             firstGroup = 3;
         }
         return grouped.toString();
+    }
+
+    /**
+     * Bounded projection of the justice-case summary into display lines
+     * (each: {@code #<id> <stage> <summary>}), or a single placeholder line
+     * when no snapshot has arrived yet.
+     */
+    public static List<String> courtLines(ClientPresentationCache cache) {
+        JusticeInfoPacket snapshot = cache.justiceSnapshot();
+        if (snapshot == null) {
+            return List.of("No court summary yet.");
+        }
+        List<String> lines = new ArrayList<>(snapshot.cases().size());
+        for (JusticeInfoPacket.CaseEntry entry : snapshot.cases()) {
+            lines.add("#" + entry.id() + " " + entry.stage()
+                    + " " + entry.summary());
+        }
+        return lines;
+    }
+
+    /**
+     * Bounded projection of the republic land overview into display lines
+     * (totals plus one line per zone), or a single placeholder line when no
+     * snapshot has arrived yet.
+     */
+    public static List<String> landLines(ClientPresentationCache cache) {
+        LandInfoPacket snapshot = cache.landSnapshot();
+        if (snapshot == null) {
+            return List.of("No land overview yet.");
+        }
+        List<String> lines = new ArrayList<>();
+        lines.add("Parcels: " + formatAmount(snapshot.parcelCount())
+                + "  Area: " + formatAmount(snapshot.totalArea()));
+        for (LandInfoPacket.ZoneEntry zone : snapshot.zones()) {
+            lines.add(zone.zone() + ": " + formatAmount(zone.count())
+                    + " parcels, " + formatAmount(zone.area()) + " area");
+        }
+        return lines;
     }
 }

@@ -5,6 +5,7 @@ import com.fontainerepublic.server.land.api.HolderDirectory;
 import com.fontainerepublic.server.land.api.LandChangeKind;
 import com.fontainerepublic.server.land.api.LandReceipt;
 import com.fontainerepublic.server.land.api.LandService;
+import com.fontainerepublic.server.land.api.LandSummary;
 import com.fontainerepublic.server.land.api.PermissionResolver;
 import com.fontainerepublic.server.land.api.UsageChangeKind;
 import com.fontainerepublic.server.land.api.UsageReceipt;
@@ -16,6 +17,7 @@ import com.fontainerepublic.server.land.model.ParcelId;
 import com.fontainerepublic.server.land.model.ViolationReport;
 import com.fontainerepublic.server.land.model.ZoneType;
 import com.fontainerepublic.server.land.persistence.LandRepository;
+import com.fontainerepublic.server.land.persistence.LandStoreSnapshot;
 import com.fontainerepublic.server.land.persistence.LandUnavailableException;
 import com.fontainerepublic.server.registry.model.OwnerReference;
 import com.fontainerepublic.server.registry.model.OwnerReferenceKind;
@@ -24,6 +26,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.LongSupplier;
+import java.util.List;
 
 /**
  * Runtime implementation of {@link LandService} (FR-LAND-001-A §4).
@@ -175,6 +178,40 @@ public final class DefaultLandService implements LandService {
     }
 
     @Override
+    public LandSummary publicSummary() {
+        LandStoreSnapshot snapshot = repository.snapshot();
+        java.util.EnumMap<ZoneType, long[]> byZone =
+                new java.util.EnumMap<>(ZoneType.class);
+        long totalArea = 0L;
+        for (LandParcel parcel : snapshot.parcels().values()) {
+            long area = areaOf(parcel.region());
+            totalArea += area;
+            long[] accumulated = byZone.computeIfAbsent(
+                    parcel.zoneType(), zone -> new long[2]
+            );
+            accumulated[0] = accumulated[0] + 1;
+            accumulated[1] = accumulated[1] + area;
+        }
+        List<LandSummary.ZoneSummary> zones = new java.util.ArrayList<>();
+        for (ZoneType zone : ZoneType.values()) {
+            long[] accumulated = byZone.get(zone);
+            if (accumulated != null) {
+                zones.add(new LandSummary.ZoneSummary(
+                        zone,
+                        Math.toIntExact(accumulated[0]),
+                        accumulated[1]
+                ));
+            }
+        }
+        return new LandSummary(
+                snapshot.parcels().size(),
+                totalArea,
+                zones,
+                snapshot.storeRevision()
+        );
+    }
+
+    @Override
     public boolean canBuild(UUID player, ParcelId parcelId) {
         return resolver.canBuild(player, parcelId);
     }
@@ -267,5 +304,17 @@ public final class DefaultLandService implements LandService {
             throw new IllegalStateException("clock returned a negative timestamp");
         }
         return value;
+    }
+
+    /**
+     * Display area of an inclusive block region (block volume; never used for
+     * any decision). Widths are positive (validated regions), so the product
+     * cannot underflow.
+     */
+    private static long areaOf(com.fontainerepublic.server.land.model.ParcelRegion region) {
+        long width = (long) region.maxX() - region.minX() + 1L;
+        long height = (long) region.maxY() - region.minY() + 1L;
+        long depth = (long) region.maxZ() - region.minZ() + 1L;
+        return width * height * depth;
     }
 }

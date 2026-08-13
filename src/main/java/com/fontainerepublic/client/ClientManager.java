@@ -1,9 +1,11 @@
 package com.fontainerepublic.client;
 
 import com.fontainerepublic.client.gui.FrMainScreen;
+import com.fontainerepublic.client.gui.court.CourtScreen;
 import com.fontainerepublic.client.gui.citizen.CitizenScreen;
 import com.fontainerepublic.client.gui.government.GovernmentScreen;
 import com.fontainerepublic.client.gui.guide.GuideScreen;
+import com.fontainerepublic.client.gui.land.LandScreen;
 import com.fontainerepublic.client.gui.money.HistoryScreen;
 import com.fontainerepublic.client.gui.money.MoneyScreen;
 import com.fontainerepublic.client.gui.notifications.NotificationScreen;
@@ -69,6 +71,10 @@ public final class ClientManager {
                         .executes(context -> openGovernment()))
                 .then(Commands.literal("parliament")
                         .executes(context -> openParliament()))
+                .then(Commands.literal("court")
+                        .executes(context -> openCourt()))
+                .then(Commands.literal("land")
+                        .executes(context -> openLand()))
                 .then(Commands.literal("guide")
                         .executes(context -> openGuide())));
         LOGGER.debug("[FR Client] /frclient client command registered");
@@ -106,6 +112,16 @@ public final class ClientManager {
 
     private static int openParliament() {
         Minecraft.getInstance().setScreen(new ParliamentScreen());
+        return 1;
+    }
+
+    private static int openCourt() {
+        Minecraft.getInstance().setScreen(new CourtScreen());
+        return 1;
+    }
+
+    private static int openLand() {
+        Minecraft.getInstance().setScreen(new LandScreen());
         return 1;
     }
 

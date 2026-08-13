@@ -49,7 +49,7 @@ public final class ClientStageB3aFoundationTestMain {
     public static void main(String[] args) throws Exception {
         testGovernmentCodec();
         testParliamentCodec();
-        testProtocolV4Contract();
+        testProtocolV5Contract();
         testCacheSemantics();
         testGovernmentProjection();
         testParliamentProjection();
@@ -183,13 +183,13 @@ public final class ClientStageB3aFoundationTestMain {
     //    NetworkFoundationTestMain and are kept in sync)
     // ------------------------------------------------------------------
 
-    private static void testProtocolV4Contract() {
-        check(NetworkProtocol.VERSION.equals("4"), "Protocol version is 4");
-        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 7,
-                "Protocol v4 expects exactly seven display messages");
+    private static void testProtocolV5Contract() {
+        check(NetworkProtocol.VERSION.equals("5"), "Protocol version is 5");
+        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 9,
+                "Protocol v5 expects exactly nine display messages");
         check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT
-                        == 5 + 2,
-                "Ledger grows by exactly the two B-3a messages");
+                        == 7 + 2,
+                "Ledger grows by exactly the two B-3b messages");
     }
 
     // ------------------------------------------------------------------
@@ -289,6 +289,8 @@ public final class ClientStageB3aFoundationTestMain {
                 sendService,
                 () -> Optional.of(new EmptyGovernmentService()),
                 () -> Optional.of(new EmptyParliamentService()),
+                Optional::empty,
+                Optional::empty,
                 () -> 1_000L,
                 uuid -> Optional.empty()
         );
@@ -305,6 +307,8 @@ public final class ClientStageB3aFoundationTestMain {
         );
         InstitutionPresentationSync sync = new InstitutionPresentationSync(
                 sendService,
+                Optional::empty,
+                Optional::empty,
                 Optional::empty,
                 Optional::empty,
                 () -> 1_000L,
@@ -328,6 +332,12 @@ public final class ClientStageB3aFoundationTestMain {
                 },
                 () -> {
                     throw new IllegalStateException("injected parliament failure");
+                },
+                () -> {
+                    throw new IllegalStateException("injected justice failure");
+                },
+                () -> {
+                    throw new IllegalStateException("injected land failure");
                 },
                 () -> 1_000L,
                 uuid -> Optional.empty()

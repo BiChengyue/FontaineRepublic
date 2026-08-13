@@ -29,6 +29,7 @@ import com.fontainerepublic.server.institutionaccess.InstitutionAccessModule;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.justice.CourtCommand;
 import com.fontainerepublic.server.justice.JusticeModule;
+import com.fontainerepublic.server.justice.api.JusticeService;
 import com.fontainerepublic.server.login.LoginProvisioningHook;
 import com.fontainerepublic.server.land.LandModule;
 import com.fontainerepublic.server.land.api.LandService;
@@ -543,12 +544,21 @@ public class FontaineRepublic {
                 .map(ParliamentModule::service);
     }
 
+    private java.util.Optional<JusticeService> justiceService() {
+        return coreManager.getRuntimeContainer(JusticeModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(JusticeModule.class::isInstance)
+                .map(JusticeModule.class::cast)
+                .map(JusticeModule::service);
+    }
+
     /**
-     * Lazily builds the login snapshot sender of the government/parliament
-     * public summaries (FR-CLIENT-001-IMPL-B3a). Built on first login: the
-     * send service is only available after the message-table freeze, and the
-     * government/parliament service suppliers are resolved per invocation so
-     * the sync always observes the current ACTIVE runtime.
+     * Lazily builds the login snapshot sender of the government/parliament/
+     * court/land public summaries (FR-CLIENT-001-IMPL-B3a/B3b). Built on first
+     * login: the send service is only available after the message-table
+     * freeze, and the institution service suppliers are resolved per
+     * invocation so the sync always observes the current ACTIVE runtime.
      */
     private InstitutionPresentationSync institutionPresentationSync() {
         InstitutionPresentationSync sync = institutionPresentationSync;
@@ -560,6 +570,8 @@ public class FontaineRepublic {
                             networkBootstrap.sendService(),
                             this::governmentService,
                             this::parliamentService,
+                            this::justiceService,
+                            this::landService,
                             System::currentTimeMillis,
                             FontaineRepublic::onlineServerPlayer
                     );

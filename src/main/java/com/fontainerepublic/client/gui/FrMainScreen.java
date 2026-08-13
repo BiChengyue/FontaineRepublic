@@ -25,7 +25,7 @@ public final class FrMainScreen extends Screen {
     @Override
     protected void init() {
         int centerX = this.width / 2;
-        int startY = this.height / 2 - 60;
+        int startY = this.height / 2 - 100;
         addRenderableWidget(Button.builder(
                         Component.literal("Money — balance / transfer / flow"),
                         button -> open(new MoneyScreen())
@@ -57,10 +57,22 @@ public final class FrMainScreen extends Screen {
                 .bounds(centerX - BUTTON_WIDTH / 2, startY + 4 * SPACING, BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build());
         addRenderableWidget(Button.builder(
+                        Component.literal("Court — cases"),
+                        button -> open(new com.fontainerepublic.client.gui.court.CourtScreen())
+                )
+                .bounds(centerX - BUTTON_WIDTH / 2, startY + 5 * SPACING, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .build());
+        addRenderableWidget(Button.builder(
+                        Component.literal("Land — overview"),
+                        button -> open(new com.fontainerepublic.client.gui.land.LandScreen())
+                )
+                .bounds(centerX - BUTTON_WIDTH / 2, startY + 6 * SPACING, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .build());
+        addRenderableWidget(Button.builder(
                         Component.literal("Close"),
                         button -> this.onClose()
                 )
-                .bounds(centerX - BUTTON_WIDTH / 2, startY + 5 * SPACING, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .bounds(centerX - BUTTON_WIDTH / 2, startY + 7 * SPACING, BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build());
     }
 

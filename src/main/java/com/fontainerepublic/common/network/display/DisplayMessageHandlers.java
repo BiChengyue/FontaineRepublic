@@ -76,4 +76,20 @@ public final class DisplayMessageHandlers {
                         .acceptParliamentInfo(message)
         );
     }
+
+    public static NetworkMessageHandler<JusticeInfoPacket> justiceInfo() {
+        return (message, context) -> DistExecutor.safeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> com.fontainerepublic.client.net.ClientNetworkExecutor
+                        .acceptJusticeInfo(message)
+        );
+    }
+
+    public static NetworkMessageHandler<LandInfoPacket> landInfo() {
+        return (message, context) -> DistExecutor.safeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> com.fontainerepublic.client.net.ClientNetworkExecutor
+                        .acceptLandInfo(message)
+        );
+    }
 }

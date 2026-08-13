@@ -3,6 +3,8 @@ package com.fontainerepublic.client.net;
 import com.fontainerepublic.common.network.display.BalanceSyncPacket;
 import com.fontainerepublic.common.network.display.CitizenInfoPacket;
 import com.fontainerepublic.common.network.display.GovernmentInfoPacket;
+import com.fontainerepublic.common.network.display.JusticeInfoPacket;
+import com.fontainerepublic.common.network.display.LandInfoPacket;
 import com.fontainerepublic.common.network.display.NotificationPacket;
 import com.fontainerepublic.common.network.display.ParliamentInfoPacket;
 import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
@@ -63,6 +65,16 @@ public final class ClientNetworkExecutor {
     public static void acceptParliamentInfo(ParliamentInfoPacket message) {
         ensureLogoutCleanup();
         ClientPresentationCache.instance().setParliament(message);
+    }
+
+    public static void acceptJusticeInfo(JusticeInfoPacket message) {
+        ensureLogoutCleanup();
+        ClientPresentationCache.instance().setJustice(message);
+    }
+
+    public static void acceptLandInfo(LandInfoPacket message) {
+        ensureLogoutCleanup();
+        ClientPresentationCache.instance().setLand(message);
     }
 
     private static void ensureLogoutCleanup() {
