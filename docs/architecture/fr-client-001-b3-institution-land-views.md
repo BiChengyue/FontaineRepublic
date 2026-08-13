@@ -46,7 +46,20 @@
 ## 5. 分阶段
 
 - **B-3a**：政府 + 议会（ID 5-6，协议 v4，账本 7 条；复用现有投影）；
-- **B-3b**：法院 + 土地（ID 7-8，账本 9 条；土地需新增只读投影 + 设计审查）。
+- **B-3b**：法院 + 土地（ID 7-8，账本 9 条）。
+
+## 5.1 B-3b 设计决策（FR-LAND 契约对齐）
+
+- 法院：复用 `JusticeService.cases(afterSeq, limit)` 有界分页投影，无需新增
+  API；
+- 土地：LandService 明示"无批量地块列表"（FR-LAND-001-A §4），且
+  LandFoundationTestMain 有"无批量枚举 API"验收。因此**不做地块枚举视图**，
+  改为**共和国土地公共概况**：新增单个有界只读方法
+  `LandSummary publicSummary()`（返回不可变聚合记录：parcelCount、totalArea、
+  各 ZoneType 计数/面积分布、storeRevision）——非列表、非枚举，符合契约；
+- 玩家个人用地权益视图（"我的地块"）需新增按主体限定的有界查询，留待后续
+  阶段单独设计；
+- 协议 v5、账本 9 条（ID 0-8）。
 
 ## 6. Review Gate
 
