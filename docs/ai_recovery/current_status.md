@@ -13,7 +13,9 @@ Phase 2 design batch was Human-confirmed on 2026-08-13
 (FR-PHASE2-HUMAN-APPROVAL-01). Implementation phase is authorized per the
 reviewed sequencing. FR-CORE-002 durable commit gate was implemented by the
 deepseek v4 flash subprocess (commit `3813648`) and passed independent review
-(Level 1-2; runtime verification pending).
+(Level 1-2; runtime verification pending). FR-AUD-001 audit module was
+implemented (commit `2ffdd1d`) and passed independent review (Level 1-2;
+runtime verification pending).
 
 ## Completed Tasks
 
@@ -65,8 +67,9 @@ deepseek v4 flash subprocess (commit `3813648`) and passed independent review
 ## Current Task
 
 FR-CORE-002-IMPL: implemented and reviewed (FR-CORE-002-REVIEW-01, ROUTE TO
-HUMAN). Next: runtime verification (Level 3), then merge decision; then
-dispatch FR-AUD-001 (audit module).
+HUMAN). FR-AUD-001-IMPL: implemented and reviewed (FR-AUD-001-REVIEW-01,
+ROUTE TO HUMAN). Next: runtime verification (Level 3) for both; then
+FR-CIT-001-A / FR-LAND-001-A design review and dispatch.
 
 ## Next Task
 
