@@ -81,8 +81,18 @@ tasks.register('commandFoundationTest', JavaExec) {
     systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
 }
 
+tasks.register('durableCommitTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-CORE-002 durable commit validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.core.DurableCommitTestMain'
+    systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
+}
+
 tasks.named('check') {
     dependsOn tasks.named('playerDataTest')
     dependsOn tasks.named('networkFoundationTest')
     dependsOn tasks.named('commandFoundationTest')
+    dependsOn tasks.named('durableCommitTest')
 }

@@ -89,6 +89,7 @@ public class FontaineRepublic {
     }
 
     private void onServerStopping(ServerStoppingEvent event) {
+        DataManager.beginShutdown();
         DataManager.saveAll();
         coreManager.stopRuntime();
     }
