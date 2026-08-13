@@ -125,15 +125,23 @@ extensions, FR-EMG); institutions switch from terminals to registered zones
 (FR-INST-002-B, implemented/reviewed/merged). FR-PAR-002 (legislative
 extensions: guardian review / referendum / amendment pipeline) dispatched.
 implemented/reviewed/merged. FR-EMG-001 (shared emergency infrastructure)
-implemented/reviewed/merged — all paused server-side tasks complete. Client
-mod remains paused.
+implemented/reviewed/merged. FR-EMG-ECO-001 (economy emergency action
+catalogue: economy.issue / economy.reclaim provider + permanent success
+receipts + receipt provider + registration wiring) implemented
+(subprocess delivered persistence layer; Reviewer completed write surface/
+provider/wiring/tests), independently reviewed (Level 1-2, full build green),
+merged into develop, and full-stack smoke passed (12 modules initialized,
+Ready, clean stop). Next server-side task: FR-EMG-CMD-001 (`/fr admin
+emergency` command adapter; task docs prepared). Client mod remains paused.
 
 ## Next Task
 
-Human directives (2026-08-13): after feature development completes, provide
-player guidance; finally, develop the UI-enabled client mod (FR Client,
-visual operations, Beta/GUI phase per architecture v2.7 optional-client
-contract). Recorded in the ops handbook task queue.
+Dispatch FR-EMG-CMD-001-IMPL (`/fr admin emergency` preview/confirm/inspect/
+status adapter under the reserved `admin` literal, runtime-resolved
+EmergencyService). After that, real-machine (Level 3) verification of the
+full emergency path with Human (console bootstrap, preview/confirm, central
+bank on-site, crash window). Client UI mod remains the final phase per Human
+directive.
 
 ## Phase 2 Design Candidates (added 2026-08-02)
 

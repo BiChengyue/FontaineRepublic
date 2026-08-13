@@ -96,16 +96,23 @@ FR-ECO-001-C-ACCOUNT-ALIGN-01 (account key alignment) were added.
 
 The Phase 2 design batch received Human confirmation on 2026-08-13
 (FR-PHASE2-HUMAN-APPROVAL-01). Implementation phase is authorized per the
-reviewed sequencing: FR-CORE-002 durable commit gate first, then
-Audit -> Citizen -> Land -> Economy.
+reviewed sequencing. Server-side implementation is complete through the
+emergency catalogue: FR-CORE-002, FR-AUD-001, FR-ID-001, FR-ID-BOOTSTRAP-001,
+FR-CIT-001, FR-LAND-001, FR-ECO-001, FR-DATA-003, FR-CMD-USER-001/002,
+FR-INST-002-B (zone-based institution access), FR-GOV-001, FR-PAR-001,
+FR-PAR-002, FR-JUS-001, FR-ECO-002, FR-CMD-GUIDE-001, FR-EMG-001, and
+FR-EMG-ECO-001 (economy.issue/reclaim emergency catalogue) are implemented,
+independently reviewed (Level 1-2), and merged into `develop`; full-stack
+smoke passes with 12 modules.
 
 Next:
 
-Implement FR-CORE-002 (durable commit gate) per task card
-docs/ai_recovery/task_cards/FR-CORE-002-IMPL-task-card.md, then proceed
-Audit -> Citizen -> Land -> Economy per roadmap, dispatching through the
-Reasonix opencode-go/deepseek-v4-flash pipeline once network is available.
-See docs/governance/continuous_development_ops.md for the operating handbook.
+Dispatch FR-EMG-CMD-001-IMPL (`/fr admin emergency` command adapter) per
+docs/ai_recovery/task_cards/FR-EMG-CMD-001-IMPL-task-card.md, then coordinate
+real-machine (Level 3) verification of the emergency path with Human, and
+finally the UI-enabled client mod (FR Client, Beta/GUI) per the approved
+sequence. See docs/governance/continuous_development_ops.md for the operating
+handbook.
 
 Always read this section before starting work.
 

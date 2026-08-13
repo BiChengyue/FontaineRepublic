@@ -476,3 +476,23 @@
 - 起草 FR-EMG-CMD-001 三件套（`/fr admin emergency` 命令适配器：preview/confirm/
   inspect/status + 运行时解析 + 来源映射）并提交 `f692d00`；待 FR-EMG-ECO-001
   落地后按序派发。
+## 2026-08-14（深夜）| FR-EMG-ECO-001 交付 + 审查通过 + 并入 develop
+
+- 派发子进程完成持久化层（EconomyEmergencyReceipt/EconomyNbtCodec/
+  EconomyStoreSnapshot）后达轮次上限退出（无最终报告，日志 102B）。
+- Reviewer 接手补齐：EconomyRepository.emergencyIssue/emergencyReclaim
+  （单快照原子写 + 永久 receipt + 链式摘要）、EconomyEmergencyProvider
+  （preview 无副作用/溢出校验；apply 终界再校验）、EconomyEmergencyProviders
+  （静态零捕获 resolver）、EconomyEmergencyReceiptProvider（有界脱敏分页/
+  watermark/verify）、EconomyModule/FontaineRepublic 接线（注册→冻结→绑定
+  receipt provider）。
+- 关键适配：注册表要求语义版本 `1.0.0`；provider identity 按动作独立
+  （economy/emergency/issue 与 /reclaim）；通知 from=null 编解码对齐。
+- 独立复跑：`economyEmergencyFoundationTest` 14 组用例通过；完整
+  `gradlew build` BUILD SUCCESSFUL；既有 economyFoundationTest 回归断言
+  （交易类型面/禁止面/枚举面）随目录授权更新。
+- 审查报告 FR-EMG-ECO-001-REVIEW-01（PASS → ROUTE TO HUMAN）；提交
+  `db2704b` 并入 develop（merge）。
+- 全栈冒烟（tmp/smoke-eco-001-20260814）：**12 模块全部初始化，0 unavailable**；
+  Ready=True、干净关停、ExitCode=0；已恢复 server.properties、清理冒烟世界。
+- 下一步：派发 FR-EMG-CMD-001（命令适配器）；随后 Human 真机核验紧急全链路。
