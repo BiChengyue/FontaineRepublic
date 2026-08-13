@@ -40,3 +40,11 @@
 - 关键发现：F-001 账户主键冲突（UUID vs SubjectId，需 FR-ECO-001-C-ACCOUNT-ALIGN）；
   F-002 持久化确认门缺失（需 FR-CORE-002）；F-003 审计模块设计缺失（需 FR-AUD-001）。
 - 将未提交的 FR-DATA-003-A 与审查报告一并提交至设计分支。
+
+## 2026-08-13 | FR-CORE-002-A 持久化确认门设计候选
+
+- 依据审查结论 F-002，产出 `docs/architecture/fr-core-002-a-durable-commit-gate.md`：
+  同步原子整根提交（NbtIo + fsync + 原子替换），保留现有非确认路径供高频普通操作；
+  WAL/分片文件记录为被拒方案；含崩溃窗口、世界身份、停服语义、验收矩阵。
+- 该设计触及 Core 持久化接口，按 CLAUDE.md 规则需用户确认后才能实现。
+- 下一队列：FR-AUD-001 审计模块设计、FR-ECO-001-C-ACCOUNT-ALIGN 账户主键对齐。
