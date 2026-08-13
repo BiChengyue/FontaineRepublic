@@ -28,6 +28,9 @@ import com.fontainerepublic.server.login.LoginProvisioningHook;
 import com.fontainerepublic.server.land.LandModule;
 import com.fontainerepublic.server.land.api.LandService;
 import com.fontainerepublic.server.network.NetworkRuntimeModule;
+import com.fontainerepublic.server.parliament.ParliamentCommand;
+import com.fontainerepublic.server.parliament.ParliamentModule;
+import com.fontainerepublic.server.parliament.api.ParliamentService;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
@@ -89,6 +92,7 @@ public class FontaineRepublic {
         EconomyModule.register(coreManager.moduleRegistry());
         InstitutionAccessModule.register(coreManager.moduleRegistry());
         GovernmentModule.register(coreManager.moduleRegistry());
+        ParliamentModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
             TestModule.registerAll(coreManager.moduleRegistry());
             LOGGER.warn(
@@ -107,6 +111,10 @@ public class FontaineRepublic {
         commandContributionRegistry.register(new CommandContributionSpec(
                 "government",
                 GovernmentCommand::create
+        ));
+        commandContributionRegistry.register(new CommandContributionSpec(
+                "parliament",
+                ParliamentCommand::create
         ));
         event.enqueueWork(() -> {
             commandContributionRegistry.freeze();
@@ -129,6 +137,7 @@ public class FontaineRepublic {
         bindEconomyServices();
         bindInstitutionAccessServices();
         bindGovernmentServices();
+        bindParliamentServices();
         if (runtimeValidationEnabled) {
             TestModule.logAvailability(coreManager);
         }
@@ -238,6 +247,30 @@ public class FontaineRepublic {
                 .ifPresent(module -> module.bindServices(
                         playerData,
                         subjectRegistry,
+                        institutionAccess,
+                        audit
+                ));
+    }
+
+    /**
+     * Binds the authoritative PlayerData, citizen, institution-access, and
+     * audit services to the parliament module after the runtime start
+     * (dependency order is guaranteed by module resolution, but the service
+     * references are only resolvable once containers exist).
+     */
+    private void bindParliamentServices() {
+        PlayerDataService playerData = playerDataService().orElse(null);
+        CitizenService citizen = citizenService().orElse(null);
+        InstitutionAccessService institutionAccess =
+                institutionAccessService().orElse(null);
+        AuditService audit = auditService().orElse(null);
+        coreManager.getRuntimeContainer(ParliamentModule.MODULE_ID)
+                .flatMap(container -> container.instance())
+                .filter(ParliamentModule.class::isInstance)
+                .map(ParliamentModule.class::cast)
+                .ifPresent(module -> module.bindServices(
+                        playerData,
+                        citizen,
                         institutionAccess,
                         audit
                 ));
