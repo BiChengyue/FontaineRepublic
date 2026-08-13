@@ -220,7 +220,8 @@ public final class ClientGuiFoundationTestMain {
     }
 
     // ------------------------------------------------------------------
-    // 4. mod entry references ClientManager only through DistExecutor
+    // 4. mod entry references ClientManager only from the client-setup
+    //    listener (FMLClientSetupEvent fires only on the physical client)
     // ------------------------------------------------------------------
 
     private static void testMainEntrySideIsolation() throws IOException {
@@ -228,20 +229,22 @@ public final class ClientGuiFoundationTestMain {
                 .toAbsolutePath().normalize();
         Path main = root.resolve("src/main/java/com/fontainerepublic/FontaineRepublic.java");
         String source = Files.readString(main, StandardCharsets.UTF_8);
-        check(source.contains("DistExecutor.safeRunWhenOn"),
-                "mod entry initializes the client via DistExecutor.safeRunWhenOn");
+        check(source.contains("modEventBus.addListener(this::onClientSetup)"),
+                "mod entry registers the client-setup listener");
+        check(source.contains("private void onClientSetup(FMLClientSetupEvent event)"),
+                "mod entry declares the client-only setup handler");
         int clientManagerReferences = count(source, "com.fontainerepublic.client.ClientManager");
         check(clientManagerReferences == 1,
                 "mod entry references ClientManager exactly once");
-        int safeCallLine = -1;
+        int handlerLine = -1;
         String[] lines = source.split("\\R");
         for (int index = 0; index < lines.length; index++) {
-            if (lines[index].contains("safeRunWhenOn")) {
-                safeCallLine = index;
+            if (lines[index].contains("private void onClientSetup")) {
+                handlerLine = index;
             }
             if (lines[index].contains("com.fontainerepublic.client.ClientManager")) {
-                check(safeCallLine >= 0 && index > safeCallLine,
-                        "ClientManager reference sits inside the DistExecutor supplier");
+                check(handlerLine >= 0 && index > handlerLine,
+                        "ClientManager reference sits inside the client-setup handler");
             }
         }
     }
