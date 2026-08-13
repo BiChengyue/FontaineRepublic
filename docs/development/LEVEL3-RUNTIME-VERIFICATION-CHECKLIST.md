@@ -13,6 +13,10 @@
 - 用开发目录启动专用服务器（与 2026-08-02 证据包相同方式：
   `runServer` 或 Gradle `runServer`，目录 `run/`）。
 - 准备一个能开服/关服的控制台（终端窗口即可）。
+- **必须使用新世界**：`run/server.properties` 的 `level-name` 须为新名字
+  （当前 `world-fr-v1`）。旧世界 `run/world` 含 7/28 原型 60 字节旧根，
+  严格解码失败会令 DataManager 进入 `LOAD_FAILED`，所有模组写入（含紧急
+  bootstrap）被拒；旧世界文件夹保留作备份，勿删除。
 
 ## 1. 启动核验
 

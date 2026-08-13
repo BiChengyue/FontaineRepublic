@@ -14,6 +14,14 @@
 4. 准备两个 UUID：你的玩家 UUID（游戏里 `F3+C` 复制或在服务器日志找
    `UUID of player`），以及一个"目标玩家"UUID（第二人，或直接给自己）。
 
+> **重要（新世界）**：不要用 7/28 旧原型世界（`run\world` 里是 60 字节旧格式
+> `fontainerepublic.dat`，会报 `LOAD_FAILED`、所有写入被拒）。请在
+> `run\server.properties` 把 `level-name` 改成新名字（当前已设为
+> `world-fr-v1`），旧世界文件夹保留作备份，不删除。
+
+> **提示（原因参数）**：`preview`/`bootstrap` 的 reason 参数不加引号时只接受
+> ASCII（字母数字），中文需加引号，如 `"首次初始化"`；操作单统一用 `test`。
+
 ## 一、服务器面（在服务器控制台输入）
 
 ```text
@@ -32,7 +40,7 @@
 应显示 `phase=ACTIVE`。
 
 ```text
-/fr admin emergency preview economy issue 1.0.0 PLAYER_UUID <目标玩家UUID> DEBUG 测试 amount 100
+/fr admin emergency preview economy issue 1.0.0 PLAYER_UUID <目标玩家UUID> DEBUG test amount 100
 ```
 应返回 `token=...` 与到期时间（记下 token）。
 
@@ -45,7 +53,7 @@
 应被拒绝（单次使用）。
 
 ```text
-/fr admin emergency preview economy reclaim 1.0.0 PLAYER_UUID <目标玩家UUID> DEBUG 测试 amount 999
+/fr admin emergency preview economy reclaim 1.0.0 PLAYER_UUID <目标玩家UUID> DEBUG test amount 999
 ```
 应被拒绝（`INSUFFICIENT_FUNDS`，因为余额只有 100）。
 
