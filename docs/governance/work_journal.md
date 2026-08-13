@@ -337,3 +337,14 @@
 - 派发 FR-CMD-GUIDE-001-IMPL：`/fr help` 分模块扩展（money/citizen/government/
   parliament/court/institution），en_us/zh_cn 双语，有界输出（wave fr-cmd-guide-001-20260813）。
 - 客户端 UI 模组保持"最后"阶段，未启动实现。
+
+## 2026-08-13 | Level 3 服务器运行验证通过
+
+- Human 运行 `gradlew runServer`：11 模块全部初始化（11 available, 0 unavailable）。
+- Reviewer 独立直连冒烟运行（新世界 smoke-20260813）：Ready=True、11 模块初始化、
+  干净关停（逆序关闭/世界保存/ExitCode=0）、fontainerepublic.dat 落盘（548B）。
+- 发现并修复：主仓库 build/classes 过期导致 NoClassDefFoundError（LoginProvisioningHook），
+  主仓库完整构建后解决。
+- 记录：run/world 存在 7/28 旧版原型存档（60B），现有 world 上运行可能失败关闭，
+  建议新世界或移除旧档（正式迁移需另行批准）。
+- 出具 FR-LEVEL3-RUNTIME-REVIEW-01；剩余可选核验（客户端加入/命令/崩溃窗口）待 Human。
