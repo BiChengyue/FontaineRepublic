@@ -14,6 +14,7 @@ import com.fontainerepublic.server.audit.AuditModule;
 import com.fontainerepublic.server.network.NetworkRuntimeModule;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
+import com.fontainerepublic.server.registry.SubjectRegistryModule;
 import com.mojang.logging.LogUtils;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.common.MinecraftForge;
@@ -63,6 +64,7 @@ public class FontaineRepublic {
         NetworkRuntimeModule.register(coreManager.moduleRegistry());
         PlayerDataModule.register(coreManager.moduleRegistry());
         AuditModule.register(coreManager.moduleRegistry());
+        SubjectRegistryModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
             TestModule.registerAll(coreManager.moduleRegistry());
             LOGGER.warn(
@@ -85,9 +87,24 @@ public class FontaineRepublic {
     private void onServerStarting(ServerStartingEvent event) {
         DataManager.init(event.getServer());
         coreManager.startRuntime();
+        bindSubjectRegistryPlayerData();
         if (runtimeValidationEnabled) {
             TestModule.logAvailability(coreManager);
         }
+    }
+
+    /**
+     * Binds the authoritative PlayerData service to the subject registry after
+     * the runtime start (dependency order is guaranteed by module resolution,
+     * but the service reference is only resolvable once containers exist).
+     */
+    private void bindSubjectRegistryPlayerData() {
+        PlayerDataService playerData = playerDataService().orElse(null);
+        coreManager.getRuntimeContainer(SubjectRegistryModule.MODULE_ID)
+                .flatMap(container -> container.instance())
+                .filter(SubjectRegistryModule.class::isInstance)
+                .map(SubjectRegistryModule.class::cast)
+                .ifPresent(module -> module.bindPlayerDataService(playerData));
     }
 
     private void onServerStopping(ServerStoppingEvent event) {
