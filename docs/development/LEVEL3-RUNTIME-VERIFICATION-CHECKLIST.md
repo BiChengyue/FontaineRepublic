@@ -99,9 +99,21 @@ Saving players / Saving worlds / All chunks are saved (主世界/DIM-1/DIM1)
 /fr admin modules       -> 11 个模块均 available
 /fr money balance       -> 本人余额反馈
 /fr citizen info        -> 本人公民状态
+/fr bank balance        -> 国库总额（只读公开）
+/fr help money | citizen | bank -> 分模块引导输出
 ```
 
 **通过条件：** 输出与上一致；无 `Runtime unavailable`。
+
+## 4.5 央行真机核验（设施/终端就绪后）
+
+- 在央行设施注册终端前交互获得现场上下文后：
+  - `/fr bank deposit <玩家> <金额>` -> 发钞成功、供给守恒；
+  - `/fr bank withdraw <玩家> <金额>` -> 回收成功、供给守恒；
+  - `/fr bank freeze <玩家>` -> 该玩家转账/提取被拒；
+  - 离开设施后重试同一操作 -> 现场上下文失效被拒（无变异）。
+
+**通过条件：** 现场门控生效、供给恒等式成立、冻结双向拒绝。
 
 ## 5. 崩溃窗口测试（可选，进阶）
 
