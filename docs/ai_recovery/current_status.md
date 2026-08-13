@@ -125,7 +125,8 @@ extensions, FR-EMG); institutions switch from terminals to registered zones
 (FR-INST-002-B, implemented/reviewed/merged). FR-PAR-002 (legislative
 extensions: guardian review / referendum / amendment pipeline) dispatched.
 implemented/reviewed/merged. FR-EMG-001 (shared emergency infrastructure)
-dispatched — last paused server-side task. Client mod remains paused.
+implemented/reviewed/merged — all paused server-side tasks complete. Client
+mod remains paused.
 
 ## Next Task
 
