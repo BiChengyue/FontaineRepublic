@@ -57,6 +57,19 @@
 - 界面布局、HUD 渲染、表单交互需 Human 连服目视核验（Level 3 清单 §4.7）；
   本阶段仅有构建 + 纯逻辑测试。
 
+### F-002（Critical, Fixed）— 主入口 safeRunWhenOn 导致专用服务器加载失败
+- 冒烟发现：`DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> () ->
+  ClientManager.init())` 在专用服务器模组构造期触发 Forge safe-referent
+  校验（"Unsafe Referent usage"，safe 变体仅接受 Minecraft/client 包），
+  模组加载失败。
+- 修复：主入口改为注册 `FMLClientSetupEvent` 监听器（仅物理客户端触发），
+  监听器方法体惰性引用 ClientManager；专用服务器不加载 client/ 类。
+  重跑冒烟通过（12 模块、协议 v2、Ready、ExitCode=0）。提交 `4cdc95d`。
+
+### F-003（Suggestion, Open）— Stage B-2 范围
+- 公民卡、完整历史页（需新 S2C 消息与服务端查询投影）、机构/土地视图留待
+  Stage B-2；建议按消息账本追加规则（ID 3+，必要时协议升版）实施。
+
 ### F-002（Suggestion, Open）— Stage B-2 范围
 - 公民卡、完整历史页（需新 S2C 消息与服务端查询投影）、机构/土地视图留待
   Stage B-2；建议按消息账本追加规则（ID 3+，必要时协议升版）实施。

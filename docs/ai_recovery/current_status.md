@@ -155,6 +155,17 @@ classloading), and merged into develop. Stage B (GUI/HUD) materials are
 prepared; Stage C is real-machine verification with Human. The Level 3 server
 verification still awaits Human.
 
+2026-08-14: FR-CLIENT-001-IMPL-B (client GUI/HUD/forms: /frclient command
+surface, balance HUD/card, transfer form via /fr money pay, notifications,
+live transaction flow, guide screen) implemented, independently reviewed
+(Level 1-2, full build green). The full-stack smoke caught a Forge
+DistExecutor.safeRunWhenOn safe-referent rejection of mod-owned client
+classes; fixed by switching the mod-entry client init to an FMLClientSetupEvent
+listener (dedicated server never loads client classes; smoke clean: 12 modules,
+protocol v2, Ready, ExitCode=0). Stage B-1 merged into develop. Stage B-2
+(citizen card / full history / institution-land views) and Stage C
+(real-machine visual verification with Human) remain.
+
 ## Phase 2 Design Candidates (added 2026-08-02)
 
 All are design candidates only — implementation is not authorized until

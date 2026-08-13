@@ -108,16 +108,22 @@ preview/confirm/inspect/status/bootstrap/stage/recover adapter) is also
 implemented, reviewed, merged, and smoke-verified — the paused server-side
 task queue is complete. FR-CLIENT-001-IMPL-A (client S2C presentation network
 surface: protocol v2, ledger IDs 0-2, DistExecutor side isolation, economy
-send wiring) is implemented, reviewed, merged, and smoke-verified; Stage B
-(GUI/HUD) is next.
+send wiring) and FR-CLIENT-001-IMPL-B (client GUI/HUD/forms: /frclient
+surface, balance HUD/card, transfer form, notifications, guide) are
+implemented, reviewed, merged, and smoke-verified. Note: Forge's
+DistExecutor.safeRunWhenOn rejects mod-owned client referents, so the mod
+entry uses an FMLClientSetupEvent listener for client init (dedicated server
+never loads client classes). Stage B-2 (citizen card / history / institution
+views) and Stage C (real-machine verification) remain.
 
 Next:
 
-Complete client Stage B (GUI/HUD/forms) per FR-CLIENT-001-IMPL-B, then
-coordinate real-machine (Level 3) verification of the server surface and the
-client network surface with Human (emergency bootstrap/preview/confirm,
-central-bank on-site, crash window, FR client connect). See
-docs/governance/continuous_development_ops.md for the operating handbook.
+Optionally continue Stage B-2 (citizen card / full history / institution-land
+views per FR-CLIENT-001-IMPL-B-2), then coordinate real-machine (Level 3)
+verification of the server surface, the client network surface, and the GUI
+with Human (emergency bootstrap/preview/confirm, central-bank on-site, crash
+window, FR client connect). See docs/governance/continuous_development_ops.md
+for the operating handbook.
 
 Always read this section before starting work.
 

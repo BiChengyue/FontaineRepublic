@@ -548,3 +548,24 @@
   protocol 2 frozen with 3 production messages**；12 模块全部初始化；
   专用服务器未加载 client/ 类；Ready、干净关停、ExitCode=0。
 - 下一步：Stage B（GUI/HUD/表单，材料已备）→ Human 早间连服核验。
+## 2026-08-14（深夜）| 客户端 Stage B-1 交付 + 冒烟发现并修复侧隔离缺陷
+
+- 派发 FR-CLIENT-001-IMPL-B（wave fr-client-001-b-20260814）：子进程完成
+  ClientManager（/frclient 客户端命令 + HUD）、MoneyScreen + TransferFormComposer
+  （`fr money pay` 命令路径提交）、ClientViewProjection、Guide/Notification
+  屏、ClientGuiFoundationTestMain 并提交 `ba50aa0`。
+- 完整构建全绿（30 tasks）；但全栈冒烟**首次失败**：Forge
+  `DistExecutor.safeRunWhenOn(Dist.CLIENT, ...)` 的 safe-referent 校验拒绝
+  mod 自有客户端类（`Unsafe Referent usage`，FontaineRepublic.<init> 抛异常、
+  模组加载失败）。
+- 根因：safe 变体仅允许 Minecraft/client 包作为 referent；Stage A 的 S2C
+  handler 路径在服务端永不执行故未触发，主入口构造器双侧执行故触发。
+- 修复：改用 `FMLClientSetupEvent` 监听器（仅物理客户端触发），监听器方法体
+  惰性引用 ClientManager，专用服务器不加载 client/ 类；同步更新 GUI 测试的
+  侧隔离断言与设计文档 §4.3（提交 `4cdc95d` 并入 develop）。
+- 验证：完整 `gradlew build` 全绿；全栈冒烟（tmp/smoke-client-b2-20260814）：
+  Ready、ExitCode=0、12 模块、协议 v2 + 3 生产消息、无 Unsafe Referent/
+  NoClassDefError/client 类加载。
+- 审查报告 FR-CLIENT-001-IMPL-B-REVIEW-01 补充 F-001（冒烟发现缺陷并修复）。
+- 客户端阶段 B-1 完成（GUI/HUD/表单/引导）；Stage B-2（公民卡/历史页/机构
+  土地视图）留待后续；Stage C（真机目视核验）待 Human。
