@@ -14,7 +14,7 @@ public final class NetworkProtocol {
     @SuppressWarnings("removal") // Forge 1.20.1 API surface (deprecated for removal on newer JDKs)
     public static final ResourceLocation CHANNEL_NAME =
             new ResourceLocation(FontaineRepublic.MOD_ID, "main");
-    public static final String VERSION = "3";
+    public static final String VERSION = "4";
 
     private NetworkProtocol() {
     }

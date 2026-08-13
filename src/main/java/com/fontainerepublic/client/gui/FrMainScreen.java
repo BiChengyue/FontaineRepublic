@@ -45,10 +45,22 @@ public final class FrMainScreen extends Screen {
                 .bounds(centerX - BUTTON_WIDTH / 2, startY + 2 * SPACING, BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build());
         addRenderableWidget(Button.builder(
+                        Component.literal("Government — ministries / positions"),
+                        button -> open(new com.fontainerepublic.client.gui.government.GovernmentScreen())
+                )
+                .bounds(centerX - BUTTON_WIDTH / 2, startY + 3 * SPACING, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .build());
+        addRenderableWidget(Button.builder(
+                        Component.literal("Parliament — proposals"),
+                        button -> open(new com.fontainerepublic.client.gui.parliament.ParliamentScreen())
+                )
+                .bounds(centerX - BUTTON_WIDTH / 2, startY + 4 * SPACING, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .build());
+        addRenderableWidget(Button.builder(
                         Component.literal("Close"),
                         button -> this.onClose()
                 )
-                .bounds(centerX - BUTTON_WIDTH / 2, startY + 3 * SPACING, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .bounds(centerX - BUTTON_WIDTH / 2, startY + 5 * SPACING, BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build());
     }
 

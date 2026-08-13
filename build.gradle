@@ -247,6 +247,15 @@ tasks.register('clientStageB2FoundationTest', JavaExec) {
     systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
 }
 
+tasks.register('clientStageB3aFoundationTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-CLIENT-001-IMPL-B3a government/parliament view validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.client.ClientStageB3aFoundationTestMain'
+    systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
+}
+
 tasks.named('check') {
     dependsOn tasks.named('playerDataTest')
     dependsOn tasks.named('playerDirectoryFoundationTest')
@@ -270,4 +279,5 @@ tasks.named('check') {
     dependsOn tasks.named('clientPresentationFoundationTest')
     dependsOn tasks.named('clientGuiFoundationTest')
     dependsOn tasks.named('clientStageB2FoundationTest')
+    dependsOn tasks.named('clientStageB3aFoundationTest')
 }

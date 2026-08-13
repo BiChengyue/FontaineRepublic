@@ -2,7 +2,9 @@ package com.fontainerepublic.client.net;
 
 import com.fontainerepublic.common.network.display.BalanceSyncPacket;
 import com.fontainerepublic.common.network.display.CitizenInfoPacket;
+import com.fontainerepublic.common.network.display.GovernmentInfoPacket;
 import com.fontainerepublic.common.network.display.NotificationPacket;
+import com.fontainerepublic.common.network.display.ParliamentInfoPacket;
 import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
 import com.fontainerepublic.common.network.display.TransactionNotifyPacket;
 
@@ -34,6 +36,8 @@ public final class ClientPresentationCache {
     private BalanceSyncPacket balance;
     private CitizenInfoPacket citizen;
     private TransactionHistorySyncPacket history;
+    private GovernmentInfoPacket government;
+    private ParliamentInfoPacket parliament;
     private final List<TransactionNotifyPacket> transactions = new ArrayList<>();
     private final List<NotificationPacket.NotificationEntry> notifications = new ArrayList<>();
 
@@ -68,6 +72,22 @@ public final class ClientPresentationCache {
         }
     }
 
+    /** Replaces the government public-summary snapshot (idempotent update). */
+    public void setGovernment(GovernmentInfoPacket snapshot) {
+        Objects.requireNonNull(snapshot, "snapshot");
+        synchronized (lock) {
+            government = snapshot;
+        }
+    }
+
+    /** Replaces the parliament public-summary snapshot (idempotent update). */
+    public void setParliament(ParliamentInfoPacket snapshot) {
+        Objects.requireNonNull(snapshot, "snapshot");
+        synchronized (lock) {
+            parliament = snapshot;
+        }
+    }
+
     /** Appends one transaction notice, dropping the oldest beyond the bound. */
     public void appendTransaction(TransactionNotifyPacket notice) {
         Objects.requireNonNull(notice, "notice");
@@ -94,6 +114,8 @@ public final class ClientPresentationCache {
             balance = null;
             citizen = null;
             history = null;
+            government = null;
+            parliament = null;
             transactions.clear();
             notifications.clear();
         }
@@ -114,6 +136,18 @@ public final class ClientPresentationCache {
     public TransactionHistorySyncPacket historySnapshot() {
         synchronized (lock) {
             return history;
+        }
+    }
+
+    public GovernmentInfoPacket governmentSnapshot() {
+        synchronized (lock) {
+            return government;
+        }
+    }
+
+    public ParliamentInfoPacket parliamentSnapshot() {
+        synchronized (lock) {
+            return parliament;
         }
     }
 

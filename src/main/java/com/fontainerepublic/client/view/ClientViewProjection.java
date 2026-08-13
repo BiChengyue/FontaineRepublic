@@ -3,7 +3,9 @@ package com.fontainerepublic.client.view;
 import com.fontainerepublic.client.net.ClientPresentationCache;
 import com.fontainerepublic.common.network.display.BalanceSyncPacket;
 import com.fontainerepublic.common.network.display.CitizenInfoPacket;
+import com.fontainerepublic.common.network.display.GovernmentInfoPacket;
 import com.fontainerepublic.common.network.display.NotificationPacket;
+import com.fontainerepublic.common.network.display.ParliamentInfoPacket;
 import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
 import com.fontainerepublic.common.network.display.TransactionNotifyPacket;
 
@@ -148,6 +150,51 @@ public final class ClientViewProjection {
                 line.append(" \"").append(entry.memo()).append('"');
             }
             lines.add(line.toString());
+        }
+        return lines;
+    }
+
+    /**
+     * Bounded projection of the government public summary into display lines
+     * (each: {@code <id-prefix> <name> (<N> positions)}), or a placeholder
+     * line when no snapshot has arrived yet. The snapshot is already bounded
+     * by the packet; this method additionally caps the returned list.
+     */
+    public static List<String> governmentLines(ClientPresentationCache cache) {
+        GovernmentInfoPacket snapshot = cache.governmentSnapshot();
+        if (snapshot == null) {
+            return List.of("No government info yet.");
+        }
+        List<GovernmentInfoPacket.MinistryEntry> entries = snapshot.ministries();
+        int cap = Math.min(entries.size(), GovernmentInfoPacket.MAX_MINISTRIES);
+        List<String> lines = new ArrayList<>(cap);
+        for (int index = 0; index < cap; index++) {
+            GovernmentInfoPacket.MinistryEntry entry = entries.get(index);
+            lines.add(digestPrefix(entry.id()) + " " + entry.name()
+                    + " (" + entry.positionCount() + " positions)");
+        }
+        return lines;
+    }
+
+    /**
+     * Bounded projection of the parliament public summary into display lines
+     * (each: {@code <id-prefix> <stage>/<normLevel> <title>}), or a
+     * placeholder line when no snapshot has arrived yet. The snapshot is
+     * already bounded by the packet; this method additionally caps the
+     * returned list.
+     */
+    public static List<String> parliamentLines(ClientPresentationCache cache) {
+        ParliamentInfoPacket snapshot = cache.parliamentSnapshot();
+        if (snapshot == null) {
+            return List.of("No parliament info yet.");
+        }
+        List<ParliamentInfoPacket.ProposalEntry> entries = snapshot.proposals();
+        int cap = Math.min(entries.size(), ParliamentInfoPacket.MAX_PROPOSALS);
+        List<String> lines = new ArrayList<>(cap);
+        for (int index = 0; index < cap; index++) {
+            ParliamentInfoPacket.ProposalEntry entry = entries.get(index);
+            lines.add(digestPrefix(entry.id()) + " " + entry.stage()
+                    + "/" + entry.normLevel() + " " + entry.title());
         }
         return lines;
     }
