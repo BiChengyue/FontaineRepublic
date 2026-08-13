@@ -35,7 +35,10 @@ contexts) implemented, reviewed Level 1-2, and merged.
 FR-GOV-001 (government: positions/ministries/offices/appointments with on-site
 gating) and FR-PAR-001 (parliament: proposals/votes/bills with legal state
 machine and norm-level thresholds) implemented, reviewed Level 1-2, and
-merged. FR-JUS-001 (justice) dispatched.
+merged. FR-JUS-001 (justice: cases/evidence/verdicts with on-site gating and
+Land intake) implemented, reviewed Level 1-2 (one defect found and fixed),
+and merged — the institution sequence (Government -> Parliament -> Justice)
+is complete.
 
 ## Completed Tasks
 
@@ -88,9 +91,11 @@ merged. FR-JUS-001 (justice) dispatched.
 
 Approved implementation sequence complete (7 modules) plus FR-DATA-003 and
 FR-CMD-USER-001/002, FR-INST-002, FR-GOV-001, and FR-PAR-001, all implemented,
-reviewed Level 1-2, merged into develop. FR-JUS-001 (justice) dispatched —
-last of the institution sequence. Pending: Level 3 runtime verification for
-all implemented modules (checklist:
+reviewed Level 1-2, merged into develop; FR-JUS-001 (justice) completes the
+institution sequence. Pending per Human directives: player guidance after
+features stabilize, then the UI-enabled client mod (FR Client, Beta/GUI).
+Also pending: Level 3 runtime verification for all implemented modules
+(checklist:
 docs/development/LEVEL3-RUNTIME-VERIFICATION-CHECKLIST.md).
 
 ## Next Task
