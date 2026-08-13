@@ -4,6 +4,7 @@ import com.fontainerepublic.server.parliament.model.BillState;
 import com.fontainerepublic.server.parliament.model.NormLevel;
 import com.fontainerepublic.server.parliament.model.Proposal;
 import com.fontainerepublic.server.parliament.model.ProposalId;
+import com.fontainerepublic.server.parliament.model.ProposalKind;
 
 /**
  * Bounded, projection-safe view of one proposal for ordered listing
@@ -15,6 +16,7 @@ public record ProposalProjection(
         long proposalSeq,
         String title,
         NormLevel normLevel,
+        ProposalKind kind,
         BillState state,
         long createdAt,
         long recordRevision
@@ -30,6 +32,9 @@ public record ProposalProjection(
         if (normLevel == null) {
             throw new IllegalArgumentException("normLevel must not be null");
         }
+        if (kind == null) {
+            throw new IllegalArgumentException("kind must not be null");
+        }
         if (state == null) {
             throw new IllegalArgumentException("state must not be null");
         }
@@ -44,6 +49,7 @@ public record ProposalProjection(
                 proposal.proposalSeq(),
                 proposal.title(),
                 proposal.normLevel(),
+                proposal.kind(),
                 proposal.state(),
                 proposal.createdAt(),
                 proposal.recordRevision()

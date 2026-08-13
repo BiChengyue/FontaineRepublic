@@ -5,15 +5,17 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Immutable, value-style legislative proposal (FR-PAR-001-A §3.1).
+ * Immutable, value-style legislative proposal (FR-PAR-001-A §3.1;
+ * FR-PAR-002-A §3: {@code kind} distinguishes the legislative pipeline from
+ * the constitutional amendment pipeline).
  *
  * <p>{@code proposalSeq} is a server-assigned monotonically increasing
  * sequence used only as a bounded paging cursor for
  * {@code ParliamentService.proposals}; {@code proposalId} is the permanent
  * authoritative identity. {@code proposerRef} is the canonical player UUID of
  * the submitting citizen (taken from the on-site context at the final
- * mutation boundary). {@code recordRevision} increments exactly once per
- * state transition.</p>
+ * mutation boundary). {@code kind} is fixed at submission. {@code recordRevision}
+ * increments exactly once per state transition.</p>
  */
 public record Proposal(
         int schemaVersion,
@@ -21,6 +23,7 @@ public record Proposal(
         long proposalSeq,
         String title,
         NormLevel normLevel,
+        ProposalKind kind,
         String fullText,
         UUID proposerRef,
         BillState state,
@@ -53,6 +56,12 @@ public record Proposal(
             );
         }
         normLevel = Objects.requireNonNull(normLevel, "normLevel");
+        kind = Objects.requireNonNull(kind, "kind");
+        if (kind == ProposalKind.AMENDMENT && normLevel != NormLevel.CONSTITUTION_BASIC) {
+            throw new IllegalArgumentException(
+                    "An amendment proposal must carry the CONSTITUTION_BASIC norm level"
+            );
+        }
         fullText = Objects.requireNonNull(fullText, "fullText").trim();
         if (fullText.isEmpty()) {
             throw new IllegalArgumentException("fullText must not be blank");
@@ -64,9 +73,6 @@ public record Proposal(
         }
         proposerRef = Objects.requireNonNull(proposerRef, "proposerRef");
         state = Objects.requireNonNull(state, "state");
-        if (proposalSeq <= 0) {
-            throw new IllegalArgumentException("proposalSeq must be positive");
-        }
         if (createdAt <= 0) {
             throw new IllegalArgumentException("createdAt must be a positive epoch millisecond");
         }
@@ -87,6 +93,7 @@ public record Proposal(
                 proposalSeq,
                 title,
                 normLevel,
+                kind,
                 fullText,
                 proposerRef,
                 newState,

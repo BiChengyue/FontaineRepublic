@@ -17,9 +17,15 @@ import com.fontainerepublic.server.parliament.persistence.ParliamentIdSource;
 import com.fontainerepublic.server.parliament.persistence.ParliamentNbtCodec;
 import com.fontainerepublic.server.parliament.persistence.ParliamentRepository;
 import com.fontainerepublic.server.parliament.service.DefaultParliamentService;
+import com.fontainerepublic.server.parliament.service.GuardianDirectory;
 import com.fontainerepublic.server.parliament.service.ParliamentCitizenDirectory;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
+import com.fontainerepublic.server.registry.SubjectRegistryModule;
+import com.fontainerepublic.server.registry.api.SubjectRegistryService;
+import com.fontainerepublic.server.registry.model.RegistryNumber;
+import com.fontainerepublic.server.registry.model.SubjectRecord;
+import com.fontainerepublic.server.registry.model.SubjectStatus;
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
@@ -51,6 +57,7 @@ public final class ParliamentModule implements IModule {
     private volatile CitizenService boundCitizen;
     private volatile InstitutionAccessService boundInstitutionAccess;
     private volatile AuditService boundAudit;
+    private volatile SubjectRegistryService boundSubjectRegistry;
 
     public static void register(ModuleRegistry registry) {
         Objects.requireNonNull(registry, "registry");
@@ -66,7 +73,8 @@ public final class ParliamentModule implements IModule {
                         PlayerDataModule.MODULE_ID,
                         CitizenModule.MODULE_ID,
                         AuditModule.MODULE_ID,
-                        InstitutionAccessModule.MODULE_ID
+                        InstitutionAccessModule.MODULE_ID,
+                        SubjectRegistryModule.MODULE_ID
                 ),
                 Set.of(),
                 90,
@@ -108,18 +116,21 @@ public final class ParliamentModule implements IModule {
             PlayerDataService playerDataService,
             CitizenService citizenService,
             InstitutionAccessService institutionAccessService,
-            AuditService auditService
+            AuditService auditService,
+            SubjectRegistryService subjectRegistryService
     ) {
         this.boundPlayerData = playerDataService;
         this.boundCitizen = citizenService;
         this.boundInstitutionAccess = institutionAccessService;
         this.boundAudit = auditService;
+        this.boundSubjectRegistry = subjectRegistryService;
         this.service = new DefaultParliamentService(
                 repository,
                 System::currentTimeMillis,
                 new RandomParliamentIdSource(),
                 new ModuleCitizenDirectory(),
                 requireInstitutionAccess(),
+                new ModuleGuardianDirectory(),
                 boundAudit
         );
         LOGGER.info(
@@ -141,6 +152,7 @@ public final class ParliamentModule implements IModule {
         boundCitizen = null;
         boundInstitutionAccess = null;
         boundAudit = null;
+        boundSubjectRegistry = null;
         LOGGER.info("[Parliament] Runtime closed");
     }
 
@@ -188,6 +200,35 @@ public final class ParliamentModule implements IModule {
             return bound.getCitizen(playerId)
                     .map(record -> record.status() == CitizenStatus.CITIZEN)
                     .orElse(false);
+        }
+    }
+
+    /**
+     * Hydro Archon identity resolution through the FR-ID subject registry
+     * (FR-PAR-002 task §3.3): the water god is the active natural person
+     * holding the fixed original personal registry number
+     * ({@code 10-000001-61}). Fail closed while unbound.
+     */
+    private final class ModuleGuardianDirectory implements GuardianDirectory {
+        @Override
+        public boolean isAvailable() {
+            return boundSubjectRegistry != null;
+        }
+
+        @Override
+        public boolean isHydroArchon(UUID playerId) {
+            SubjectRegistryService bound = boundSubjectRegistry;
+            if (bound == null) {
+                return false;
+            }
+            return bound.findSubjectForPlayer(playerId)
+                    .filter(record -> record.registryNumber()
+                            .equals(RegistryNumber.FIXED_PERSONAL))
+                    .filter(record -> record.status() == SubjectStatus.ACTIVE)
+                    .map(SubjectRecord::subjectId)
+                    .flatMap(bound::status)
+                    .filter(status -> status == SubjectStatus.ACTIVE)
+                    .isPresent();
         }
     }
 
