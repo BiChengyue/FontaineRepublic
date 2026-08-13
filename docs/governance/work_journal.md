@@ -464,3 +464,12 @@
 - 修复：`FontaineRepublic.onCommonSetup` 补 `EmergencyModule.register(...)`。
 - 重跑：**12 模块全部初始化，0 unavailable**；干净关停、ExitCode=0、落盘正常。
 - 已恢复 server.properties、清理冒烟世界；Level 3 清单模块数更新为 12。
+## 2026-08-14（夜）| FR-EMG-ECO-001 任务文档入库 + 派发
+
+- 提交 FR-EMG-ECO-001 三件套（任务卡/实现任务文档/派发提示词）到 develop：`52353fa`。
+- 从 develop 新建隔离工作树 `deepseek-worktrees-v2/fr-emg-eco-001-impl`
+  （分支 `codex/fr-emg-eco-001-impl`）。
+- 派发 FR-EMG-ECO-001-IMPL（economy.issue / economy.reclaim 紧急动作提供方接入
+  FR-EMG；wave `fr-emg-eco-001-20260814`，reasonix v1.21.2 + deepseek-v4-flash，
+  `--output-format text -p`，--dir 指向工作树）。
+- 待交付后：独立审查 → 完整构建 → 并入 develop → 更新台账/日志。
