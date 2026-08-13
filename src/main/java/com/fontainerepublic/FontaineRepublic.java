@@ -20,6 +20,7 @@ import com.fontainerepublic.server.citizen.CitizenModule;
 import com.fontainerepublic.server.citizen.api.CitizenService;
 import com.fontainerepublic.server.economy.EconomyModule;
 import com.fontainerepublic.server.economy.api.EconomyService;
+import com.fontainerepublic.server.emergency.EmergencyModule;
 import com.fontainerepublic.server.government.GovernmentCommand;
 import com.fontainerepublic.server.government.GovernmentModule;
 import com.fontainerepublic.server.government.api.GovernmentService;
@@ -99,6 +100,7 @@ public class FontaineRepublic {
         GovernmentModule.register(coreManager.moduleRegistry());
         ParliamentModule.register(coreManager.moduleRegistry());
         JusticeModule.register(coreManager.moduleRegistry());
+        EmergencyModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
             TestModule.registerAll(coreManager.moduleRegistry());
             LOGGER.warn(

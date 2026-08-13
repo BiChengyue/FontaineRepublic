@@ -39,10 +39,11 @@
 [CoreManager] Module initialized: government
 [CoreManager] Module initialized: parliament
 [CoreManager] Module initialized: justice
+[CoreManager] Module initialized: emergency
 Done (X.XXXs)! For help, type "help"
 ```
 
-**通过条件：** 上述 11 个模块初始化日志全部出现；无 ERROR/Exception；`Done ...` 出现。
+**通过条件：** 上述 12 个模块初始化日志全部出现；无 ERROR/Exception；`Done ...` 出现。
 
 ## 2. 存档落盘核验
 
@@ -95,8 +96,8 @@ Saving players / Saving worlds / All chunks are saved (主世界/DIM-1/DIM1)
 
 ```text
 /fr help
-/fr admin status        -> modules: 11; active: 11; unavailable: 0
-/fr admin modules       -> 11 个模块均 available
+/fr admin status        -> modules: 12; active: 12; unavailable: 0
+/fr admin modules       -> 12 个模块均 available
 /fr money balance       -> 本人余额反馈
 /fr citizen info        -> 本人公民状态
 /fr bank balance        -> 国库总额（只读公开）

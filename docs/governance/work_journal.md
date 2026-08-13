@@ -456,3 +456,11 @@
 - **服务端暂停任务全部收尾**：区域制 ✅、议会扩展 ✅、FR-EMG ✅。
 - 业务动作目录（economy.issue/reclaim 等）为后续独立任务（共享基础设施已就绪）。
 - 客户端模组继续暂停（Human 未发"开始"信号）。
+
+## 2026-08-14 | 全栈自冒烟发现并修复 emergency 接线
+
+- Reviewer 全栈自冒烟（develop 全量）：首轮仅 11 模块——**emergency 未注册**，
+  EmergencyModule 未接入 FontaineRepublic 入口（合并时遗漏）。
+- 修复：`FontaineRepublic.onCommonSetup` 补 `EmergencyModule.register(...)`。
+- 重跑：**12 模块全部初始化，0 unavailable**；干净关停、ExitCode=0、落盘正常。
+- 已恢复 server.properties、清理冒烟世界；Level 3 清单模块数更新为 12。
