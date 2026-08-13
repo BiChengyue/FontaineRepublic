@@ -4,6 +4,8 @@ import com.fontainerepublic.server.parliament.model.Bill;
 import com.fontainerepublic.server.parliament.model.BillId;
 import com.fontainerepublic.server.parliament.model.Proposal;
 import com.fontainerepublic.server.parliament.model.ProposalId;
+import com.fontainerepublic.server.parliament.model.ProposalStage;
+import com.fontainerepublic.server.parliament.model.Referendum;
 import com.fontainerepublic.server.parliament.model.TransitionRecord;
 import com.fontainerepublic.server.parliament.model.Vote;
 import com.fontainerepublic.server.parliament.model.VoteId;
@@ -18,7 +20,8 @@ import java.util.UUID;
 
 /**
  * Immutable, fully validated representation of the complete
- * {@code "parliament"} namespace (FR-PAR-001-A §3.4).
+ * {@code "parliament"} namespace (FR-PAR-001-A §3.4; FR-PAR-002-A §3 adds
+ * the per-proposal stage metadata and the amendment referendums).
  *
  * <p>The constructor enforces the authoritative invariants — no partially
  * consistent snapshot can exist:</p>
@@ -26,6 +29,8 @@ import java.util.UUID;
  *   <li>every map key matches its record's canonical id;</li>
  *   <li>every vote references an existing proposal;</li>
  *   <li>every bill references an existing proposal;</li>
+ *   <li>every stage references an existing proposal;</li>
+ *   <li>every referendum references an existing proposal;</li>
  *   <li>every transition references an existing proposal;</li>
  *   <li>transitions are an ordered, immutable ledger (append-only within a
  *       snapshot).</li>
@@ -40,7 +45,9 @@ public record ParliamentStoreSnapshot(
         Map<VoteId, Vote> votes,
         Map<BillId, Bill> bills,
         List<TransitionRecord> transitions,
-        Set<UUID> citizenRoster
+        Set<UUID> citizenRoster,
+        Map<ProposalId, ProposalStage> stages,
+        Map<ProposalId, Referendum> referendums
 ) {
 
     public static final int CURRENT_STORE_VERSION = 1;
@@ -61,14 +68,15 @@ public record ParliamentStoreSnapshot(
         citizenRoster = Collections.unmodifiableSet(
                 new TreeSet<>(Objects.requireNonNull(citizenRoster, "citizenRoster"))
         );
+        stages = Map.copyOf(Objects.requireNonNull(stages, "stages"));
+        referendums = Map.copyOf(Objects.requireNonNull(referendums, "referendums"));
+
         for (UUID citizen : citizenRoster) {
-            if (!citizen.toString().equals(citizen.toString().toLowerCase(java.util.Locale.ROOT))) {
-                throw invalid(
-                        "citizenRoster contains non-canonical UUID " + citizen
-                );
+            if (!citizen.toString().equals(
+                    citizen.toString().toLowerCase(java.util.Locale.ROOT))) {
+                throw invalid("Citizen roster contains a non-canonical UUID: " + citizen);
             }
         }
-
         for (Map.Entry<ProposalId, Proposal> entry : proposals.entrySet()) {
             if (!entry.getKey().equals(entry.getValue().proposalId())) {
                 throw invalid(
@@ -105,6 +113,36 @@ public record ParliamentStoreSnapshot(
                 throw invalid(
                         "Bill " + entry.getKey() + " references missing proposal "
                                 + entry.getValue().proposalId()
+                );
+            }
+        }
+        for (Map.Entry<ProposalId, ProposalStage> entry : stages.entrySet()) {
+            if (!entry.getKey().equals(entry.getValue().proposalId())) {
+                throw invalid(
+                        "Stages key " + entry.getKey()
+                                + " does not match record proposalId "
+                                + entry.getValue().proposalId()
+                );
+            }
+            if (!proposals.containsKey(entry.getKey())) {
+                throw invalid(
+                        "Stage for " + entry.getKey()
+                                + " references missing proposal"
+                );
+            }
+        }
+        for (Map.Entry<ProposalId, Referendum> entry : referendums.entrySet()) {
+            if (!entry.getKey().equals(entry.getValue().proposalId())) {
+                throw invalid(
+                        "Referendums key " + entry.getKey()
+                                + " does not match record proposalId "
+                                + entry.getValue().proposalId()
+                );
+            }
+            if (!proposals.containsKey(entry.getKey())) {
+                throw invalid(
+                        "Referendum for " + entry.getKey()
+                                + " references missing proposal"
                 );
             }
         }

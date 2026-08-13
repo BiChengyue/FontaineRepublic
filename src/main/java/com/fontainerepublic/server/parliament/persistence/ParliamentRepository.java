@@ -7,6 +7,8 @@ import com.fontainerepublic.server.parliament.model.Bill;
 import com.fontainerepublic.server.parliament.model.BillId;
 import com.fontainerepublic.server.parliament.model.Proposal;
 import com.fontainerepublic.server.parliament.model.ProposalId;
+import com.fontainerepublic.server.parliament.model.ProposalStage;
+import com.fontainerepublic.server.parliament.model.Referendum;
 import com.fontainerepublic.server.parliament.model.TransitionRecord;
 import com.fontainerepublic.server.parliament.model.Vote;
 import com.fontainerepublic.server.parliament.model.VoteId;
@@ -62,6 +64,8 @@ public final class ParliamentRepository {
     private final LinkedHashMap<BillId, Bill> bills = new LinkedHashMap<>();
     private final List<TransitionRecord> transitions = new ArrayList<>();
     private final TreeSet<UUID> citizenRoster = new TreeSet<>(Comparator.comparing(UUID::toString));
+    private final LinkedHashMap<ProposalId, ProposalStage> stages = new LinkedHashMap<>();
+    private final LinkedHashMap<ProposalId, Referendum> referendums = new LinkedHashMap<>();
     private long storeRevision;
 
     /**
@@ -117,6 +121,20 @@ public final class ParliamentRepository {
         return Optional.ofNullable(bills.get(Objects.requireNonNull(billId, "billId")));
     }
 
+    public Optional<ProposalStage> stage(ProposalId proposalId) {
+        requireOwnerThread();
+        return Optional.ofNullable(
+                stages.get(Objects.requireNonNull(proposalId, "proposalId"))
+        );
+    }
+
+    public Optional<Referendum> referendum(ProposalId proposalId) {
+        requireOwnerThread();
+        return Optional.ofNullable(
+                referendums.get(Objects.requireNonNull(proposalId, "proposalId"))
+        );
+    }
+
     /**
      * Ordered, bounded projection of proposals by ascending sequence,
      * strictly after {@code afterSeq}, at most {@code limit} records
@@ -145,7 +163,9 @@ public final class ParliamentRepository {
                 votes,
                 bills,
                 transitions,
-                citizenRoster
+                citizenRoster,
+                stages,
+                referendums
         );
     }
 
@@ -219,6 +239,10 @@ public final class ParliamentRepository {
         transitions.addAll(snapshot.transitions());
         citizenRoster.clear();
         citizenRoster.addAll(snapshot.citizenRoster());
+        stages.clear();
+        stages.putAll(snapshot.stages());
+        referendums.clear();
+        referendums.putAll(snapshot.referendums());
         storeRevision = snapshot.storeRevision();
     }
 
@@ -252,6 +276,16 @@ public final class ParliamentRepository {
             throw capacity("citizen roster size " + candidate.citizenRoster().size()
                     + " exceeds the budget of " + limits.maxCitizens());
         }
+        // Stage metadata is one per proposal and referendums one per
+        // amendment proposal: the proposal budget bounds both.
+        if (candidate.stages().size() > limits.maxProposals()) {
+            throw capacity("stage count " + candidate.stages().size()
+                    + " exceeds the proposal budget of " + limits.maxProposals());
+        }
+        if (candidate.referendums().size() > limits.maxProposals()) {
+            throw capacity("referendum count " + candidate.referendums().size()
+                    + " exceeds the proposal budget of " + limits.maxProposals());
+        }
     }
 
     private void enforceLoadedCapacity(ParliamentStoreSnapshot snapshot) {
@@ -259,7 +293,9 @@ public final class ParliamentRepository {
                 || snapshot.votes().size() > limits.maxVotes()
                 || snapshot.bills().size() > limits.maxBills()
                 || snapshot.transitions().size() > limits.maxTransitions()
-                || snapshot.citizenRoster().size() > limits.maxCitizens()) {
+                || snapshot.citizenRoster().size() > limits.maxCitizens()
+                || snapshot.stages().size() > limits.maxProposals()
+                || snapshot.referendums().size() > limits.maxProposals()) {
             throw new ParliamentUnavailableException(
                     ParliamentUnavailableException.CODE_CAPACITY_EXCEEDED,
                     "Loaded parliament namespace exceeds the configured budget"

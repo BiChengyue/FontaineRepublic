@@ -64,6 +64,21 @@ public final class ParliamentUnavailableException extends RuntimeException {
     /** The durable store rejected the snapshot (not COMMITTED). */
     public static final String CODE_STORE_FAILURE = "STORE_FAILURE";
 
+    /** The guardian channel (player identity or console) is not authorized. */
+    public static final String CODE_GUARDIAN_NOT_AUTHORIZED = "GUARDIAN_NOT_AUTHORIZED";
+
+    /** The guardian has no veto over organic laws. */
+    public static final String CODE_GUARDIAN_NO_VETO = "GUARDIAN_NO_VETO";
+
+    /** A timeout advancement was requested before the stage deadline. */
+    public static final String CODE_DEADLINE_NOT_REACHED = "DEADLINE_NOT_REACHED";
+
+    /** The referenced referendum does not exist. */
+    public static final String CODE_REFERENDUM_NOT_FOUND = "REFERENDUM_NOT_FOUND";
+
+    /** The court review was already extended (extendable exactly once). */
+    public static final String CODE_COURT_EXTENSION_LIMIT = "COURT_EXTENSION_LIMIT";
+
     private final String failureCode;
 
     public ParliamentUnavailableException(String failureCode, String message) {

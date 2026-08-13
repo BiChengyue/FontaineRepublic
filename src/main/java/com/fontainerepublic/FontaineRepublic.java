@@ -276,10 +276,10 @@ public class FontaineRepublic {
     }
 
     /**
-     * Binds the authoritative PlayerData, citizen, institution-access, and
-     * audit services to the parliament module after the runtime start
-     * (dependency order is guaranteed by module resolution, but the service
-     * references are only resolvable once containers exist).
+     * Binds the authoritative PlayerData, citizen, institution-access, audit,
+     * and subject-registry services to the parliament module after the
+     * runtime start (dependency order is guaranteed by module resolution, but
+     * the service references are only resolvable once containers exist).
      */
     private void bindParliamentServices() {
         PlayerDataService playerData = playerDataService().orElse(null);
@@ -287,6 +287,7 @@ public class FontaineRepublic {
         InstitutionAccessService institutionAccess =
                 institutionAccessService().orElse(null);
         AuditService audit = auditService().orElse(null);
+        SubjectRegistryService subjectRegistry = subjectRegistryService().orElse(null);
         coreManager.getRuntimeContainer(ParliamentModule.MODULE_ID)
                 .flatMap(container -> container.instance())
                 .filter(ParliamentModule.class::isInstance)
@@ -295,7 +296,8 @@ public class FontaineRepublic {
                         playerData,
                         citizen,
                         institutionAccess,
-                        audit
+                        audit,
+                        subjectRegistry
                 ));
     }
 
