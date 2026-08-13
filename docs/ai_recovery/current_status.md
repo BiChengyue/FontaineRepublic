@@ -122,7 +122,9 @@ cleanup = approved set removed (credential-stage kept).
 
 2026-08-14 Human directives: resume paused server-side tasks (Parliament
 extensions, FR-EMG); institutions switch from terminals to registered zones
-(FR-INST-002-B, dispatched). Client mod remains paused.
+(FR-INST-002-B, implemented/reviewed/merged). FR-PAR-002 (legislative
+extensions: guardian review / referendum / amendment pipeline) dispatched.
+Client mod remains paused.
 
 ## Next Task
 
