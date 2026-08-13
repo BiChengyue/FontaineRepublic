@@ -116,6 +116,12 @@ carry no authority).
 - S2C handler 内 `DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> () ->
   ClientNetworkExecutor.accept(msg, ctx))`；专用服务器上 supplier 不求值，
   client 类不加载；
+- **Forge 限制（v1.1 修正）：** `DistExecutor.safeRunWhenOn` 的 safe-referent
+  校验只接受 Minecraft/client 包作为 referent，mod 自有客户端类会触发
+  "Unsafe Referent usage" 并导致加载失败。因此：
+  - S2C 展示 handler（common 包，服务端永不执行该路径）仍可用 safe 变体；
+  - 主入口客户端初始化改用 `FMLClientSetupEvent` 监听器（仅物理客户端触发），
+    监听器方法体引用 `ClientManager` 惰性解析，专用服务器不加载 client/ 类；
 - 发送端每次 `trySendToPlayer`；`REMOTE_CHANNEL_ABSENT`/`CONNECTION_NOT_LIVE`
   为非异常结果，业务照常（命令/聊天为兜底）；
 - 客户端展示缓存仅内存、非权威、随连接/登出清空。
