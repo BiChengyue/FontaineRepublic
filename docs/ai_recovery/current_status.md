@@ -185,6 +185,17 @@ Stage B-3b (court/land views; land needs a new bounded read projection plus
 design review), Stage C (real-machine visual verification with Human), and
 the Level 3 server verification awaiting Human.
 
+2026-08-14: FR-CLIENT-001-IMPL-B3b (court case summary + republic land
+overview, protocol v5, ledger IDs 0-8, LandService.publicSummary single-value
+aggregate) implemented, independently reviewed (Level 1-2, full build green,
+33 tasks), merged into develop, and full-stack smoke passed (protocol 5,
+9 messages, 12 modules, Ready, ExitCode=0, no client classloading). The
+client first-release feature set is complete (10 /frclient views: money,
+citizen, history, notifications, guide, government, parliament, court, land +
+main menu). Remaining: personal land-usage rights view (future stage), Stage C
+(real-machine visual verification with Human), and the Level 3 server
+verification awaiting Human.
+
 ## Phase 2 Design Candidates (added 2026-08-02)
 
 All are design candidates only — implementation is not authorized until

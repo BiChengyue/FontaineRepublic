@@ -612,6 +612,28 @@
 - 派发 FR-CLIENT-001-IMPL-B3a（wave fr-client-001-b3a-20260814，工作树
   fr-client-001-impl-b3a）。
 - 待交付后：独立审查 → 完整构建 → 并入 develop → 与早间真机核验一并验收。
+## 2026-08-14（深夜）| 客户端 Stage B-3b 交付 + 审查通过 + 并入 develop
+
+- 派发 FR-CLIENT-001-IMPL-B3b（wave fr-client-001-b3b-20260814）：子进程完成
+  协议 v5、账本追加 JusticeInfoPacket(7)/LandInfoPacket(8)、
+  LandService.publicSummary()（单值聚合，符合无枚举契约）、
+  InstitutionPresentationSync 扩展（justice/land 登录快照）后达轮次上限退出
+  （约 60%，缺投影/界面/测试）。
+- Reviewer 补齐：ClientViewProjection.courtLines/landLines、CourtScreen/
+  LandScreen、/frclient court|land、主屏两个按钮（布局上移）、
+  ClientStageB3bFoundationTestMain（9 组）+ build.gradle 接线；修复编译错误
+  （DefaultLandService 缺 List import、CaseEntry 访问器名、FakeLandService
+  补 publicSummary、B-3a 测试 v5 断言与构造签名）并同步全部既有测试。
+- 验证：`clientStageB3bFoundationTest` 通过；完整 `gradlew build`
+  BUILD SUCCESSFUL（33 tasks，含土地无枚举验收）。
+- 审查报告 FR-CLIENT-001-IMPL-B3b-REVIEW-01（PASS → ROUTE TO HUMAN）；提交
+  `61cc505` 并入 develop（merge `a37b6c0`）。
+- 全栈冒烟（tmp/smoke-client-b3b-20260814）：**Channel fontainerepublic:main
+  protocol 5 frozen with 9 production messages**；12 模块全部初始化；
+  无 client 类加载/ERROR；Ready、干净关停、ExitCode=0。
+- **客户端首版功能集全部完成**：余额/转账/流水、公民卡、历史、通知、引导、
+  政府、议会、法院、土地 —— 十个 /frclient 视图；剩余：个人用地权益（后续
+  阶段）、Stage C（真机目视核验）。
 ## 2026-08-14（深夜）| 客户端 Stage B-3a 交付 + 审查通过 + 并入 develop
 
 - 派发 FR-CLIENT-001-IMPL-B3a（wave fr-client-001-b3a-20260814）：子进程完成
