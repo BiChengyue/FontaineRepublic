@@ -3,6 +3,11 @@ package com.fontainerepublic.server.registry.persistence;
 import com.fontainerepublic.core.DataManager;
 import com.fontainerepublic.core.DurableCommitResult;
 import com.fontainerepublic.core.DurableCommitStatus;
+import com.fontainerepublic.server.registry.model.BootstrapAttemptRecord;
+import com.fontainerepublic.server.registry.model.BootstrapAttemptResult;
+import com.fontainerepublic.server.registry.model.BootstrapDigests;
+import com.fontainerepublic.server.registry.model.BootstrapPhase;
+import com.fontainerepublic.server.registry.model.BootstrapSourceClassification;
 import com.fontainerepublic.server.registry.model.BootstrapState;
 import com.fontainerepublic.server.registry.model.OwnerReference;
 import com.fontainerepublic.server.registry.model.RegistryNumber;
@@ -15,7 +20,9 @@ import com.mojang.logging.LogUtils;
 import net.minecraft.nbt.CompoundTag;
 import org.slf4j.Logger;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,9 +47,11 @@ import java.util.function.LongSupplier;
  * snapshot: both Human-fixed numbers become {@link ReservationKind#FIXED}
  * reservations and the Hydro Archon office subject is materialized idempotently
  * from its constant {@code OFFICE_ID:HYDRO_ARCHON} owner reference. The
- * original personal subject ({@code 10-000001-61}) is <em>not</em> bound —
- * that requires the separately approved audited bootstrap design and any
- * snapshot claiming it is rejected fail-closed.</p>
+ * original personal subject ({@code 10-000001-61}) is materialized only by the
+ * approved, console-only, audited bootstrap
+ * ({@link #applyOriginalPersonBinding(UUID, String, BootstrapSourceClassification, long)});
+ * before it commits, any snapshot claiming the binding is rejected
+ * fail-closed.</p>
  */
 public final class SubjectRegistryRepository {
 
@@ -63,6 +72,8 @@ public final class SubjectRegistryRepository {
     private final LinkedHashMap<RegistryNumber, SubjectId> numbers = new LinkedHashMap<>();
     private final LinkedHashMap<OwnerReference, SubjectId> owners = new LinkedHashMap<>();
     private final LinkedHashMap<RegistryNumber, Reservation> reservations =
+            new LinkedHashMap<>();
+    private final LinkedHashMap<String, BootstrapAttemptRecord> bootstrapAttempts =
             new LinkedHashMap<>();
 
     private long storeRevision;
@@ -165,8 +176,33 @@ public final class SubjectRegistryRepository {
                 numbers,
                 owners,
                 reservations,
-                bootstrapState
+                bootstrapState,
+                bootstrapAttempts
         );
+    }
+
+    // ------------------------------------------------------------------
+    // bootstrap read surface (FR-ID-BOOTSTRAP-001-A §3/§4)
+    // ------------------------------------------------------------------
+
+    public BootstrapState bootstrapState() {
+        requireOwnerThread();
+        return bootstrapState;
+    }
+
+    /** Read-only snapshot of the append-only bootstrap attempt trail. */
+    public Map<String, BootstrapAttemptRecord> bootstrapAttempts() {
+        requireOwnerThread();
+        return Map.copyOf(bootstrapAttempts);
+    }
+
+    /** The most recent attempt record of the trail, if any. */
+    public Optional<BootstrapAttemptRecord> lastBootstrapAttempt() {
+        requireOwnerThread();
+        if (bootstrapAttempts.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(lastAttempt());
     }
 
     // ------------------------------------------------------------------
@@ -229,7 +265,8 @@ public final class SubjectRegistryRepository {
                 nextNumbers,
                 nextOwners,
                 reservations,
-                bootstrapState
+                bootstrapState,
+                bootstrapAttempts
         );
         commitAndPublish(candidate);
         return record;
@@ -270,7 +307,8 @@ public final class SubjectRegistryRepository {
                 numbers,
                 owners,
                 reservations,
-                bootstrapState
+                bootstrapState,
+                bootstrapAttempts
         );
         commitAndPublish(candidate);
         return updated;
@@ -323,7 +361,8 @@ public final class SubjectRegistryRepository {
                 initialNumbers,
                 initialOwners,
                 initialReservations,
-                BootstrapState.OFFICE_MATERIALIZED
+                BootstrapState.OFFICE_MATERIALIZED,
+                new LinkedHashMap<>()
         );
         commitAndPublish(initial);
         LOGGER.info(
@@ -443,8 +482,259 @@ public final class SubjectRegistryRepository {
         snapshot.reservations().forEach(
                 (number, reservation) -> reservations.put(number, reservation)
         );
+        bootstrapAttempts.clear();
+        snapshot.bootstrapAttempts().forEach(
+                (attemptId, record) -> bootstrapAttempts.put(attemptId, record)
+        );
         storeRevision = snapshot.storeRevision();
         bootstrapState = snapshot.bootstrapState();
+    }
+
+    // ------------------------------------------------------------------
+    // bootstrap mutation primitives (FR-ID-BOOTSTRAP-001-A §5): every
+    // attempt first appends a PENDING record through the durable gate, then a
+    // terminal record; the successful binding appends the SUCCESS terminal
+    // record inside the same replacement snapshot that materializes the
+    // subject and flips BootstrapState to BOUND.
+    // ------------------------------------------------------------------
+
+    /**
+     * Appends a PENDING attempt record to the trail (durable, one revision).
+     */
+    public BootstrapAttemptRecord appendBootstrapPending(
+            UUID playerUuid,
+            String reason,
+            BootstrapSourceClassification source,
+            long timestamp
+    ) {
+        requireOwnerThread();
+        requireValidBootstrapInput(playerUuid, reason, source, timestamp);
+        return appendBootstrapAttempt(
+                playerUuid,
+                reason,
+                source,
+                BootstrapAttemptResult.PENDING,
+                timestamp
+        );
+    }
+
+    /**
+     * Appends a terminal (non-SUCCESS) attempt record to the trail. The
+     * terminal SUCCESS record is only ever written by
+     * {@link #applyOriginalPersonBinding(UUID, String, BootstrapSourceClassification, long)}.
+     */
+    public BootstrapAttemptRecord appendBootstrapTerminal(
+            UUID playerUuid,
+            String reason,
+            BootstrapSourceClassification source,
+            BootstrapAttemptResult result,
+            long timestamp
+    ) {
+        requireOwnerThread();
+        Objects.requireNonNull(result, "result");
+        if (result == BootstrapAttemptResult.PENDING
+                || result == BootstrapAttemptResult.SUCCESS) {
+            throw new IllegalArgumentException(
+                    "appendBootstrapTerminal accepts only terminal non-SUCCESS results, got "
+                            + result
+            );
+        }
+        requireValidBootstrapInput(playerUuid, reason, source, timestamp);
+        return appendBootstrapAttempt(playerUuid, reason, source, result, timestamp);
+    }
+
+    /**
+     * Materializes the original personal subject ({@code 10-000001-61}, type
+     * NATURAL_PERSON, ACTIVE) bound to {@code playerUuid} together with its
+     * number/owner indexes, the BOUND {@link BootstrapState}, and the terminal
+     * SUCCESS trail record — one replacement snapshot, one store revision,
+     * published only after the durable gate reports COMMITTED. Fail-closed
+     * preconditions: the registry must be UNBOUND and the owner must not
+     * already have a subject.
+     */
+    public SubjectRecord applyOriginalPersonBinding(
+            UUID playerUuid,
+            String reason,
+            BootstrapSourceClassification source,
+            long timestamp
+    ) {
+        requireOwnerThread();
+        requireValidBootstrapInput(playerUuid, reason, source, timestamp);
+        if (bootstrapState.phase() != BootstrapPhase.UNBOUND) {
+            throw new IllegalStateException(
+                    "Original person binding is only possible from phase UNBOUND, got "
+                            + bootstrapState.phase()
+            );
+        }
+        OwnerReference owner = OwnerReference.forPlayer(playerUuid);
+        if (findByOwner(owner).isPresent()) {
+            throw new IllegalStateException(
+                    "Owner " + owner.key() + " already has a subject"
+            );
+        }
+        if (storeRevision == Long.MAX_VALUE) {
+            throw new SubjectRegistryUnavailableException(
+                    SubjectRegistryUnavailableException.CODE_CAPACITY_EXCEEDED,
+                    "Subject-registry store revision space exhausted"
+            );
+        }
+
+        SubjectId personalId = allocateSubjectId();
+        SubjectRecord personal = new SubjectRecord(
+                SubjectRecord.CURRENT_SCHEMA_VERSION,
+                personalId,
+                RegistryNumber.FIXED_PERSONAL,
+                SubjectType.NATURAL_PERSON,
+                owner,
+                SubjectStatus.ACTIVE,
+                1,
+                timestamp,
+                timestamp
+        );
+
+        BootstrapAttemptRecord success = newAttempt(
+                playerUuid,
+                reason,
+                source,
+                BootstrapAttemptResult.SUCCESS,
+                timestamp
+        );
+
+        LinkedHashMap<SubjectId, SubjectRecord> nextSubjects = new LinkedHashMap<>(subjects);
+        nextSubjects.put(personalId, personal);
+        LinkedHashMap<RegistryNumber, SubjectId> nextNumbers = new LinkedHashMap<>(numbers);
+        nextNumbers.put(RegistryNumber.FIXED_PERSONAL, personalId);
+        LinkedHashMap<OwnerReference, SubjectId> nextOwners = new LinkedHashMap<>(owners);
+        nextOwners.put(owner, personalId);
+        LinkedHashMap<RegistryNumber, Reservation> nextReservations =
+                new LinkedHashMap<>(reservations);
+        nextReservations.put(
+                RegistryNumber.FIXED_PERSONAL,
+                Reservation.fixedTo(RegistryNumber.FIXED_PERSONAL, personalId)
+        );
+        LinkedHashMap<String, BootstrapAttemptRecord> nextAttempts =
+                new LinkedHashMap<>(bootstrapAttempts);
+        nextAttempts.put(success.attemptId().toString(), success);
+
+        BootstrapState boundState = BootstrapState.bound(
+                BootstrapDigests.uuidDigest(playerUuid),
+                timestamp,
+                success.selfDigest()
+        );
+
+        SubjectRegistryStoreSnapshot candidate = new SubjectRegistryStoreSnapshot(
+                SubjectRegistryStoreSnapshot.CURRENT_STORE_VERSION,
+                storeRevision + 1,
+                nextSubjects,
+                nextNumbers,
+                nextOwners,
+                nextReservations,
+                boundState,
+                nextAttempts
+        );
+        commitAndPublish(candidate);
+        return personal;
+    }
+
+    private BootstrapAttemptRecord appendBootstrapAttempt(
+            UUID playerUuid,
+            String reason,
+            BootstrapSourceClassification source,
+            BootstrapAttemptResult result,
+            long timestamp
+    ) {
+        if (storeRevision == Long.MAX_VALUE) {
+            throw new SubjectRegistryUnavailableException(
+                    SubjectRegistryUnavailableException.CODE_CAPACITY_EXCEEDED,
+                    "Subject-registry store revision space exhausted"
+            );
+        }
+        BootstrapAttemptRecord record = newAttempt(
+                playerUuid,
+                reason,
+                source,
+                result,
+                timestamp
+        );
+        LinkedHashMap<String, BootstrapAttemptRecord> nextAttempts =
+                new LinkedHashMap<>(bootstrapAttempts);
+        nextAttempts.put(record.attemptId().toString(), record);
+
+        SubjectRegistryStoreSnapshot candidate = new SubjectRegistryStoreSnapshot(
+                SubjectRegistryStoreSnapshot.CURRENT_STORE_VERSION,
+                storeRevision + 1,
+                subjects,
+                numbers,
+                owners,
+                reservations,
+                bootstrapState.withTrailHead(record.selfDigest()),
+                nextAttempts
+        );
+        commitAndPublish(candidate);
+        return record;
+    }
+
+    private BootstrapAttemptRecord newAttempt(
+            UUID playerUuid,
+            String reason,
+            BootstrapSourceClassification source,
+            BootstrapAttemptResult result,
+            long timestamp
+    ) {
+        byte[] prevDigest = bootstrapAttempts.isEmpty()
+                ? BootstrapDigests.ZERO_DIGEST
+                : lastAttempt().selfDigest();
+        return BootstrapAttemptRecord.of(
+                subjectIdSource.nextUuid(),
+                timestamp,
+                source,
+                result,
+                BootstrapDigests.uuidDigest(playerUuid),
+                BootstrapDigests.reasonDigest(reason),
+                prevDigest,
+                playerUuid.toString()
+        );
+    }
+
+    private BootstrapAttemptRecord lastAttempt() {
+        BootstrapAttemptRecord last = null;
+        for (BootstrapAttemptRecord attempt : bootstrapAttempts.values()) {
+            boolean isTail = true;
+            for (BootstrapAttemptRecord other : bootstrapAttempts.values()) {
+                if (other != attempt
+                        && Arrays.equals(other.prevDigest(), attempt.selfDigest())) {
+                    isTail = false;
+                    break;
+                }
+            }
+            if (isTail) {
+                if (last != null) {
+                    throw new IllegalStateException("Bootstrap attempt trail has multiple tails");
+                }
+                last = attempt;
+            }
+        }
+        if (last == null) {
+            throw new IllegalStateException("Bootstrap attempt trail is empty");
+        }
+        return last;
+    }
+
+    private static void requireValidBootstrapInput(
+            UUID playerUuid,
+            String reason,
+            BootstrapSourceClassification source,
+            long timestamp
+    ) {
+        Objects.requireNonNull(playerUuid, "playerUuid");
+        Objects.requireNonNull(reason, "reason");
+        Objects.requireNonNull(source, "source");
+        if (timestamp <= 0) {
+            throw new IllegalArgumentException("Bootstrap timestamp must be positive");
+        }
+        if (!playerUuid.toString().equals(playerUuid.toString().toLowerCase(java.util.Locale.ROOT))) {
+            throw new IllegalArgumentException("playerUuid must be canonical");
+        }
     }
 
     // ------------------------------------------------------------------

@@ -11,7 +11,9 @@ import com.fontainerepublic.server.registry.api.PlayerPresence;
 import com.fontainerepublic.server.registry.api.SubjectRegistryService;
 import com.fontainerepublic.server.registry.persistence.SubjectRegistryNbtCodec;
 import com.fontainerepublic.server.registry.persistence.SubjectRegistryRepository;
+import com.fontainerepublic.server.registry.service.DefaultSubjectBootstrapService;
 import com.fontainerepublic.server.registry.service.DefaultSubjectRegistryService;
+import com.fontainerepublic.server.registry.service.SubjectBootstrapService;
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
@@ -30,10 +32,11 @@ import java.util.UUID;
  * module never touches the FR-EMG namespace and never derives owner identity
  * from a game name, FR-EMG authority, or any configured holder UUID.</p>
  *
- * <p>The original-person bootstrap ({@code 10-000001-61}) is intentionally not
- * implemented here: it requires the separately approved audited bootstrap
- * design. This module materializes only the fixed reservations and the
- * constant {@code OFFICE_ID:HYDRO_ARCHON} office subject.</p>
+ * <p>The original-person bootstrap ({@code 10-000001-61}) is implemented per
+ * the separately approved audited bootstrap design
+ * (FR-ID-BOOTSTRAP-001-A): console-only, one-time, immutable. This module also
+ * materializes the fixed reservations and the constant
+ * {@code OFFICE_ID:HYDRO_ARCHON} office subject.</p>
  */
 public final class SubjectRegistryModule implements IModule {
 
@@ -42,6 +45,7 @@ public final class SubjectRegistryModule implements IModule {
 
     private SubjectRegistryRepository repository;
     private SubjectRegistryService service;
+    private SubjectBootstrapService bootstrapService;
     private volatile PlayerDataService boundPlayerData;
 
     public static void register(ModuleRegistry registry) {
@@ -72,15 +76,22 @@ public final class SubjectRegistryModule implements IModule {
     @Override
     public void init() {
         repository = SubjectRegistryRepository.createProduction(new SubjectRegistryNbtCodec());
+        ModulePlayerPresence presence = new ModulePlayerPresence();
         service = new DefaultSubjectRegistryService(
                 repository,
                 System::currentTimeMillis,
-                new ModulePlayerPresence()
+                presence
+        );
+        bootstrapService = new DefaultSubjectBootstrapService(
+                repository,
+                System::currentTimeMillis,
+                presence
         );
         LOGGER.info(
-                "[SubjectRegistry] Runtime initialized (revision={}, subjects={})",
+                "[SubjectRegistry] Runtime initialized (revision={}, subjects={}, bootstrap={})",
                 repository.snapshot().storeRevision(),
-                repository.size()
+                repository.size(),
+                repository.bootstrapState().phase()
         );
     }
 
@@ -96,6 +107,7 @@ public final class SubjectRegistryModule implements IModule {
     @Override
     public void shutdown() {
         service = null;
+        bootstrapService = null;
         repository = null;
         boundPlayerData = null;
         LOGGER.info("[SubjectRegistry] Runtime closed");
@@ -106,6 +118,13 @@ public final class SubjectRegistryModule implements IModule {
             throw new IllegalStateException("Subject-registry service is not active");
         }
         return service;
+    }
+
+    public SubjectBootstrapService bootstrapService() {
+        if (bootstrapService == null) {
+            throw new IllegalStateException("Subject bootstrap service is not active");
+        }
+        return bootstrapService;
     }
 
     private final class ModulePlayerPresence implements PlayerPresence {

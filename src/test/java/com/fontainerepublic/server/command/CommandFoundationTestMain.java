@@ -342,13 +342,28 @@ public final class CommandFoundationTestMain {
                 "PlayerDataNbtCodec",
                 "SimpleChannel",
                 "CompletableFuture",
-                "performPrefixedCommand",
-                "Commands.argument("
+                "performPrefixedCommand"
         )) {
             check(
                     !production.contains(forbidden),
                     "Production command source must not contain forbidden dependency: "
                             + forbidden
+            );
+        }
+        // Argument parsing is allowed only inside the foundation-owned admin
+        // child adapter (FrameworkAdminCommand), which hosts the approved
+        // /fr admin bootstrap subject-hydro <uuid> <reason> command
+        // (FR-ID-BOOTSTRAP-001-A §3). Every other command source file must
+        // remain argument-free.
+        for (Path file : commandFiles(commandDirectory)) {
+            if (file.getFileName().toString().equals("FrameworkAdminCommand.java")) {
+                continue;
+            }
+            check(
+                    !read(file).contains("Commands.argument("),
+                    "Command argument parsing is only permitted in "
+                            + "FrameworkAdminCommand (foundation-owned admin child adapter): "
+                            + file.getFileName()
             );
         }
         for (String businessLiteral : List.of(
@@ -398,6 +413,16 @@ public final class CommandFoundationTestMain {
                 }
             }
         }
+    }
+
+    private static List<Path> commandFiles(Path commandDirectory) throws Exception {
+        List<Path> files = new java.util.ArrayList<>();
+        try (var paths = Files.walk(commandDirectory)) {
+            paths.filter(path -> path.toString().endsWith(".java"))
+                    .sorted()
+                    .forEach(files::add);
+        }
+        return files;
     }
 
     private static CommandContributionSpec spec(String literal) {

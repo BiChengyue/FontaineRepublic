@@ -1,5 +1,10 @@
 package com.fontainerepublic.server.registry.persistence;
 
+import com.fontainerepublic.server.registry.model.BootstrapAttemptRecord;
+import com.fontainerepublic.server.registry.model.BootstrapAttemptResult;
+import com.fontainerepublic.server.registry.model.BootstrapDigests;
+import com.fontainerepublic.server.registry.model.BootstrapPhase;
+import com.fontainerepublic.server.registry.model.BootstrapSourceClassification;
 import com.fontainerepublic.server.registry.model.BootstrapState;
 import com.fontainerepublic.server.registry.model.OwnerReference;
 import com.fontainerepublic.server.registry.model.RegistryNumber;
@@ -16,6 +21,7 @@ import net.minecraft.nbt.Tag;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -25,16 +31,16 @@ import java.util.UUID;
 
 /**
  * Strict, versioned, deterministic NBT codec for the {@code "subject-registry"}
- * namespace (FR-ID-001-A §6.3).
+ * namespace (FR-ID-001-A §6.3, FR-ID-BOOTSTRAP-001-A §4).
  *
  * <p>Encoding writes every index in deterministic lexical key order so the
  * same immutable snapshot always produces an equivalent ordered NBT.
  * Decoding accepts only declared fields with exact NBT types, canonical UUIDs
  * and numbers, valid checksums, agreed types, positive timestamps/statuses/
  * revisions, and constructs the validating
- * {@link SubjectRegistryStoreSnapshot} which enforces the bidirectional index
- * and fixed-reservation invariants. Unknown newer versions are rejected;
- * nothing is ever auto-repaired.</p>
+ * {@link SubjectRegistryStoreSnapshot} which enforces the bidirectional index,
+ * fixed-reservation, and bootstrap-trail invariants. Unknown newer versions
+ * are rejected; nothing is ever auto-repaired.</p>
  */
 public final class SubjectRegistryNbtCodec {
 
@@ -45,6 +51,7 @@ public final class SubjectRegistryNbtCodec {
     private static final String OWNERS = "Owners";
     private static final String RESERVATIONS = "Reservations";
     private static final String BOOTSTRAP_STATE = "BootstrapState";
+    private static final String BOOTSTRAP_ATTEMPTS = "BootstrapAttempts";
 
     private static final String RECORD_VERSION = "RecordVersion";
     private static final String SUBJECT_ID = "SubjectId";
@@ -69,6 +76,20 @@ public final class SubjectRegistryNbtCodec {
             "OfficeSubjectMaterialized";
     private static final String BS_ORIGINAL_PERSONAL_BINDING_APPLIED =
             "OriginalPersonalBindingApplied";
+    private static final String BS_PHASE = "Phase";
+    private static final String BS_BOUND_UUID_DIGEST = "BoundUuidDigest";
+    private static final String BS_BOUND_AT = "BoundAt";
+    private static final String BS_TRAIL_HEAD_DIGEST = "TrailHeadDigest";
+
+    private static final String ATTEMPT_ID = "AttemptId";
+    private static final String ATTEMPT_AT = "At";
+    private static final String ATTEMPT_SOURCE = "SourceClassification";
+    private static final String ATTEMPT_RESULT = "ResultCode";
+    private static final String ATTEMPT_UUID_DIGEST = "UuidDigest";
+    private static final String ATTEMPT_REASON_DIGEST = "ReasonDigest";
+    private static final String ATTEMPT_PREV_DIGEST = "PrevDigest";
+    private static final String ATTEMPT_SELF_DIGEST = "SelfDigest";
+    private static final String ATTEMPT_IDEMPOTENCY_KEY = "IdempotencyKey";
 
     /** Hard structural cap, independent of the configurable budget. */
     private static final int HARD_MAX_SUBJECTS = 100_000;
@@ -80,7 +101,8 @@ public final class SubjectRegistryNbtCodec {
             NUMBERS,
             OWNERS,
             RESERVATIONS,
-            BOOTSTRAP_STATE
+            BOOTSTRAP_STATE,
+            BOOTSTRAP_ATTEMPTS
     );
     private static final Set<String> RECORD_KEYS = Set.of(
             RECORD_VERSION,
@@ -102,7 +124,22 @@ public final class SubjectRegistryNbtCodec {
     private static final Set<String> BOOTSTRAP_KEYS = Set.of(
             BS_FIXED_RESERVATIONS_ESTABLISHED,
             BS_OFFICE_SUBJECT_MATERIALIZED,
-            BS_ORIGINAL_PERSONAL_BINDING_APPLIED
+            BS_ORIGINAL_PERSONAL_BINDING_APPLIED,
+            BS_PHASE,
+            BS_BOUND_UUID_DIGEST,
+            BS_BOUND_AT,
+            BS_TRAIL_HEAD_DIGEST
+    );
+    private static final Set<String> ATTEMPT_KEYS = Set.of(
+            ATTEMPT_ID,
+            ATTEMPT_AT,
+            ATTEMPT_SOURCE,
+            ATTEMPT_RESULT,
+            ATTEMPT_UUID_DIGEST,
+            ATTEMPT_REASON_DIGEST,
+            ATTEMPT_PREV_DIGEST,
+            ATTEMPT_SELF_DIGEST,
+            ATTEMPT_IDEMPOTENCY_KEY
     );
 
     // ------------------------------------------------------------------
@@ -157,6 +194,11 @@ public final class SubjectRegistryNbtCodec {
         BootstrapState bootstrapState = decodeBootstrapState(
                 root.getCompound(BOOTSTRAP_STATE)
         );
+        Map<String, BootstrapAttemptRecord> bootstrapAttempts = decodeBootstrapAttempts(
+                root.contains(BOOTSTRAP_ATTEMPTS)
+                        ? root.getCompound(BOOTSTRAP_ATTEMPTS)
+                        : new CompoundTag()
+        );
 
         return new SubjectRegistryStoreSnapshot(
                 storeVersion,
@@ -165,7 +207,8 @@ public final class SubjectRegistryNbtCodec {
                 numbers,
                 owners,
                 reservations,
-                bootstrapState
+                bootstrapState,
+                bootstrapAttempts
         );
     }
 
@@ -366,11 +409,125 @@ public final class SubjectRegistryNbtCodec {
         requireType(tag, BS_FIXED_RESERVATIONS_ESTABLISHED, Tag.TAG_BYTE, "BootstrapState");
         requireType(tag, BS_OFFICE_SUBJECT_MATERIALIZED, Tag.TAG_BYTE, "BootstrapState");
         requireType(tag, BS_ORIGINAL_PERSONAL_BINDING_APPLIED, Tag.TAG_BYTE, "BootstrapState");
-        return new BootstrapState(
-                tag.getBoolean(BS_FIXED_RESERVATIONS_ESTABLISHED),
-                tag.getBoolean(BS_OFFICE_SUBJECT_MATERIALIZED),
-                tag.getBoolean(BS_ORIGINAL_PERSONAL_BINDING_APPLIED)
+
+        boolean fixed = tag.getBoolean(BS_FIXED_RESERVATIONS_ESTABLISHED);
+        boolean office = tag.getBoolean(BS_OFFICE_SUBJECT_MATERIALIZED);
+        boolean applied = tag.getBoolean(BS_ORIGINAL_PERSONAL_BINDING_APPLIED);
+
+        // The original-person binding fields are optional for backward
+        // compatibility with FR-ID-001 snapshots; when present they must be
+        // consistent (enforced by the BootstrapState constructor).
+        BootstrapPhase phase = tag.contains(BS_PHASE)
+                ? enumValue(BootstrapPhase.class, tag.getString(BS_PHASE), "BootstrapState phase")
+                : BootstrapPhase.UNBOUND;
+        byte[] boundUuidDigest = tag.contains(BS_BOUND_UUID_DIGEST)
+                ? requireDigest(tag, BS_BOUND_UUID_DIGEST, "BootstrapState")
+                : null;
+        long boundAt = tag.getLong(BS_BOUND_AT);
+        byte[] trailHeadDigest = tag.contains(BS_TRAIL_HEAD_DIGEST)
+                ? requireDigest(tag, BS_TRAIL_HEAD_DIGEST, "BootstrapState")
+                : null;
+
+        try {
+            return new BootstrapState(
+                    fixed,
+                    office,
+                    applied,
+                    phase,
+                    boundUuidDigest,
+                    boundAt,
+                    trailHeadDigest
+            );
+        } catch (IllegalArgumentException failure) {
+            throw invalid(
+                    "Invalid BootstrapState: " + failure.getMessage(),
+                    failure
+            );
+        }
+    }
+
+    private Map<String, BootstrapAttemptRecord> decodeBootstrapAttempts(CompoundTag tag) {
+        Map<String, BootstrapAttemptRecord> attempts = new LinkedHashMap<>();
+        for (String key : tag.getAllKeys().stream().sorted().toList()) {
+            if (!key.equals(key.toLowerCase(java.util.Locale.ROOT))) {
+                throw invalid("BootstrapAttempts key is not canonical: " + key);
+            }
+            requireType(tag, key, Tag.TAG_COMPOUND, "BootstrapAttempts");
+            BootstrapAttemptRecord record = decodeAttempt(
+                    tag.getCompound(key),
+                    key
+            );
+            if (attempts.put(key, record) != null) {
+                throw invalid("Duplicate bootstrap attempt id: " + key);
+            }
+        }
+        return attempts;
+    }
+
+    private BootstrapAttemptRecord decodeAttempt(CompoundTag tag, String expectedKey) {
+        requireOnlyKeys(tag, ATTEMPT_KEYS, "bootstrap attempt " + expectedKey);
+        requireType(tag, ATTEMPT_ID, Tag.TAG_INT_ARRAY, "bootstrap attempt " + expectedKey);
+        requireType(tag, ATTEMPT_AT, Tag.TAG_LONG, "bootstrap attempt " + expectedKey);
+        requireType(tag, ATTEMPT_SOURCE, Tag.TAG_STRING, "bootstrap attempt " + expectedKey);
+        requireType(tag, ATTEMPT_RESULT, Tag.TAG_STRING, "bootstrap attempt " + expectedKey);
+        requireType(tag, ATTEMPT_UUID_DIGEST, Tag.TAG_BYTE_ARRAY, "bootstrap attempt " + expectedKey);
+        requireType(tag, ATTEMPT_REASON_DIGEST, Tag.TAG_BYTE_ARRAY, "bootstrap attempt " + expectedKey);
+        requireType(tag, ATTEMPT_PREV_DIGEST, Tag.TAG_BYTE_ARRAY, "bootstrap attempt " + expectedKey);
+        requireType(tag, ATTEMPT_SELF_DIGEST, Tag.TAG_BYTE_ARRAY, "bootstrap attempt " + expectedKey);
+        requireType(tag, ATTEMPT_IDEMPOTENCY_KEY, Tag.TAG_STRING, "bootstrap attempt " + expectedKey);
+
+        UUID attemptId = tag.getUUID(ATTEMPT_ID);
+        if (!expectedKey.equals(attemptId.toString())) {
+            throw invalid(
+                    "BootstrapAttempts key " + expectedKey
+                            + " does not match record attemptId " + attemptId
+            );
+        }
+        BootstrapSourceClassification source = enumValue(
+                BootstrapSourceClassification.class,
+                tag.getString(ATTEMPT_SOURCE),
+                "SourceClassification for " + expectedKey
         );
+        BootstrapAttemptResult result = enumValue(
+                BootstrapAttemptResult.class,
+                tag.getString(ATTEMPT_RESULT),
+                "ResultCode for " + expectedKey
+        );
+        byte[] uuidDigest = requireDigest(tag, ATTEMPT_UUID_DIGEST, "bootstrap attempt " + expectedKey);
+        byte[] reasonDigest = requireDigest(tag, ATTEMPT_REASON_DIGEST, "bootstrap attempt " + expectedKey);
+        byte[] prevDigest = requireDigest(tag, ATTEMPT_PREV_DIGEST, "bootstrap attempt " + expectedKey);
+        byte[] storedSelfDigest = requireDigest(tag, ATTEMPT_SELF_DIGEST, "bootstrap attempt " + expectedKey);
+
+        try {
+            return new BootstrapAttemptRecord(
+                    attemptId,
+                    tag.getLong(ATTEMPT_AT),
+                    source,
+                    result,
+                    uuidDigest,
+                    reasonDigest,
+                    prevDigest,
+                    storedSelfDigest,
+                    tag.getString(ATTEMPT_IDEMPOTENCY_KEY)
+            );
+        } catch (IllegalArgumentException failure) {
+            throw invalid(
+                    "Invalid bootstrap attempt " + expectedKey + ": "
+                            + failure.getMessage(),
+                    failure
+            );
+        }
+    }
+
+    private static byte[] requireDigest(CompoundTag tag, String key, String path) {
+        byte[] digest = tag.getByteArray(key);
+        if (digest.length != BootstrapDigests.DIGEST_LENGTH) {
+            throw invalid(
+                    path + " field " + key + " must be exactly "
+                            + BootstrapDigests.DIGEST_LENGTH + " bytes"
+            );
+        }
+        return digest;
     }
 
     // ------------------------------------------------------------------
@@ -430,6 +587,16 @@ public final class SubjectRegistryNbtCodec {
         root.put(RESERVATIONS, reservationsTag);
 
         root.put(BOOTSTRAP_STATE, encodeBootstrapState(snapshot.bootstrapState()));
+
+        CompoundTag attemptsTag = new CompoundTag();
+        TreeMap<String, BootstrapAttemptRecord> orderedAttempts = new TreeMap<>();
+        snapshot.bootstrapAttempts().forEach(
+                (attemptId, record) -> orderedAttempts.put(attemptId, record)
+        );
+        orderedAttempts.forEach(
+                (attemptId, record) -> attemptsTag.put(attemptId, encodeAttempt(record))
+        );
+        root.put(BOOTSTRAP_ATTEMPTS, attemptsTag);
         return root;
     }
 
@@ -468,7 +635,34 @@ public final class SubjectRegistryNbtCodec {
         CompoundTag tag = new CompoundTag();
         tag.putBoolean(BS_FIXED_RESERVATIONS_ESTABLISHED, state.fixedReservationsEstablished());
         tag.putBoolean(BS_OFFICE_SUBJECT_MATERIALIZED, state.officeSubjectMaterialized());
-        tag.putBoolean(BS_ORIGINAL_PERSONAL_BINDING_APPLIED, state.originalPersonalBindingApplied());
+        tag.putBoolean(
+                BS_ORIGINAL_PERSONAL_BINDING_APPLIED,
+                state.originalPersonalBindingApplied()
+        );
+        tag.putString(BS_PHASE, state.phase().name());
+        if (state.boundUuidDigest() != null) {
+            tag.putByteArray(BS_BOUND_UUID_DIGEST, state.boundUuidDigest());
+        }
+        if (state.boundAt() != 0) {
+            tag.putLong(BS_BOUND_AT, state.boundAt());
+        }
+        if (state.trailHeadDigest() != null) {
+            tag.putByteArray(BS_TRAIL_HEAD_DIGEST, state.trailHeadDigest());
+        }
+        return tag;
+    }
+
+    private CompoundTag encodeAttempt(BootstrapAttemptRecord attempt) {
+        CompoundTag tag = new CompoundTag();
+        tag.putUUID(ATTEMPT_ID, attempt.attemptId());
+        tag.putLong(ATTEMPT_AT, attempt.at());
+        tag.putString(ATTEMPT_SOURCE, attempt.source().name());
+        tag.putString(ATTEMPT_RESULT, attempt.resultCode().name());
+        tag.putByteArray(ATTEMPT_UUID_DIGEST, attempt.uuidDigest());
+        tag.putByteArray(ATTEMPT_REASON_DIGEST, attempt.reasonDigest());
+        tag.putByteArray(ATTEMPT_PREV_DIGEST, attempt.prevDigest());
+        tag.putByteArray(ATTEMPT_SELF_DIGEST, attempt.selfDigest());
+        tag.putString(ATTEMPT_IDEMPOTENCY_KEY, attempt.idempotencyKey());
         return tag;
     }
 

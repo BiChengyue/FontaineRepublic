@@ -106,6 +106,14 @@ tasks.register('subjectRegistryFoundationTest', JavaExec) {
     mainClass = 'com.fontainerepublic.server.registry.SubjectRegistryFoundationTestMain'
 }
 
+tasks.register('bootstrapFoundationTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-ID-BOOTSTRAP-001 original-person bootstrap validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.server.registry.BootstrapFoundationTestMain'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('playerDataTest')
     dependsOn tasks.named('networkFoundationTest')
@@ -113,4 +121,5 @@ tasks.named('check') {
     dependsOn tasks.named('durableCommitTest')
     dependsOn tasks.named('auditFoundationTest')
     dependsOn tasks.named('subjectRegistryFoundationTest')
+    dependsOn tasks.named('bootstrapFoundationTest')
 }

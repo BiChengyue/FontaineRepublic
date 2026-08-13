@@ -1,5 +1,9 @@
 package com.fontainerepublic.server.registry.persistence;
 
+import com.fontainerepublic.server.registry.model.BootstrapAttemptRecord;
+import com.fontainerepublic.server.registry.model.BootstrapAttemptResult;
+import com.fontainerepublic.server.registry.model.BootstrapDigests;
+import com.fontainerepublic.server.registry.model.BootstrapPhase;
 import com.fontainerepublic.server.registry.model.BootstrapState;
 import com.fontainerepublic.server.registry.model.OwnerReference;
 import com.fontainerepublic.server.registry.model.OwnerReferenceKind;
@@ -10,12 +14,18 @@ import com.fontainerepublic.server.registry.model.SubjectId;
 import com.fontainerepublic.server.registry.model.SubjectRecord;
 import com.fontainerepublic.server.registry.model.SubjectType;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 /**
  * Immutable, fully validated representation of the complete
- * {@code "subject-registry"} namespace (FR-ID-001-A §6).
+ * {@code "subject-registry"} namespace (FR-ID-001-A §6,
+ * FR-ID-BOOTSTRAP-001-A §4).
  *
  * <p>The constructor enforces the authoritative bidirectional invariants — no
  * partially consistent snapshot can exist:</p>
@@ -29,11 +39,16 @@ import java.util.Objects;
  *   <li>both Human-fixed numbers carry a {@link ReservationKind#FIXED}
  *       reservation; the office number is bound to the materialized
  *       {@code OFFICE_ID:HYDRO_ARCHON} office subject; the original personal
- *       number stays unbound (bootstrap is a separately approved future task)
- *       and no other record may claim it.</li>
+ *       number stays unbound until the approved bootstrap commits (then it is
+ *       bound to its natural-person subject);</li>
+ *   <li>the bootstrap attempt trail is a valid digest chain whose head agrees
+ *       with {@code BootstrapState.trailHeadDigest}, and a BOUND state agrees
+ *       with a committed SUCCESS trail record (restart reconciliation,
+ *       FR-ID-BOOTSTRAP-001-A §4/§5).</li>
  * </ul>
- * <p>Duplicates, orphans, mismatches, or bootstrap state this implementation
- * does not support reject the whole snapshot (fail closed).</p>
+ * <p>Duplicates, orphans, mismatches, broken or tampered trails, or bootstrap
+ * state the registry does not support reject the whole snapshot (fail
+ * closed).</p>
  */
 public record SubjectRegistryStoreSnapshot(
         int storeVersion,
@@ -42,7 +57,8 @@ public record SubjectRegistryStoreSnapshot(
         Map<RegistryNumber, SubjectId> numbers,
         Map<OwnerReference, SubjectId> owners,
         Map<RegistryNumber, Reservation> reservations,
-        BootstrapState bootstrapState
+        BootstrapState bootstrapState,
+        Map<String, BootstrapAttemptRecord> bootstrapAttempts
 ) {
 
     public static final int CURRENT_STORE_VERSION = 1;
@@ -61,9 +77,13 @@ public record SubjectRegistryStoreSnapshot(
         owners = Map.copyOf(Objects.requireNonNull(owners, "owners"));
         reservations = Map.copyOf(Objects.requireNonNull(reservations, "reservations"));
         bootstrapState = Objects.requireNonNull(bootstrapState, "bootstrapState");
+        bootstrapAttempts = Map.copyOf(
+                Objects.requireNonNull(bootstrapAttempts, "bootstrapAttempts")
+        );
 
         validateBidirectionalIndexes(subjects, numbers, owners);
         validateFixedReservations(subjects, numbers, reservations, bootstrapState);
+        validateBootstrapTrail(bootstrapAttempts, bootstrapState);
     }
 
     // ------------------------------------------------------------------
@@ -165,7 +185,8 @@ public record SubjectRegistryStoreSnapshot(
     }
 
     // ------------------------------------------------------------------
-    // fixed reservations (FR-ID-001-A §4.4/§4.5/§17.1)
+    // fixed reservations (FR-ID-001-A §4.4/§4.5/§17.1) + original-person
+    // bootstrap (FR-ID-BOOTSTRAP-001-A §5)
     // ------------------------------------------------------------------
 
     private static void validateFixedReservations(
@@ -189,21 +210,75 @@ public record SubjectRegistryStoreSnapshot(
             );
         }
 
-        // Original personal subject (10-000001-61) requires the separately
-        // approved audited bootstrap; this implementation must not see one.
-        if (personal.boundSubjectId().isPresent()) {
-            throw invalid(
-                    "Original personal binding is not supported by this implementation "
-                            + "(requires the approved bootstrap design); number "
-                            + RegistryNumber.FIXED_PERSONAL.display() + " is already bound"
+        if (bootstrapState.phase() == BootstrapPhase.UNBOUND) {
+            // Before the original-person bootstrap commits, the personal
+            // reservation must stay unbound and no subject may claim the number.
+            if (personal.boundSubjectId().isPresent()) {
+                throw invalid(
+                        "Original personal binding is not committed (phase UNBOUND) "
+                                + "but number " + RegistryNumber.FIXED_PERSONAL.display()
+                                + " is already bound"
+                );
+            }
+            if (numbers.containsKey(RegistryNumber.FIXED_PERSONAL)) {
+                throw invalid(
+                        "Number " + RegistryNumber.FIXED_PERSONAL.display()
+                                + " is claimed by a subject but the bootstrap "
+                                + "phase is UNBOUND"
+                );
+            }
+        } else {
+            // BOUND: the personal number must be materialized as a natural
+            // person bound to the digest in BootstrapState.
+            SubjectId boundId = personal.boundSubjectId().orElseThrow(
+                    () -> invalid(
+                            "Bootstrap phase is BOUND but the fixed personal number "
+                                    + RegistryNumber.FIXED_PERSONAL.display()
+                                    + " has no bound subject"
+                    )
             );
-        }
-        if (numbers.containsKey(RegistryNumber.FIXED_PERSONAL)) {
-            throw invalid(
-                    "Number " + RegistryNumber.FIXED_PERSONAL.display()
-                            + " is claimed by a subject but the original personal binding "
-                            + "is not implemented"
+            SubjectRecord personalSubject = subjects.get(boundId);
+            if (personalSubject == null) {
+                throw invalid(
+                        "Bootstrap phase is BOUND but the personal reservation points "
+                                + "to a missing subject " + boundId
+                );
+            }
+            if (personalSubject.subjectType() != SubjectType.NATURAL_PERSON) {
+                throw invalid(
+                        "Bound original personal subject " + boundId
+                                + " must be type NATURAL_PERSON"
+                );
+            }
+            if (!personalSubject.registryNumber().equals(RegistryNumber.FIXED_PERSONAL)) {
+                throw invalid(
+                        "Bound original personal subject " + boundId
+                                + " must carry number "
+                                + RegistryNumber.FIXED_PERSONAL.display()
+                );
+            }
+            if (personalSubject.ownerReference().kind() != OwnerReferenceKind.PLAYER_UUID) {
+                throw invalid(
+                        "Bound original personal subject " + boundId
+                                + " must be owned by a player UUID"
+                );
+            }
+            SubjectId indexedPersonal = numbers.get(RegistryNumber.FIXED_PERSONAL);
+            if (!boundId.equals(indexedPersonal)) {
+                throw invalid(
+                        "Number index for " + RegistryNumber.FIXED_PERSONAL.display()
+                                + " must point to the bound personal subject " + boundId
+                );
+            }
+            byte[] ownerDigest = BootstrapDigests.uuidDigest(
+                    java.util.UUID.fromString(personalSubject.ownerReference().ownerId())
             );
+            if (!Arrays.equals(ownerDigest, bootstrapState.boundUuidDigest())) {
+                throw invalid(
+                        "Bound personal subject owner does not match "
+                                + "BootstrapState.boundUuidDigest"
+                );
+            }
         }
 
         // The office subject must be materialized idempotently from its
@@ -249,12 +324,116 @@ public record SubjectRegistryStoreSnapshot(
         if (!bootstrapState.officeSubjectMaterialized()) {
             throw invalid("BootstrapState must confirm the office subject is materialized");
         }
-        if (bootstrapState.originalPersonalBindingApplied()) {
+    }
+
+    // ------------------------------------------------------------------
+    // bootstrap attempt trail validation (FR-ID-BOOTSTRAP-001-A §4/§5:
+    // digest chain + restart reconciliation)
+    // ------------------------------------------------------------------
+
+    private static void validateBootstrapTrail(
+            Map<String, BootstrapAttemptRecord> attempts,
+            BootstrapState bootstrapState
+    ) {
+        if (attempts.isEmpty()) {
+            if (bootstrapState.trailHeadDigest() != null) {
+                throw invalid(
+                        "BootstrapState carries a trail-head digest but the attempt "
+                                + "trail is empty"
+                );
+            }
+            if (bootstrapState.phase() == BootstrapPhase.BOUND) {
+                throw invalid(
+                        "Bootstrap phase is BOUND but the attempt trail is empty "
+                                + "(missing SUCCESS record)"
+                );
+            }
+            return;
+        }
+
+        // Order the trail by the digest chain: exactly one root whose
+        // prevDigest is all-zero; every record links to exactly one successor.
+        Map<String, BootstrapAttemptRecord> byId = new HashMap<>(attempts);
+        List<BootstrapAttemptRecord> chain = new ArrayList<>(attempts.size());
+        BootstrapAttemptRecord current = null;
+        for (BootstrapAttemptRecord attempt : attempts.values()) {
+            if (Arrays.equals(attempt.prevDigest(), BootstrapDigests.ZERO_DIGEST)) {
+                if (current != null) {
+                    throw invalid("Bootstrap attempt trail has multiple chain roots");
+                }
+                current = attempt;
+            }
+        }
+        if (current == null) {
+            throw invalid("Bootstrap attempt trail has no chain root (prevDigest all-zero)");
+        }
+        while (current != null) {
+            chain.add(current);
+            String key = current.attemptId().toString();
+            if (!byId.containsKey(key)) {
+                throw invalid("Bootstrap attempt trail contains a non-canonical key");
+            }
+            byId.remove(key);
+            BootstrapAttemptRecord successor = null;
+            for (BootstrapAttemptRecord candidate : byId.values()) {
+                if (Arrays.equals(candidate.prevDigest(), current.selfDigest())) {
+                    if (successor != null) {
+                        throw invalid("Bootstrap attempt trail forks at " + current.attemptId());
+                    }
+                    successor = candidate;
+                }
+            }
+            current = successor;
+        }
+        if (!byId.isEmpty()) {
             throw invalid(
-                    "BootstrapState claims an applied original personal binding, "
-                            + "which is not supported by this implementation "
-                            + "(requires the approved bootstrap design)"
+                    "Bootstrap attempt trail contains records unreachable from the chain root"
             );
+        }
+        if (chain.size() != attempts.size()) {
+            throw invalid("Bootstrap attempt trail chain length mismatch");
+        }
+
+        // Trail head must agree with BootstrapState (restart reconciliation).
+        BootstrapAttemptRecord head = chain.get(chain.size() - 1);
+        if (!Arrays.equals(bootstrapState.trailHeadDigest(), head.selfDigest())) {
+            throw invalid(
+                    "BootstrapState.trailHeadDigest does not match the last attempt "
+                            + "record (tampered or inconsistent trail)"
+            );
+        }
+
+        // A BOUND state requires a committed SUCCESS record whose target
+        // digest matches the bound UUID digest; an UNBOUND state must not
+        // contain a SUCCESS record.
+        boolean hasSuccess = chain.stream()
+                .anyMatch(attempt -> attempt.resultCode() == BootstrapAttemptResult.SUCCESS);
+        if (bootstrapState.phase() == BootstrapPhase.BOUND) {
+            if (!hasSuccess) {
+                throw invalid(
+                        "Bootstrap phase is BOUND but the attempt trail contains "
+                                + "no SUCCESS record"
+                );
+            }
+            boolean successMatches = chain.stream()
+                    .filter(attempt -> attempt.resultCode() == BootstrapAttemptResult.SUCCESS)
+                    .allMatch(attempt -> Arrays.equals(
+                            attempt.uuidDigest(),
+                            bootstrapState.boundUuidDigest()
+                    ));
+            if (!successMatches) {
+                throw invalid(
+                        "Bootstrap SUCCESS record target does not match "
+                                + "BootstrapState.boundUuidDigest"
+                );
+            }
+        } else {
+            if (hasSuccess) {
+                throw invalid(
+                        "Bootstrap phase is UNBOUND but the attempt trail contains "
+                                + "a SUCCESS record (tampered trail)"
+                );
+            }
         }
     }
 
