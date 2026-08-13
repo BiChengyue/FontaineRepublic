@@ -11,10 +11,12 @@ import com.fontainerepublic.server.command.CommandBootstrap;
 import com.fontainerepublic.server.command.CommandRuntimeResolver;
 import com.fontainerepublic.server.command.registration.CommandContributionRegistry;
 import com.fontainerepublic.server.audit.AuditModule;
+import com.fontainerepublic.server.citizen.CitizenModule;
 import com.fontainerepublic.server.network.NetworkRuntimeModule;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
+import com.fontainerepublic.server.registry.api.SubjectRegistryService;
 import com.mojang.logging.LogUtils;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.common.MinecraftForge;
@@ -65,6 +67,7 @@ public class FontaineRepublic {
         PlayerDataModule.register(coreManager.moduleRegistry());
         AuditModule.register(coreManager.moduleRegistry());
         SubjectRegistryModule.register(coreManager.moduleRegistry());
+        CitizenModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
             TestModule.registerAll(coreManager.moduleRegistry());
             LOGGER.warn(
@@ -88,6 +91,7 @@ public class FontaineRepublic {
         DataManager.init(event.getServer());
         coreManager.startRuntime();
         bindSubjectRegistryPlayerData();
+        bindCitizenServices();
         if (runtimeValidationEnabled) {
             TestModule.logAvailability(coreManager);
         }
@@ -105,6 +109,31 @@ public class FontaineRepublic {
                 .filter(SubjectRegistryModule.class::isInstance)
                 .map(SubjectRegistryModule.class::cast)
                 .ifPresent(module -> module.bindPlayerDataService(playerData));
+    }
+
+    /**
+     * Binds the authoritative PlayerData and subject-registry services to the
+     * citizen module after the runtime start (dependency order is guaranteed
+     * by module resolution, but the service references are only resolvable
+     * once containers exist).
+     */
+    private void bindCitizenServices() {
+        PlayerDataService playerData = playerDataService().orElse(null);
+        SubjectRegistryService subjectRegistry = subjectRegistryService().orElse(null);
+        coreManager.getRuntimeContainer(CitizenModule.MODULE_ID)
+                .flatMap(container -> container.instance())
+                .filter(CitizenModule.class::isInstance)
+                .map(CitizenModule.class::cast)
+                .ifPresent(module -> module.bindServices(playerData, subjectRegistry));
+    }
+
+    private java.util.Optional<SubjectRegistryService> subjectRegistryService() {
+        return coreManager.getRuntimeContainer(SubjectRegistryModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(SubjectRegistryModule.class::isInstance)
+                .map(SubjectRegistryModule.class::cast)
+                .map(SubjectRegistryModule::service);
     }
 
     private void onServerStopping(ServerStoppingEvent event) {

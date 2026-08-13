@@ -114,6 +114,15 @@ tasks.register('bootstrapFoundationTest', JavaExec) {
     mainClass = 'com.fontainerepublic.server.registry.BootstrapFoundationTestMain'
 }
 
+tasks.register('citizenFoundationTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-CIT-001 citizen module validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.server.citizen.CitizenFoundationTestMain'
+    systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
+}
+
 tasks.named('check') {
     dependsOn tasks.named('playerDataTest')
     dependsOn tasks.named('networkFoundationTest')
@@ -122,4 +131,5 @@ tasks.named('check') {
     dependsOn tasks.named('auditFoundationTest')
     dependsOn tasks.named('subjectRegistryFoundationTest')
     dependsOn tasks.named('bootstrapFoundationTest')
+    dependsOn tasks.named('citizenFoundationTest')
 }
