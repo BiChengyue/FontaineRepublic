@@ -22,7 +22,10 @@ implemented, independently reviewed Level 1-2, merged into develop).
 Per Human instruction on 2026-08-13, further implementation dispatch is
 resumed (Human: "批准阻断项实施；可以继续工作"). FR-ID-BOOTSTRAP-001
 (original-person binding), FR-CIT-001 (citizen), and FR-LAND-001 (land)
-implemented, reviewed Level 1-2, and merged into develop.
+implemented, reviewed Level 1-2, and merged into develop. FR-ECO-001
+(economy player services) implemented, reviewed Level 1-2, and merged —
+the approved implementation sequence (Audit -> Citizen -> Land -> Economy)
+is complete.
 
 ## Completed Tasks
 
@@ -73,9 +76,10 @@ implemented, reviewed Level 1-2, and merged into develop.
 
 ## Current Task
 
-FR-ECO-001-IMPL dispatched (economy player services — last module of the
-approved sequence). Pending alongside: Level 3 runtime verification for all
-implemented modules (checklist:
+Approved implementation sequence complete (7 modules implemented, reviewed
+Level 1-2, merged into develop). Next candidates: FR-DATA-003 (safe player
+directory, prep ready), command/login wiring for economy/citizen, then Level 3
+runtime verification for all implemented modules (checklist:
 docs/development/LEVEL3-RUNTIME-VERIFICATION-CHECKLIST.md).
 
 ## Next Task
