@@ -25,7 +25,8 @@ resumed (Human: "批准阻断项实施；可以继续工作"). FR-ID-BOOTSTRAP-0
 implemented, reviewed Level 1-2, and merged into develop. FR-ECO-001
 (economy player services) implemented, reviewed Level 1-2, and merged —
 the approved implementation sequence (Audit -> Citizen -> Land -> Economy)
-is complete.
+is complete. FR-DATA-003 (safe player directory) implemented, reviewed
+Level 1-2, and merged into develop.
 
 ## Completed Tasks
 
@@ -76,10 +77,10 @@ is complete.
 
 ## Current Task
 
-Approved implementation sequence complete (7 modules implemented, reviewed
-Level 1-2, merged into develop). Next candidates: FR-DATA-003 (safe player
-directory, prep ready), command/login wiring for economy/citizen, then Level 3
-runtime verification for all implemented modules (checklist:
+Approved implementation sequence complete (7 modules) plus FR-DATA-003
+(safe player directory), all implemented, reviewed Level 1-2, merged into
+develop. FR-CMD-USER-001 dispatched (economy/citizen commands + login hooks).
+Pending: Level 3 runtime verification for all implemented modules (checklist:
 docs/development/LEVEL3-RUNTIME-VERIFICATION-CHECKLIST.md).
 
 ## Next Task

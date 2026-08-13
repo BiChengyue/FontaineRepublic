@@ -238,3 +238,13 @@
   FR-CORE-002 / FR-AUD-001 / FR-ID-001 / FR-ID-BOOTSTRAP / FR-CIT-001 / FR-LAND-001 /
   FR-ECO-001 七项，全部 Level 1-2 独立验证通过。
 - 下一实现候选：FR-DATA-003 安全玩家目录（就绪工件已备，wave 待发）。
+
+## 2026-08-13 | FR-DATA-003 交付 + 审查通过 + 命令接线派发
+
+- FR-DATA-003 子进程完成并**自行提交** `f3c34a3`（25 文件 +1922/-27：Directory 段 v2、
+  永久歧义、改名原子快照、确定性迁移、PlayerDirectoryService），报告落盘。
+- Reviewer 独立复跑 playerDirectoryFoundationTest + 完整构建全绿（无回归）；
+  审查报告 FR-DATA-003-REVIEW-01（验收 13/14 PASS）；并入 develop（`07fcc5e`）。
+- 关注项 F-001：player-data 全量变异走确认门，与 100ms 间隔交互（实际频率远低，可接受；
+  高频非权威更新需另行批准）。
+- 派发 FR-CMD-USER-001-IMPL（/fr money、/fr citizen info、登录钩子接线）。
