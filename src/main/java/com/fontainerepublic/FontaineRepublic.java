@@ -7,12 +7,18 @@ import com.fontainerepublic.core.module.ModuleRegistry;
 import com.fontainerepublic.core.module.runtime.ModuleState;
 import com.fontainerepublic.core.module.test.TestModule;
 import com.fontainerepublic.common.network.NetworkBootstrap;
+import com.fontainerepublic.server.command.CitizenCommand;
 import com.fontainerepublic.server.command.CommandBootstrap;
 import com.fontainerepublic.server.command.CommandRuntimeResolver;
+import com.fontainerepublic.server.command.MoneyCommand;
 import com.fontainerepublic.server.command.registration.CommandContributionRegistry;
+import com.fontainerepublic.server.command.registration.CommandContributionSpec;
 import com.fontainerepublic.server.audit.AuditModule;
 import com.fontainerepublic.server.citizen.CitizenModule;
+import com.fontainerepublic.server.citizen.api.CitizenService;
 import com.fontainerepublic.server.economy.EconomyModule;
+import com.fontainerepublic.server.economy.api.EconomyService;
+import com.fontainerepublic.server.login.LoginProvisioningHook;
 import com.fontainerepublic.server.land.LandModule;
 import com.fontainerepublic.server.network.NetworkRuntimeModule;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
@@ -50,6 +56,8 @@ public class FontaineRepublic {
     );
     private final boolean runtimeValidationEnabled =
             Boolean.getBoolean(RUNTIME_VALIDATION_PROPERTY);
+    private final LoginProvisioningHook loginProvisioningHook =
+            new LoginProvisioningHook(this::citizenService, this::economyService);
 
     public FontaineRepublic() {
         LOGGER.info("[FontaineRepublic] Loading");
@@ -79,6 +87,14 @@ public class FontaineRepublic {
                     RUNTIME_VALIDATION_PROPERTY
             );
         }
+        commandContributionRegistry.register(new CommandContributionSpec(
+                "money",
+                MoneyCommand::create
+        ));
+        commandContributionRegistry.register(new CommandContributionSpec(
+                "citizen",
+                CitizenCommand::create
+        ));
         event.enqueueWork(() -> {
             commandContributionRegistry.freeze();
             networkBootstrap.registerProductionMessagesAndFreeze();
@@ -195,6 +211,10 @@ public class FontaineRepublic {
                                 player.getUUID(),
                                 player.getGameProfile().getName()
                         );
+                        loginProvisioningHook.provision(
+                                player.getUUID(),
+                                player.getGameProfile().getName()
+                        );
                     } catch (RuntimeException failed) {
                         LOGGER.error(
                                 "[FontaineRepublic] PlayerData login failed for {} ({}): {}",
@@ -246,5 +266,23 @@ public class FontaineRepublic {
                 .filter(PlayerDataModule.class::isInstance)
                 .map(PlayerDataModule.class::cast)
                 .map(PlayerDataModule::service);
+    }
+
+    private java.util.Optional<CitizenService> citizenService() {
+        return coreManager.getRuntimeContainer(CitizenModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(CitizenModule.class::isInstance)
+                .map(CitizenModule.class::cast)
+                .map(CitizenModule::service);
+    }
+
+    private java.util.Optional<EconomyService> economyService() {
+        return coreManager.getRuntimeContainer(EconomyModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(EconomyModule.class::isInstance)
+                .map(EconomyModule.class::cast)
+                .map(EconomyModule::service);
     }
 }
