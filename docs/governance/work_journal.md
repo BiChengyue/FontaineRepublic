@@ -579,3 +579,25 @@
 - 派发 FR-CLIENT-001-IMPL-B2（wave fr-client-001-b2-20260814，工作树
   fr-client-001-impl-b2，分支 codex/fr-client-001-impl-b2）。
 - 待交付后：独立审查 → 完整构建 → 并入 develop → Human 早间真机核验。
+## 2026-08-14（深夜）| 客户端 Stage B-2 交付 + 审查通过 + 并入 develop
+
+- 派发 FR-CLIENT-001-IMPL-B2（wave fr-client-001-b2-20260814）：子进程完成
+  协议 v3、账本追加 CitizenInfoPacket(3)/TransactionHistorySyncPacket(4)、
+  公民模块 network 依赖 + ServerCitizenPresentationNotifier +
+  PresentationAwareCitizenService、economy syncHistory 扩展、客户端缓存/
+  执行器/handler、CitizenScreen/HistoryScreen、/frclient citizen|history
+  后达轮次上限退出（未提交、未写测试）。
+- Reviewer 修复：ClientManager 缺 openCitizen/openHistory、SubjectRecord import
+  缺失；补齐 ClientStageB2FoundationTestMain（8 组）与 build.gradle 接线；
+  同步既有测试（NetworkFoundationTestMain v3/5 条、ClientPresentationFoundation
+  TestMain v3/handler 5 引用、CitizenFoundationTestMain 依赖集、匿名 notifier
+  补 syncHistory）；修正历史空态占位断言。
+- 验证：`clientStageB2FoundationTest` 通过；完整 `gradlew build`
+  BUILD SUCCESSFUL（31 tasks）。
+- 审查报告 FR-CLIENT-001-IMPL-B2-REVIEW-01（PASS → ROUTE TO HUMAN）；提交
+  `84bb477` 并入 develop（merge `b500acb`）。
+- 全栈冒烟（tmp/smoke-client-b2-20260814）：**Channel fontainerepublic:main
+  protocol 3 frozen with 5 production messages**；12 模块全部初始化；
+  无 client 类加载/Unsafe Referent；Ready、干净关停、ExitCode=0。
+- 客户端阶段：A（网络面）✓、B-1（GUI）✓、B-2（公民卡+历史）✓；
+  剩余：B-3（机构/土地视图，需公共信息查询面）、Stage C（真机目视核验）。

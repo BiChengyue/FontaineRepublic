@@ -113,17 +113,19 @@ surface, balance HUD/card, transfer form, notifications, guide) are
 implemented, reviewed, merged, and smoke-verified. Note: Forge's
 DistExecutor.safeRunWhenOn rejects mod-owned client referents, so the mod
 entry uses an FMLClientSetupEvent listener for client init (dedicated server
-never loads client classes). Stage B-2 (citizen card / history / institution
-views) and Stage C (real-machine verification) remain.
+never loads client classes). FR-CLIENT-001-IMPL-B2 (citizen card + transaction
+history view, protocol v3, ledger IDs 0-4) is also implemented, reviewed,
+merged, and smoke-verified. Stage B-3 (institution/land views) and Stage C
+(real-machine verification) remain.
 
 Next:
 
-Optionally continue Stage B-2 (citizen card / full history / institution-land
-views per FR-CLIENT-001-IMPL-B-2), then coordinate real-machine (Level 3)
-verification of the server surface, the client network surface, and the GUI
-with Human (emergency bootstrap/preview/confirm, central-bank on-site, crash
-window, FR client connect). See docs/governance/continuous_development_ops.md
-for the operating handbook.
+Optionally continue Stage B-3 (institution/land views per a future task card),
+then coordinate real-machine (Level 3) verification of the server surface,
+the client network surface, and the GUI with Human (emergency
+bootstrap/preview/confirm, central-bank on-site, crash window, FR client
+connect). See docs/governance/continuous_development_ops.md for the operating
+handbook.
 
 Always read this section before starting work.
 

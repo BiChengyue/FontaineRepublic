@@ -166,6 +166,15 @@ protocol v2, Ready, ExitCode=0). Stage B-1 merged into develop. Stage B-2
 (citizen card / full history / institution-land views) and Stage C
 (real-machine visual verification with Human) remain.
 
+2026-08-14: FR-CLIENT-001-IMPL-B2 (citizen card + transaction history view,
+protocol v3, ledger IDs 0-4, citizen-module presentation wiring, economy
+history sync) implemented, independently reviewed (Level 1-2, full build
+green, 31 tasks), merged into develop, and full-stack smoke passed (protocol 3,
+5 messages, 12 modules, Ready, ExitCode=0, no client classloading). Client
+stages A/B-1/B-2 complete. Remaining: Stage B-3 (institution/land views),
+Stage C (real-machine visual verification with Human), and the Level 3 server
+verification awaiting Human.
+
 ## Phase 2 Design Candidates (added 2026-08-02)
 
 All are design candidates only — implementation is not authorized until
