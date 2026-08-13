@@ -77,6 +77,10 @@ $prompt = Get-Content -LiteralPath '<TASK>-PROMPT.md' -Raw -Encoding UTF8
 & 'E:\Reasonix\versions\v1.25.0\reasonix-cli.exe' --permission-mode auto run --model opencode-go/deepseek-v4-flash --max-steps 60 $prompt *> "$log\<task>.out.log"
 ```
 
+> 注意：派发需要能访问 `opencode.ai`（OpenAI 兼容网关）。若直连不可达，
+> 需先启动本地代理（全局配置 `[network] proxy_mode = "auto"` 读取环境代理），
+> 或由用户在 Reasonix 桌面端完成网络配置后再派发。2026-08-13 探针因网络不可达搁置。
+
 ### 4.3 派发纪律
 
 - 每个任务先写 `<TASK>-PROMPT.md`：包含工作目录、必读文档、执行约束、交付格式、禁止项。
