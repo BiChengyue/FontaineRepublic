@@ -14,6 +14,10 @@
 - `/fr admin emergency confirm <token>`
 - `/fr admin emergency inspect <attemptId>`
 - `/fr admin emergency status`
+- `/fr admin emergency bootstrap <uuid> <reason>`（仅本地专用控制台；
+  权威配置生命周期 FR-EMG-001-A §4）
+- `/fr admin emergency stage <uuid> <reason>`（已授权水神或控制台）
+- `/fr admin emergency recover <uuid> <reason>`（仅本地专用控制台；漂移恢复）
 
 每次执行通过 `CommandRuntimeResolver` 运行时解析当前 ACTIVE 的 `EmergencyService`，
 绝不捕获 Service 实例。来源分类走 `EmergencyConsoleClassifier`；玩家来源转
@@ -49,6 +53,8 @@
 - preview 成功：展示单次 token 与到期时间；token 绝不写入日志/聊天历史；
 - confirm/inspect/status：按 `ConfirmResult` / `EmergencyInspection` / `EmergencyStatus`
   输出有界摘要；失败输出 bounded failureCode；
+- bootstrap/stage/recover：调用 `bootstrapAuthority` / `stageAuthority` /
+  `recoverAuthority`，输出 `ConfigureResult` 有界摘要；来源门槛由服务端核验；
 - 所有反馈经 `CommandFeedback`，服务不可用时 fail closed。
 
 ### 3.3 运行时解析

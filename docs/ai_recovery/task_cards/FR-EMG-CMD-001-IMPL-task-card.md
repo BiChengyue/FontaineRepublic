@@ -21,8 +21,8 @@
 
 ## Acceptance
 
-- `/fr admin emergency preview|confirm|inspect|status` 可解析并运行时解析 ACTIVE
-  EmergencyService（不捕获 Service）；
+- `/fr admin emergency preview|confirm|inspect|status|bootstrap|stage|recover`
+  可解析并运行时解析 ACTIVE EmergencyService（不捕获 Service）；
 - 来源分类：LOCAL_CONSOLE → SERVER_CONSOLE；玩家 → HYDRO_ARCHON（服务核验）；
   RCON/命令方块/函数/集成主机即使到达回调也被服务拒绝；
 - token 仅展示一次、不落日志；输出有界；
