@@ -13,14 +13,17 @@ import com.fontainerepublic.server.institutionaccess.api.FacilityReceipt;
 import com.fontainerepublic.server.institutionaccess.api.FacilityRegistrationRequest;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.institutionaccess.api.OnSiteContext;
-import com.fontainerepublic.server.institutionaccess.api.TerminalReceipt;
-import com.fontainerepublic.server.institutionaccess.api.TerminalRegistrationRequest;
 import com.fontainerepublic.server.institutionaccess.api.ValidationResult;
+import com.fontainerepublic.server.institutionaccess.api.ZoneReceipt;
+import com.fontainerepublic.server.institutionaccess.api.ZoneRegistrationRequest;
 import com.fontainerepublic.server.institutionaccess.model.CapabilityClass;
 import com.fontainerepublic.server.institutionaccess.model.FacilityId;
 import com.fontainerepublic.server.institutionaccess.model.InstitutionType;
-import com.fontainerepublic.server.institutionaccess.model.TerminalId;
 import com.fontainerepublic.server.institutionaccess.model.WorkflowKind;
+import com.fontainerepublic.server.institutionaccess.model.Zone;
+import com.fontainerepublic.server.institutionaccess.model.ZoneId;
+import com.fontainerepublic.server.institutionaccess.model.ZoneKind;
+import com.fontainerepublic.server.institutionaccess.model.ZoneRegion;
 import com.fontainerepublic.server.institutionaccess.persistence.InstitutionAccessUnavailableException;
 import com.fontainerepublic.server.land.model.ParcelId;
 import com.fontainerepublic.server.parliament.api.BillReceipt;
@@ -1181,7 +1184,7 @@ public final class ParliamentFoundationTestMain {
                 InstitutionType.PARLIAMENT,
                 FacilityId.of(UUID.fromString(
                         "00000000-0000-0000-0000-0000000000dd")),
-                TerminalId.of(UUID.fromString(
+                ZoneId.of(UUID.fromString(
                         "00000000-0000-0000-0000-0000000000ee")),
                 WorkflowKind.OFFICIAL_ROUTINE,
                 CapabilityClass.ONSITE_OFFICIAL_DUTY,
@@ -1581,24 +1584,39 @@ public final class ParliamentFoundationTestMain {
         }
 
         @Override
-        public TerminalReceipt registerTerminal(UUID actor, TerminalRegistrationRequest request) {
+        public ZoneReceipt addZone(UUID actor, ZoneRegistrationRequest request) {
             throw unsupported();
         }
 
         @Override
-        public TerminalReceipt suspendTerminal(UUID actor, TerminalId terminalId) {
+        public ZoneReceipt removeZone(UUID actor, ZoneId zoneId) {
             throw unsupported();
         }
 
         @Override
-        public TerminalReceipt disableTerminal(UUID actor, TerminalId terminalId) {
+        public ZoneReceipt resizeZone(UUID actor, ZoneId zoneId, ZoneRegion newRegion) {
+            throw unsupported();
+        }
+
+        @Override
+        public ZoneReceipt setZoneKind(UUID actor, ZoneId zoneId, ZoneKind newKind) {
+            throw unsupported();
+        }
+
+        @Override
+        public ZoneReceipt suspendZone(UUID actor, ZoneId zoneId) {
+            throw unsupported();
+        }
+
+        @Override
+        public ZoneReceipt activateZone(UUID actor, ZoneId zoneId) {
             throw unsupported();
         }
 
         @Override
         public OnSiteContext issueOnSiteContext(
                 UUID playerId,
-                TerminalId terminalId,
+                ZoneId zoneId,
                 CapabilityClass capability,
                 String playerDimension,
                 int x,
@@ -1625,8 +1643,7 @@ public final class ParliamentFoundationTestMain {
         }
 
         @Override
-        public Optional<com.fontainerepublic.server.institutionaccess.model.Terminal>
-                getTerminal(TerminalId terminalId) {
+        public Optional<Zone> getZone(ZoneId zoneId) {
             throw unsupported();
         }
 

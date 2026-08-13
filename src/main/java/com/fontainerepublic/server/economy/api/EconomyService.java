@@ -26,7 +26,7 @@ import java.util.UUID;
  *
  * <p>Central-bank official duties (deposit / withdraw / freeze / unfreeze)
  * are gated on a valid {@code ONSITE_OFFICIAL_DUTY} on-site context issued
- * from a registered central-bank facility terminal; the service revalidates
+ * from a registered central-bank facility zone; the service revalidates
  * the context at the final mutation boundary. The public treasury total is a
  * read-only aggregate.</p>
  */
@@ -128,7 +128,7 @@ public interface EconomyService {
      * snapshot, appending an immutable {@code DEPOSIT} transaction. Total
      * supply {@code = sum(accounts) + treasury} is conserved exactly. The
      * mutation requires a valid {@code ONSITE_OFFICIAL_DUTY} on-site context
-     * (registered central-bank facility + terminal) revalidated at the final
+     * (registered central-bank facility + zone) revalidated at the final
      * mutation boundary; the treasury must hold the amount; a frozen target
      * is rejected. On any failure nothing is published.
      *

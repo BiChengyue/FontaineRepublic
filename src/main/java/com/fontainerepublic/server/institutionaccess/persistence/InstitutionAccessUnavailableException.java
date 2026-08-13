@@ -1,14 +1,17 @@
 package com.fontainerepublic.server.institutionaccess.persistence;
 
 /**
- * Fail-closed institution-access unavailability (FR-INST-002-A §7).
+ * Fail-closed institution-access unavailability (FR-INST-002-A §7,
+ * FR-INST-002-B §7).
  *
  * <p>Thrown when a mutation or context operation cannot be completed with
  * authority: unavailable player-data/subject/land services, an invalid or
- * unprovisioned actor, an unknown facility/terminal or parcel, a state-machine
- * violation, a terminal outside its facility region, an unsupported
- * capability, capacity exhaustion, or an underlying store failure. A failed
- * mutation publishes no facility, no terminal, no revision, and no context.</p>
+ * unprovisioned actor, an unknown facility/zone or parcel, a state-machine
+ * violation, a zone outside its facility parcel region or beyond the
+ * small-size budget, a capability not allowed by the zone kind or set, an
+ * unsupported capability, capacity exhaustion, or an underlying store
+ * failure. A failed mutation publishes no facility, no zone, no revision,
+ * and no context.</p>
  */
 public final class InstitutionAccessUnavailableException extends RuntimeException {
 
@@ -42,35 +45,41 @@ public final class InstitutionAccessUnavailableException extends RuntimeExceptio
     /** The facility is not in an ACTIVE state. */
     public static final String CODE_FACILITY_NOT_ACTIVE = "FACILITY_NOT_ACTIVE";
 
-    /** No terminal exists for the requested id. */
-    public static final String CODE_TERMINAL_NOT_FOUND = "TERMINAL_NOT_FOUND";
+    /** No zone exists for the requested id. */
+    public static final String CODE_ZONE_NOT_FOUND = "ZONE_NOT_FOUND";
 
-    /** The terminal is not in an ACTIVE state. */
-    public static final String CODE_TERMINAL_NOT_ACTIVE = "TERMINAL_NOT_ACTIVE";
+    /** The zone is not in an ACTIVE state. */
+    public static final String CODE_ZONE_NOT_ACTIVE = "ZONE_NOT_ACTIVE";
 
-    /** The terminal institution type does not match its facility. */
+    /** The zone institution type does not match its facility. */
     public static final String CODE_INSTITUTION_MISMATCH = "INSTITUTION_MISMATCH";
 
-    /** The terminal position is not inside its facility's parcel region. */
-    public static final String CODE_TERMINAL_OUTSIDE_REGION = "TERMINAL_OUTSIDE_REGION";
+    /** The zone region is not inside its facility's parcel region. */
+    public static final String CODE_ZONE_OUTSIDE_REGION = "ZONE_OUTSIDE_REGION";
 
-    /** The requested capability is not allowed by the terminal. */
+    /** The zone region exceeds the small-size budget of the workflow. */
+    public static final String CODE_ZONE_SIZE_EXCEEDED = "ZONE_SIZE_EXCEEDED";
+
+    /** The requested capability is not allowed by the zone. */
     public static final String CODE_CAPABILITY_NOT_ALLOWED = "CAPABILITY_NOT_ALLOWED";
+
+    /** The capability set is not a subset of the zone kind's allowed classes. */
+    public static final String CODE_KIND_CAPABILITY_MISMATCH = "KIND_CAPABILITY_MISMATCH";
 
     /** Only on-site capability classes may anchor an on-site context. */
     public static final String CODE_UNSUPPORTED_CAPABILITY = "UNSUPPORTED_CAPABILITY";
 
-    /** The player is not within the configured interaction distance. */
+    /** The player is not inside the zone region. */
     public static final String CODE_PLAYER_OUT_OF_RANGE = "PLAYER_OUT_OF_RANGE";
 
-    /** The player dimension does not match the terminal dimension. */
+    /** The player dimension does not match the zone dimension. */
     public static final String CODE_DIMENSION_MISMATCH = "DIMENSION_MISMATCH";
 
     /** A high-risk authorization requires a valid official routine session. */
     public static final String CODE_OFFICIAL_SESSION_REQUIRED = "OFFICIAL_SESSION_REQUIRED";
 
-    /** A high-risk authorization requires a secure terminal. */
-    public static final String CODE_SECURE_TERMINAL_REQUIRED = "SECURE_TERMINAL_REQUIRED";
+    /** A high-risk authorization requires a SECURE zone. */
+    public static final String CODE_SECURE_ZONE_REQUIRED = "SECURE_ZONE_REQUIRED";
 
     /** The request failed validation. */
     public static final String CODE_INVALID_REQUEST = "INVALID_REQUEST";

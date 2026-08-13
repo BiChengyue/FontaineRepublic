@@ -2,40 +2,49 @@ package com.fontainerepublic.server.institutionaccess.service;
 
 /**
  * Immutable server-configurable workflow parameters of the shared access
- * boundary (FR-INST-001-B §3/§4).
+ * boundary (FR-INST-001-B §3/§4, adapted to zones by FR-INST-002-B §4).
  *
  * <p>All parameters are server-configurable through
  * {@link com.fontainerepublic.core.ConfigManager} (institution config
- * section); tests inject their own. The final mutation-time revalidation has
- * no switch — it is mandatory and cannot be disabled by configuration
- * (FR-INST-001-B §4).</p>
+ * section); tests inject their own. Zone presence replaces terminal
+ * distance: a player is on-site exactly when inside the registered zone
+ * region, so no distance parameter exists. The final mutation-time
+ * revalidation has no switch — it is mandatory and cannot be disabled by
+ * configuration (FR-INST-001-B §4).</p>
  *
- * @param publicDistanceBlocks       public workflow terminal distance
  * @param publicContextLifetimeMillis public workflow context lifetime
- * @param officialIdleTimeoutMillis  official routine idle timeout
- * @param officialHardLimitMillis    official routine hard session limit
- * @param highRiskDistanceBlocks     high-risk workflow terminal distance
- * @param highRiskLifetimeMillis     high-risk single-use authorization lifetime
- * @param presenceCheckIntervalTicks bounded presence-check interval (1 second
- *                                   default at 20 TPS)
+ *                                    (2 minutes default)
+ * @param officialIdleTimeoutMillis   official routine idle timeout
+ *                                    (10 minutes default)
+ * @param officialHardLimitMillis     official routine hard session limit
+ *                                    (60 minutes default)
+ * @param highRiskLifetimeMillis      high-risk single-use authorization
+ *                                    lifetime (30 seconds default)
+ * @param maxZoneXSize                small-size budget: inclusive x extent
+ *                                    of a zone (16 blocks default)
+ * @param maxZoneYSize                small-size budget: inclusive y extent
+ *                                    of a zone (8 blocks default)
+ * @param maxZoneZSize                small-size budget: inclusive z extent
+ *                                    of a zone (16 blocks default)
+ * @param presenceCheckIntervalTicks  bounded presence-check interval
+ *                                    (1 second default at 20 TPS)
  */
 public record InstitutionAccessConfig(
-        int publicDistanceBlocks,
         long publicContextLifetimeMillis,
         long officialIdleTimeoutMillis,
         long officialHardLimitMillis,
-        int highRiskDistanceBlocks,
         long highRiskLifetimeMillis,
+        int maxZoneXSize,
+        int maxZoneYSize,
+        int maxZoneZSize,
         int presenceCheckIntervalTicks
 ) {
 
     public static final InstitutionAccessConfig DEFAULT =
-            new InstitutionAccessConfig(6, 120_000L, 600_000L, 3_600_000L, 6, 30_000L, 20);
+            new InstitutionAccessConfig(120_000L, 600_000L, 3_600_000L, 30_000L,
+                    16, 8, 16, 20);
 
     public InstitutionAccessConfig {
-        if (publicDistanceBlocks <= 0) {
-            throw new IllegalArgumentException("publicDistanceBlocks must be positive");
-        }
         if (publicContextLifetimeMillis <= 0) {
             throw new IllegalArgumentException(
                     "publicContextLifetimeMillis must be positive"
@@ -51,11 +60,17 @@ public record InstitutionAccessConfig(
                     "officialHardLimitMillis must not be below the idle timeout"
             );
         }
-        if (highRiskDistanceBlocks <= 0) {
-            throw new IllegalArgumentException("highRiskDistanceBlocks must be positive");
-        }
         if (highRiskLifetimeMillis <= 0) {
             throw new IllegalArgumentException("highRiskLifetimeMillis must be positive");
+        }
+        if (maxZoneXSize <= 0) {
+            throw new IllegalArgumentException("maxZoneXSize must be positive");
+        }
+        if (maxZoneYSize <= 0) {
+            throw new IllegalArgumentException("maxZoneYSize must be positive");
+        }
+        if (maxZoneZSize <= 0) {
+            throw new IllegalArgumentException("maxZoneZSize must be positive");
         }
         if (presenceCheckIntervalTicks <= 0) {
             throw new IllegalArgumentException(
@@ -72,12 +87,13 @@ public record InstitutionAccessConfig(
      */
     public InstitutionAccessConfig withConfigManagerValues() {
         return new InstitutionAccessConfig(
-                com.fontainerepublic.core.ConfigManager.institutionPublicDistanceBlocks(),
                 com.fontainerepublic.core.ConfigManager.institutionPublicContextLifetimeMillis(),
                 com.fontainerepublic.core.ConfigManager.institutionOfficialIdleTimeoutMillis(),
                 com.fontainerepublic.core.ConfigManager.institutionOfficialHardLimitMillis(),
-                com.fontainerepublic.core.ConfigManager.institutionHighRiskDistanceBlocks(),
                 com.fontainerepublic.core.ConfigManager.institutionHighRiskLifetimeMillis(),
+                com.fontainerepublic.core.ConfigManager.institutionMaxZoneXSize(),
+                com.fontainerepublic.core.ConfigManager.institutionMaxZoneYSize(),
+                com.fontainerepublic.core.ConfigManager.institutionMaxZoneZSize(),
                 com.fontainerepublic.core.ConfigManager.institutionPresenceCheckIntervalTicks()
         );
     }

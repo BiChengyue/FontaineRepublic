@@ -23,20 +23,21 @@ import com.fontainerepublic.server.institutionaccess.api.FacilityReceipt;
 import com.fontainerepublic.server.institutionaccess.api.FacilityRegistrationRequest;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.institutionaccess.api.OnSiteContext;
-import com.fontainerepublic.server.institutionaccess.api.TerminalChangeKind;
-import com.fontainerepublic.server.institutionaccess.api.TerminalReceipt;
-import com.fontainerepublic.server.institutionaccess.api.TerminalRegistrationRequest;
 import com.fontainerepublic.server.institutionaccess.api.ValidationResult;
+import com.fontainerepublic.server.institutionaccess.api.ZoneChangeKind;
+import com.fontainerepublic.server.institutionaccess.api.ZoneReceipt;
+import com.fontainerepublic.server.institutionaccess.api.ZoneRegistrationRequest;
 import com.fontainerepublic.server.institutionaccess.model.CapabilityClass;
 import com.fontainerepublic.server.institutionaccess.model.Facility;
 import com.fontainerepublic.server.institutionaccess.model.FacilityId;
 import com.fontainerepublic.server.institutionaccess.model.FacilityState;
 import com.fontainerepublic.server.institutionaccess.model.InstitutionType;
-import com.fontainerepublic.server.institutionaccess.model.Terminal;
-import com.fontainerepublic.server.institutionaccess.model.TerminalId;
-import com.fontainerepublic.server.institutionaccess.model.TerminalPosition;
-import com.fontainerepublic.server.institutionaccess.model.TerminalState;
 import com.fontainerepublic.server.institutionaccess.model.WorkflowKind;
+import com.fontainerepublic.server.institutionaccess.model.Zone;
+import com.fontainerepublic.server.institutionaccess.model.ZoneId;
+import com.fontainerepublic.server.institutionaccess.model.ZoneKind;
+import com.fontainerepublic.server.institutionaccess.model.ZoneRegion;
+import com.fontainerepublic.server.institutionaccess.model.ZoneState;
 import com.fontainerepublic.server.institutionaccess.persistence.InstitutionAccessLimits;
 import com.fontainerepublic.server.institutionaccess.persistence.InstitutionAccessNbtCodec;
 import com.fontainerepublic.server.institutionaccess.persistence.InstitutionAccessNbtException;
@@ -77,7 +78,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -92,18 +92,19 @@ import java.util.function.LongSupplier;
 import java.util.stream.Stream;
 
 /**
- * Dependency-free validation entry point for FR-INST-002 (shared institution
- * access boundary). Exercises the FR-INST-002-A §7 acceptance matrix with an
- * injectable store and SavedData-backed restart simulation: facility/terminal
- * registration with FR-LAND parcel validation, region checks, and the
- * lifecycle state machine; on-site context issue/validate/expiry/revision
- * binding; leave-invalidation without restore; single-use consumption
- * (public on submit, high-risk at the final boundary); the three workflow
- * default parameters per FR-INST-001-B §3; the bounded presence boundary
- * (active-context players only); injection failure without publish; restart
- * clearing contexts while recovering the directory; strict deterministic
- * codec; no hard-coded coordinates; and a command tree without privilege
- * escalation.
+ * Dependency-free validation entry point for FR-INST-002-B (zone-based shared
+ * institution access boundary). Exercises the FR-INST-002-B §7 acceptance
+ * matrix with an injectable store and SavedData-backed restart simulation:
+ * facility/zone registration with FR-LAND parcel validation, the small-size
+ * budget, the zone kind/capability match, the lifecycle state machine; on-site
+ * context issue/validate/expiry/revision binding; leave-invalidation without
+ * restore; single-use consumption (public on submit, high-risk at the final
+ * boundary); the three workflow default parameters per FR-INST-001-B §3; the
+ * bounded presence boundary (active-context players only); injection failure
+ * without publish; restart clearing contexts while recovering the directory;
+ * strict deterministic codec; no hard-coded coordinates; no terminal-model
+ * references; a command tree without privilege escalation; and the v1
+ * (terminal-model) root rejection.
  */
 public final class InstitutionAccessFoundationTestMain {
 
@@ -120,12 +121,29 @@ public final class InstitutionAccessFoundationTestMain {
     /** Parcel B region: x 100..120, y 60..70, z 100..120. */
     private static final ParcelRegion REGION_B = new ParcelRegion(100, 60, 100, 120, 70, 120);
 
+    /** Small bounded zone region A inside parcel A (16×8×16). */
+    private static final ZoneRegion ZONE_A = new ZoneRegion(DIMENSION, 12, 62, 12, 27, 69, 27);
+    /** Small bounded zone region B inside parcel A (16×8×16). */
+    private static final ZoneRegion ZONE_B = new ZoneRegion(DIMENSION, 13, 62, 13, 28, 69, 28);
+    /** Small bounded zone region C inside parcel B (16×8×16). */
+    private static final ZoneRegion ZONE_C = new ZoneRegion(DIMENSION, 105, 62, 105, 120, 69, 120);
+
+    /** A point inside ZONE_A / ZONE_B. */
+    private static final int IN_ZONE_X = 20;
+    private static final int IN_ZONE_Y = 64;
+    private static final int IN_ZONE_Z = 20;
+
+    /** A point inside parcel A but outside any zone region. */
+    private static final int OUT_ZONE_X = 11;
+    private static final int OUT_ZONE_Y = 64;
+    private static final int OUT_ZONE_Z = 11;
+
     private InstitutionAccessFoundationTestMain() {
     }
 
     public static void main(String[] args) throws Exception {
         testFacilityRegistrationParcelValidation();
-        testTerminalRegistrationValidation();
+        testZoneRegistrationValidation();
         testFacilityStateMachine();
         testIssueContextValidation();
         testValidateAtMutation();
@@ -137,11 +155,13 @@ public final class InstitutionAccessFoundationTestMain {
         testRestartClearsContexts();
         testStrictDeterministicCodec();
         testCorruptSnapshotFailClosed();
+        testV1RootRejected();
         testNoHardcodedCoordinates();
+        testNoTerminalReferences();
         testCommandTreeNoEscalation();
         testModuleContract();
         System.out.println(
-                "[FR-INST-002] Institution access foundation validation passed"
+                "[FR-INST-002-B] Institution access foundation validation passed"
         );
     }
 
@@ -216,10 +236,11 @@ public final class InstitutionAccessFoundationTestMain {
     }
 
     // ------------------------------------------------------------------
-    // acceptance: terminal registration — region/institution/capability checks
+    // acceptance: zone registration — parcel containment, size budget,
+    // kind/capability match, state machine (§7)
     // ------------------------------------------------------------------
 
-    private static void testTerminalRegistrationValidation() {
+    private static void testZoneRegistrationValidation() {
         MutableClock clock = new MutableClock(2_000);
         FakeLandService land = landWith(parcelA(), parcelB());
         InstitutionAccessService service = service(new SavedDataBackedTestStore(),
@@ -231,131 +252,219 @@ public final class InstitutionAccessFoundationTestMain {
                 service, InstitutionType.CENTRAL_BANK, parcelB().parcelId()
         );
 
-        // Terminal outside the facility region is rejected.
-        TerminalPosition outside = new TerminalPosition(
-                DIMENSION, 50, 64, 50
+        // Zone region outside the facility parcel region is rejected.
+        ZoneRegion outside = new ZoneRegion(
+                DIMENSION, 40, 60, 40, 50, 64, 50
         );
         expectThrows(
                 InstitutionAccessUnavailableException.class,
-                () -> service.registerTerminal(
+                () -> service.addZone(
                         ALPHA_ID,
-                        new TerminalRegistrationRequest(
-                                parliament, outside,
-                                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE),
-                                false
+                        new ZoneRegistrationRequest(
+                                parliament, ZoneKind.PUBLIC, outside,
+                                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
                         )
                 ),
-                "a terminal outside its facility parcel region must be rejected"
+                "a zone outside its facility parcel region must be rejected"
         );
 
-        // Terminal in the wrong dimension is rejected even when coordinates
+        // Zone in the wrong dimension is rejected even when coordinates
         // overlap the region in another dimension.
-        TerminalPosition wrongDimension = new TerminalPosition(
-                "minecraft:the_nether", 20, 64, 20
+        ZoneRegion wrongDimension = new ZoneRegion(
+                "minecraft:the_nether", 20, 62, 20, 27, 69, 27
         );
         expectThrows(
                 InstitutionAccessUnavailableException.class,
-                () -> service.registerTerminal(
+                () -> service.addZone(
                         ALPHA_ID,
-                        new TerminalRegistrationRequest(
-                                parliament, wrongDimension,
-                                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE),
-                                false
+                        new ZoneRegistrationRequest(
+                                parliament, ZoneKind.PUBLIC, wrongDimension,
+                                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
                         )
                 ),
-                "a terminal dimension not matching the parcel must be rejected"
+                "a zone dimension not matching the parcel must be rejected"
+        );
+
+        // A zone covering the whole parcel exceeds the small-size budget.
+        ZoneRegion oversized = new ZoneRegion(
+                DIMENSION, 10, 60, 10, 30, 70, 30
+        );
+        expectThrows(
+                InstitutionAccessUnavailableException.class,
+                () -> service.addZone(
+                        ALPHA_ID,
+                        new ZoneRegistrationRequest(
+                                parliament, ZoneKind.PUBLIC, oversized,
+                                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
+                        )
+                ),
+                "a zone beyond the small-size budget must be rejected"
         );
 
         // Registration on a non-ACTIVE facility is rejected.
         service.suspendFacility(ALPHA_ID, parliament);
         expectThrows(
                 InstitutionAccessUnavailableException.class,
-                () -> service.registerTerminal(
+                () -> service.addZone(
                         ALPHA_ID,
-                        new TerminalRegistrationRequest(
-                                parliament, terminalA(),
-                                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE),
-                                false
+                        new ZoneRegistrationRequest(
+                                parliament, ZoneKind.PUBLIC, ZONE_A,
+                                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
                         )
                 ),
-                "terminals may only be registered on an ACTIVE facility"
+                "zones may only be added to an ACTIVE facility"
         );
         service.activateFacility(ALPHA_ID, parliament);
 
         // Empty capability set is rejected by the request contract.
         expectThrows(
                 IllegalArgumentException.class,
-                () -> new TerminalRegistrationRequest(
-                        parliament, terminalA(), Set.of(), false
+                () -> new ZoneRegistrationRequest(
+                        parliament, ZoneKind.PUBLIC, ZONE_A, Set.of()
                 ),
                 "an empty capability set must be rejected at construction"
         );
 
-        TerminalReceipt receipt = service.registerTerminal(
-                ALPHA_ID,
-                new TerminalRegistrationRequest(
-                        parliament, terminalA(),
-                        Set.of(
-                                CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                                CapabilityClass.ONSITE_OFFICIAL_DUTY
-                        ),
-                        false
-                )
-        );
-        require(receipt.applied(), "terminal registration is applied");
-        require(receipt.kind() == TerminalChangeKind.TERMINAL_REGISTERED,
-                "receipt kind is TERMINAL_REGISTERED");
-        require(receipt.terminal().state() == TerminalState.ACTIVE,
-                "a registered terminal starts ACTIVE");
-        require(receipt.terminal().terminalRevision() == 1,
-                "a registered terminal starts at revision 1");
-        require(receipt.terminal().institutionType() == InstitutionType.PARLIAMENT,
-                "the terminal inherits the facility institution type");
-        require(receipt.terminal().integrity().equals(terminalA().integrityDigest()),
-                "the terminal integrity digest binds the anchored position");
-
-        // Same anchored position cannot host a second terminal (anti-clone).
+        // Capability set not matching the zone kind is rejected.
         expectThrows(
                 InstitutionAccessUnavailableException.class,
-                () -> service.registerTerminal(
+                () -> service.addZone(
                         ALPHA_ID,
-                        new TerminalRegistrationRequest(
-                                parliament, terminalA(),
-                                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE),
-                                false
+                        new ZoneRegistrationRequest(
+                                parliament, ZoneKind.PUBLIC, ZONE_A,
+                                Set.of(CapabilityClass.ONSITE_OFFICIAL_DUTY)
                         )
                 ),
-                "a second terminal at the same anchored position must be rejected"
+                "a PUBLIC zone may not allow official-duty capabilities"
         );
 
-        // A terminal on bank parcel cannot be anchored to the parliament
+        ZoneReceipt receipt = service.addZone(
+                ALPHA_ID,
+                new ZoneRegistrationRequest(
+                        parliament, ZoneKind.PUBLIC, ZONE_A,
+                        Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
+                )
+        );
+        require(receipt.applied(), "zone registration is applied");
+        require(receipt.kind() == ZoneChangeKind.ZONE_ADDED,
+                "receipt kind is ZONE_ADDED");
+        require(receipt.zone().state() == ZoneState.ACTIVE,
+                "a registered zone starts ACTIVE");
+        require(receipt.zone().zoneRevision() == 1,
+                "a registered zone starts at revision 1");
+        require(receipt.zone().institutionType() == InstitutionType.PARLIAMENT,
+                "the zone inherits the facility institution type");
+        require(receipt.zone().kind() == ZoneKind.PUBLIC,
+                "the zone kind is applied");
+        require(receipt.zone().region().equals(ZONE_A),
+                "the zone region is applied");
+        require(receipt.zone().capabilitySet().equals(
+                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)),
+                "the zone capability set is applied");
+
+        // Overlapping regions are allowed (zones are areas, not anchored
+        // positions; no anti-clone constraint exists in the zone model).
+        ZoneId overlapping = addZone(
+                service, parliament, ZoneKind.OFFICIAL, ZONE_B,
+                Set.of(CapabilityClass.ONSITE_OFFICIAL_DUTY)
+        );
+        require(service.getZone(overlapping).isPresent(),
+                "a second zone may share the facility");
+
+        // A zone on the bank parcel cannot be anchored to the parliament
         // facility (region check across parcels).
         expectThrows(
                 InstitutionAccessUnavailableException.class,
-                () -> service.registerTerminal(
+                () -> service.addZone(
                         ALPHA_ID,
-                        new TerminalRegistrationRequest(
-                                parliament,
-                                new TerminalPosition(DIMENSION, 110, 64, 110),
-                                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE),
-                                false
+                        new ZoneRegistrationRequest(
+                                parliament, ZoneKind.PUBLIC, ZONE_C,
+                                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
                         )
                 ),
-                "a terminal outside the referenced facility region must be rejected"
+                "a zone outside the referenced facility region must be rejected"
         );
 
-        // The bank facility still accepts its own terminal.
-        TerminalReceipt bankTerminal = service.registerTerminal(
-                BRAVO_ID,
-                new TerminalRegistrationRequest(
-                        bank,
-                        new TerminalPosition(DIMENSION, 110, 64, 110),
-                        Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE),
-                        false
-                )
+        // The bank facility still accepts its own zone.
+        ZoneId bankZone = addZone(
+                service, bank, ZoneKind.PUBLIC, ZONE_C,
+                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
         );
-        require(bankTerminal.terminal().facilityId().equals(bank),
-                "bank terminal anchors to the bank facility");
+        require(service.getZone(bankZone).get().facilityId().equals(bank),
+                "the bank zone anchors to the bank facility");
+
+        // resize: onto an out-of-parcel region is rejected; a valid resize
+        // increments the revision exactly once.
+        ZoneId publicZone = addZone(
+                service, parliament, ZoneKind.PUBLIC, ZONE_A,
+                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
+        );
+        expectThrows(
+                InstitutionAccessUnavailableException.class,
+                () -> service.resizeZone(
+                        ALPHA_ID, publicZone,
+                        new ZoneRegion(DIMENSION, 40, 60, 40, 50, 64, 50)
+                ),
+                "resizing outside the parcel region must be rejected"
+        );
+        ZoneRegion grown = new ZoneRegion(
+                DIMENSION, 12, 62, 12, 27, 69, 28
+        );
+        expectThrows(
+                InstitutionAccessUnavailableException.class,
+                () -> service.resizeZone(ALPHA_ID, publicZone, grown),
+                "resizing beyond the small-size budget must be rejected"
+        );
+        ZoneReceipt resized = service.resizeZone(
+                ALPHA_ID, publicZone, ZONE_B
+        );
+        require(resized.applied(), "resize applies");
+        require(resized.zone().region().equals(ZONE_B), "the new region applies");
+        require(resized.zone().zoneRevision() == 2,
+                "resize increments the zone revision exactly once");
+
+        // set-kind: a capability set not allowed by the new kind is rejected;
+        // a valid kind change increments the revision exactly once.
+        expectThrows(
+                InstitutionAccessUnavailableException.class,
+                () -> service.setZoneKind(ALPHA_ID, publicZone, ZoneKind.OFFICIAL),
+                "a PUBLIC zone without official-duty capabilities cannot become "
+                        + "an OFFICIAL zone"
+        );
+        expectThrows(
+                InstitutionAccessUnavailableException.class,
+                () -> service.setZoneKind(ALPHA_ID, publicZone, ZoneKind.SECURE),
+                "a PUBLIC zone without official-duty capabilities cannot become "
+                        + "a SECURE zone"
+        );
+        ZoneReceipt rekinded = service.setZoneKind(
+                ALPHA_ID, overlapping, ZoneKind.SECURE
+        );
+        require(rekinded.applied(), "set-kind applies");
+        require(rekinded.zone().kind() == ZoneKind.SECURE, "the new kind applies");
+        require(rekinded.zone().zoneRevision() == 2,
+                "set-kind increments the zone revision exactly once");
+
+        // Zone state machine: suspend -> activate -> remove.
+        ZoneReceipt suspended = service.suspendZone(ALPHA_ID, publicZone);
+        require(suspended.zone().state() == ZoneState.SUSPENDED,
+                "suspend moves the zone to SUSPENDED");
+        require(suspended.zone().zoneRevision() == 3,
+                "suspend increments the revision once");
+        require(!service.suspendZone(ALPHA_ID, publicZone).applied(),
+                "suspending a suspended zone is a no-op");
+        require(!service.suspendZone(ALPHA_ID, publicZone).zone().equals(suspended.zone())
+                        || service.suspendZone(ALPHA_ID, publicZone).zone().zoneRevision() == 3,
+                "a no-op suspend commits nothing");
+        ZoneReceipt activated = service.activateZone(ALPHA_ID, publicZone);
+        require(activated.zone().state() == ZoneState.ACTIVE,
+                "activate restores ACTIVE");
+        require(activated.zone().zoneRevision() == 4,
+                "activate increments the revision once");
+        ZoneReceipt removed = service.removeZone(ALPHA_ID, publicZone);
+        require(removed.kind() == ZoneChangeKind.ZONE_REMOVED, "removal kind applies");
+        require(service.getZone(publicZone).isEmpty(),
+                "the removed zone is gone from the directory");
     }
 
     // ------------------------------------------------------------------
@@ -419,15 +528,15 @@ public final class InstitutionAccessFoundationTestMain {
         );
         require(other.equals(other), "the second facility stays bound to parcelC");
 
-        // RELOCATING -> ACTIVE via activate, then DISABLED (terminal state).
+        // RELOCATING -> ACTIVE via activate, then DISABLED (final state).
         service.activateFacility(ALPHA_ID, id);
         FacilityReceipt disabled = service.disableFacility(ALPHA_ID, id);
         require(disabled.facility().state() == FacilityState.DISABLED,
                 "disable moves the facility to DISABLED");
-        require(service.disableFacility(ALPHA_ID, id).applied() == false,
+        require(!service.disableFacility(ALPHA_ID, id).applied(),
                 "disabling a disabled facility is a no-op");
 
-        // DISABLED is terminal: no suspend/activate/relocate.
+        // DISABLED is final: no suspend/activate/relocate.
         expectThrows(
                 InstitutionAccessUnavailableException.class,
                 () -> service.suspendFacility(ALPHA_ID, id),
@@ -453,217 +562,226 @@ public final class InstitutionAccessFoundationTestMain {
     }
 
     // ------------------------------------------------------------------
-    // acceptance: context issue — §6.3 verification chain
+    // acceptance: context issue — zone presence chain (§7)
     // ------------------------------------------------------------------
 
     private static void testIssueContextValidation() {
         MutableClock clock = new MutableClock(10_000);
         FakeLandService land = landWith(parcelA());
-        InstitutionAccessService service = service(
+        DefaultInstitutionAccessService service = service(
                 new SavedDataBackedTestStore(), land, clock
         );
         FacilityId parliament = registerFacility(
                 service, InstitutionType.PARLIAMENT, parcelA().parcelId()
         );
-        TerminalId publicTerminal = registerTerminal(
-                service, parliament, terminalA(),
-                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE), false
+        ZoneId publicZone = addZone(
+                service, parliament, ZoneKind.PUBLIC, ZONE_A,
+                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
         );
-        TerminalId routineTerminal = registerTerminal(
-                service, parliament,
-                new TerminalPosition(DIMENSION, 15, 64, 15),
-                Set.of(CapabilityClass.ONSITE_OFFICIAL_DUTY), false
+        ZoneId officialZone = addZone(
+                service, parliament, ZoneKind.OFFICIAL, ZONE_B,
+                Set.of(CapabilityClass.ONSITE_OFFICIAL_DUTY)
         );
-        TerminalId secureTerminal = registerTerminal(
-                service, parliament, terminalB(),
-                Set.of(
-                        CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                        CapabilityClass.ONSITE_OFFICIAL_DUTY
-                ),
-                true
+        // Overlapping SECURE zone (areas may overlap; kind selects workflow).
+        ZoneId secureZone = addZone(
+                service, parliament, ZoneKind.SECURE, ZONE_B,
+                Set.of(CapabilityClass.ONSITE_OFFICIAL_DUTY)
         );
 
-        // Capability not allowed by the terminal.
-        expectThrows(
-                InstitutionAccessUnavailableException.class,
-                () -> service.issueOnSiteContext(
-                        ALPHA_ID, publicTerminal,
-                        CapabilityClass.ONSITE_OFFICIAL_DUTY,
-                        DIMENSION, 20, 64, 20
-                ),
-                "a capability outside the terminal set must be rejected"
-        );
-        // Remote/emergency classes never anchor an on-site context.
-        expectThrows(
-                InstitutionAccessUnavailableException.class,
-                () -> service.issueOnSiteContext(
-                        ALPHA_ID, publicTerminal,
-                        CapabilityClass.REMOTE_INFORMATION,
-                        DIMENSION, 20, 64, 20
-                ),
-                "remote capabilities must never issue an on-site context"
+        // Unknown zone is rejected.
+        ZoneId unknown = ZoneId.of(
+                UUID.fromString("00000000-0000-0000-0000-0000000000dd")
         );
         expectThrows(
                 InstitutionAccessUnavailableException.class,
                 () -> service.issueOnSiteContext(
-                        ALPHA_ID, publicTerminal,
-                        CapabilityClass.EMERGENCY_RECOVERY,
-                        DIMENSION, 20, 64, 20
+                        ALPHA_ID, unknown, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                        DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
                 ),
-                "emergency recovery is owned by FR-EMG and never issued here"
+                "issue on an unknown zone must fail closed"
         );
 
-        // Player out of the 6-block public range.
+        // A suspended zone cannot anchor contexts.
+        service.suspendZone(ALPHA_ID, officialZone);
         expectThrows(
                 InstitutionAccessUnavailableException.class,
                 () -> service.issueOnSiteContext(
-                        ALPHA_ID, publicTerminal,
-                        CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                        DIMENSION, 30, 64, 20
+                        ALPHA_ID, officialZone, CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                        DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
                 ),
-                "a player 10 blocks from the terminal must be rejected"
+                "a suspended zone must reject issue"
+        );
+        service.activateZone(ALPHA_ID, officialZone);
+
+        // A suspended facility cannot anchor contexts.
+        service.suspendFacility(ALPHA_ID, parliament);
+        expectThrows(
+                InstitutionAccessUnavailableException.class,
+                () -> service.issueOnSiteContext(
+                        ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                        DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+                ),
+                "a suspended facility must reject issue"
+        );
+        service.activateFacility(ALPHA_ID, parliament);
+
+        // Remote capabilities may never anchor an on-site context.
+        expectThrows(
+                InstitutionAccessUnavailableException.class,
+                () -> service.issueOnSiteContext(
+                        ALPHA_ID, publicZone, CapabilityClass.REMOTE_INFORMATION,
+                        DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+                ),
+                "remote capabilities must be rejected for on-site contexts"
         );
 
-        // Player in a different dimension.
+        // A capability not in the zone capability set is rejected.
         expectThrows(
                 InstitutionAccessUnavailableException.class,
                 () -> service.issueOnSiteContext(
-                        ALPHA_ID, publicTerminal,
-                        CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                        "minecraft:the_nether", 20, 64, 20
+                        ALPHA_ID, publicZone, CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                        DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+                ),
+                "a capability outside the zone capability set must be rejected"
+        );
+
+        // Dimension mismatch is rejected.
+        expectThrows(
+                InstitutionAccessUnavailableException.class,
+                () -> service.issueOnSiteContext(
+                        ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                        "minecraft:the_nether", IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
                 ),
                 "a dimension mismatch must be rejected"
         );
 
-        // Valid public context issues with default lifetime.
-        OnSiteContext publicContext = service.issueOnSiteContext(
-                ALPHA_ID, publicTerminal,
-                CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                DIMENSION, 20, 64, 20
-        );
-        require(publicContext.workflowKind() == WorkflowKind.PUBLIC,
-                "ONSITE_PUBLIC_SERVICE selects the public workflow");
-        require(publicContext.capability() == CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                "context binds the requested capability");
-        require(publicContext.expiryTime() - publicContext.issueTime()
-                        == InstitutionAccessConfig.DEFAULT.publicContextLifetimeMillis(),
-                "public context lifetime follows the default (2 minutes)");
-
-        // High-risk on a secure terminal requires a valid official session.
+        // Presence is zone containment: a player inside the parcel but
+        // outside the zone region is rejected.
         expectThrows(
                 InstitutionAccessUnavailableException.class,
                 () -> service.issueOnSiteContext(
-                        ALPHA_ID, secureTerminal,
-                        CapabilityClass.ONSITE_OFFICIAL_DUTY,
-                        DIMENSION, 25, 64, 25
+                        ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                        DIMENSION, OUT_ZONE_X, OUT_ZONE_Y, OUT_ZONE_Z
                 ),
-                "high-risk without an official routine session must be rejected"
+                "a player outside the zone region must be rejected"
         );
 
-        // After the official session exists (issued at a normal terminal
-        // inside the work zone), the secure terminal issues a high-risk
-        // authorization.
-        OnSiteContext official = service.issueOnSiteContext(
-                ALPHA_ID, routineTerminal,
-                CapabilityClass.ONSITE_OFFICIAL_DUTY,
-                DIMENSION, 15, 64, 15
+        // Public workflow: presence inside a PUBLIC zone issues a 2-minute
+        // single-use context.
+        OnSiteContext publicContext = service.issueOnSiteContext(
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
-        require(official.workflowKind() == WorkflowKind.OFFICIAL_ROUTINE,
-                "a normal terminal selects the official routine workflow");
-        require(official.facilityRevision()
-                        == service.getFacility(parliament)
-                        .map(Facility::facilityRevision).orElse(-1L),
-                "the context binds the facility revision at issue time");
-        require(official.terminalRevision()
-                        == service.getTerminal(routineTerminal)
-                        .map(Terminal::terminalRevision).orElse(-1L),
-                "the context binds the terminal revision at issue time");
-        OnSiteContext highRisk = service.issueOnSiteContext(
-                ALPHA_ID, secureTerminal,
-                CapabilityClass.ONSITE_OFFICIAL_DUTY,
-                DIMENSION, 25, 64, 25
+        require(publicContext.workflowKind() == WorkflowKind.PUBLIC,
+                "a PUBLIC zone serves the public workflow");
+        require(publicContext.zoneId().equals(publicZone),
+                "the context binds the zone id");
+        require(publicContext.facilityRevision()
+                        == service.getFacility(parliament).get().facilityRevision(),
+                "the context binds the facility revision");
+        require(publicContext.zoneRevision()
+                        == service.getZone(publicZone).get().zoneRevision(),
+                "the context binds the zone revision");
+        require(publicContext.expiryTime() - publicContext.issueTime()
+                        == InstitutionAccessConfig.DEFAULT.publicContextLifetimeMillis(),
+                "the public context lifetime is the configured 2 minutes");
+        require(publicContext.dimension().equals(DIMENSION),
+                "the context records the source dimension");
+        require(publicContext.blockX() == IN_ZONE_X
+                        && publicContext.blockY() == IN_ZONE_Y
+                        && publicContext.blockZ() == IN_ZONE_Z,
+                "the context records the source position");
+
+        // High-risk workflow requires an already-valid official session:
+        // rejected while the player holds no official routine session.
+        expectThrows(
+                InstitutionAccessUnavailableException.class,
+                () -> service.issueOnSiteContext(
+                        ALPHA_ID, secureZone, CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                        DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+                ),
+                "a high-risk authorization without an official session must be rejected"
         );
-        require(highRisk.workflowKind() == WorkflowKind.HIGH_RISK,
-                "secure terminal selects the high-risk workflow");
-        require(highRisk.expiryTime() - highRisk.issueTime()
+
+        // Official routine workflow: 60-minute session lifetime.
+        OnSiteContext officialContext = service.issueOnSiteContext(
+                ALPHA_ID, officialZone, CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        require(officialContext.workflowKind() == WorkflowKind.OFFICIAL_ROUTINE,
+                "an OFFICIAL zone serves the official routine workflow");
+        require(officialContext.expiryTime() - officialContext.issueTime()
+                        == InstitutionAccessConfig.DEFAULT.officialHardLimitMillis(),
+                "the official session lifetime is the configured 60 minutes");
+
+        // With a valid official session the SECURE zone issues a 30-second
+        // single-use high-risk authorization.
+        OnSiteContext highRiskContext = service.issueOnSiteContext(
+                ALPHA_ID, secureZone, CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        require(highRiskContext.workflowKind() == WorkflowKind.HIGH_RISK,
+                "a SECURE zone serves the high-risk workflow");
+        require(highRiskContext.expiryTime() - highRiskContext.issueTime()
                         == InstitutionAccessConfig.DEFAULT.highRiskLifetimeMillis(),
-                "high-risk lifetime follows the default (30 seconds)");
+                "the high-risk authorization lifetime is the configured 30 seconds");
+        require(service.activeContextsOf(ALPHA_ID).size() == 3,
+                "the player holds the public, official, and high-risk contexts");
     }
 
     // ------------------------------------------------------------------
-    // acceptance: validateAtMutation — capability/expiry/revision binding
+    // acceptance: final mutation-time revalidation (§7)
     // ------------------------------------------------------------------
 
     private static void testValidateAtMutation() {
         MutableClock clock = new MutableClock(20_000);
         FakeLandService land = landWith(parcelA());
-        InstitutionAccessService service = service(
+        DefaultInstitutionAccessService service = service(
                 new SavedDataBackedTestStore(), land, clock
         );
         FacilityId parliament = registerFacility(
                 service, InstitutionType.PARLIAMENT, parcelA().parcelId()
         );
-        TerminalId publicTerminal = registerTerminal(
-                service, parliament, terminalA(),
-                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE), false
+        ZoneId publicZone = addZone(
+                service, parliament, ZoneKind.PUBLIC, ZONE_A,
+                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
+        );
+        OnSiteContext context = service.issueOnSiteContext(
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
 
-        // Null context is never valid.
+        // Null context is rejected.
         require(!service.validateAtMutation(
                 null, CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                clock.now(), DIMENSION, 20, 64, 20
-        ).valid(), "a null context must be invalid");
-
-        OnSiteContext context = service.issueOnSiteContext(
-                ALPHA_ID, publicTerminal,
-                CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                DIMENSION, 20, 64, 20
-        );
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        ).valid(), "a null context must not validate");
 
         // Capability mismatch.
-        ValidationResult mismatch = service.validateAtMutation(
+        ValidationResult wrongCapability = service.validateAtMutation(
                 context, CapabilityClass.ONSITE_OFFICIAL_DUTY,
-                clock.now(), DIMENSION, 20, 64, 20
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
-        require(!mismatch.valid()
-                        && mismatch.reason().equals(ValidationResult.REASON_CAPABILITY_MISMATCH),
-                "a capability mismatch must fail at the mutation boundary");
+        require(!wrongCapability.valid()
+                        && wrongCapability.reason().equals(
+                        ValidationResult.REASON_CAPABILITY_MISMATCH),
+                "a capability mismatch must be rejected with CAPABILITY_MISMATCH");
 
         // Expiry.
         clock.setNow(clock.now() + InstitutionAccessConfig.DEFAULT
                 .publicContextLifetimeMillis() + 1);
-        ValidationResult expired = service.validateAtMutation(
+        require(!service.validateAtMutation(
                 context, CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                clock.now(), DIMENSION, 20, 64, 20
-        );
-        require(!expired.valid()
-                        && expired.reason().equals(ValidationResult.REASON_EXPIRED),
-                "an expired context must fail at the mutation boundary");
-
-        // Fresh context validates (public is NOT consumed by validation).
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        ).valid(), "an expired context must not validate");
         clock.setNow(20_000);
-        OnSiteContext fresh = service.issueOnSiteContext(
-                ALPHA_ID, publicTerminal,
-                CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                DIMENSION, 20, 64, 20
-        );
-        ValidationResult valid = service.validateAtMutation(
-                fresh, CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                clock.now(), DIMENSION, 20, 64, 20
-        );
-        require(valid.valid(), "a fresh in-range context validates");
-        require(service.validateAtMutation(
-                fresh, CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                clock.now(), DIMENSION, 20, 64, 20
-        ).valid(), "public validation does not consume the context");
 
-        // Facility lifecycle change invalidates bound contexts immediately
-        // (FR-INST-001-B §4 lifecycle events); the revision binding is an
-        // additional defense-in-depth at the mutation boundary.
+        // Facility lifecycle change invalidates bound contexts immediately;
+        // the revision binding is an additional defense-in-depth at the
+        // mutation boundary.
         OnSiteContext beforeSuspend = service.issueOnSiteContext(
-                ALPHA_ID, publicTerminal,
-                CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                DIMENSION, 20, 64, 20
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
         require(beforeSuspend.facilityRevision()
                         == service.getFacility(parliament)
@@ -672,162 +790,266 @@ public final class InstitutionAccessFoundationTestMain {
         service.suspendFacility(ALPHA_ID, parliament);
         ValidationResult afterSuspend = service.validateAtMutation(
                 beforeSuspend, CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                clock.now(), DIMENSION, 20, 64, 20
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
         require(!afterSuspend.valid()
-                        && afterSuspend.reason().equals(ValidationResult.REASON_INVALIDATED),
+                        && afterSuspend.reason().equals(
+                        ValidationResult.REASON_INVALIDATED),
                 "a suspended facility invalidates bound contexts immediately");
         service.activateFacility(ALPHA_ID, parliament);
         require(!service.validateAtMutation(
                 beforeSuspend, CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                clock.now(), DIMENSION, 20, 64, 20
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         ).valid(), "reactivating the facility does not restore old contexts");
 
-        // Terminal lifecycle change invalidates bound contexts immediately.
-        TerminalId secondTerminal = registerTerminal(
-                service, parliament,
-                new TerminalPosition(DIMENSION, 25, 64, 25),
-                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE), false
+        // The final boundary rechecks directory state independently of event
+        // invalidation (defense-in-depth): a directory change that bypassed
+        // the lifecycle events still fails with the specific reason. The
+        // repository is driven directly to simulate that bypass.
+        OnSiteContext againstSuspendedFacility = service.issueOnSiteContext(
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
-        OnSiteContext terminalContext = service.issueOnSiteContext(
-                ALPHA_ID, secondTerminal,
-                CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                DIMENSION, 25, 64, 25
+        repositoryOf(service).suspendFacility(parliament);
+        ValidationResult facilitySuspended = service.validateAtMutation(
+                againstSuspendedFacility, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
-        require(terminalContext.terminalRevision()
-                        == service.getTerminal(secondTerminal)
-                        .map(Terminal::terminalRevision).orElse(-1L),
-                "the context binds the terminal revision at issue time");
-        service.suspendTerminal(ALPHA_ID, secondTerminal);
-        ValidationResult afterTerminal = service.validateAtMutation(
-                terminalContext, CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                clock.now(), DIMENSION, 25, 64, 25
+        require(!facilitySuspended.valid()
+                        && facilitySuspended.reason().equals(
+                        ValidationResult.REASON_FACILITY_NOT_ACTIVE),
+                "a suspended facility must reject with FACILITY_NOT_ACTIVE");
+        repositoryOf(service).activateFacility(parliament);
+
+        // Facility revision change invalidates: a suspend/activate cycle
+        // moves the revision while the facility is ACTIVE again; the context
+        // was issued before the cycle and stays active in the runtime
+        // registry (repository bypasses the lifecycle invalidation).
+        OnSiteContext beforeRevisionCycle = service.issueOnSiteContext(
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
-        require(!afterTerminal.valid()
-                        && afterTerminal.reason().equals(ValidationResult.REASON_INVALIDATED),
-                "a suspended terminal invalidates bound contexts immediately");
+        repositoryOf(service).suspendFacility(parliament);
+        repositoryOf(service).activateFacility(parliament);
+        ValidationResult facilityRevised = service.validateAtMutation(
+                beforeRevisionCycle, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        require(!facilityRevised.valid()
+                        && facilityRevised.reason().equals(
+                        ValidationResult.REASON_FACILITY_REVISION),
+                "a facility revision change must reject with FACILITY_REVISION");
+
+        // Zone state change bypassing events rejects with ZONE_NOT_ACTIVE.
+        OnSiteContext beforeZoneSuspend = service.issueOnSiteContext(
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        repositoryOf(service).suspendZone(publicZone);
+        ValidationResult zoneSuspended = service.validateAtMutation(
+                beforeZoneSuspend, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        require(!zoneSuspended.valid()
+                        && zoneSuspended.reason().equals(
+                        ValidationResult.REASON_ZONE_NOT_ACTIVE),
+                "a suspended zone must reject with ZONE_NOT_ACTIVE");
+        repositoryOf(service).activateZone(publicZone);
+
+        // Zone revision change (resize) invalidates.
+        OnSiteContext beforeResize = service.issueOnSiteContext(
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        repositoryOf(service).resizeZone(publicZone, ZONE_B);
+        ValidationResult zoneRevised = service.validateAtMutation(
+                beforeResize, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        require(!zoneRevised.valid()
+                        && zoneRevised.reason().equals(
+                        ValidationResult.REASON_ZONE_REVISION),
+                "a zone revision change must reject with ZONE_REVISION");
+
+        // Zone removal invalidates.
+        OnSiteContext beforeRemove = service.issueOnSiteContext(
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        repositoryOf(service).removeZone(publicZone);
+        ValidationResult zoneRemoved = service.validateAtMutation(
+                beforeRemove, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        require(!zoneRemoved.valid()
+                        && zoneRemoved.reason().equals(
+                        ValidationResult.REASON_ZONE_NOT_ACTIVE),
+                "a removed zone must reject with ZONE_NOT_ACTIVE");
+
+        // Parcel shrinking out from under the zone rejects (spatial
+        // revalidation against the authoritative FR-LAND parcel).
+        ZoneId freshZone = addZone(
+                service, parliament, ZoneKind.PUBLIC, ZONE_A,
+                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
+        );
+        OnSiteContext beforeShrink = service.issueOnSiteContext(
+                ALPHA_ID, freshZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        LandParcel shrunk = new LandParcel(
+                LandParcel.CURRENT_SCHEMA_VERSION,
+                parcelA().parcelId(),
+                DIMENSION,
+                new ParcelRegion(10, 60, 10, 25, 70, 25),
+                ZoneType.GOVERNMENT,
+                LandOwnership.REPUBLIC,
+                LandAccess.PUBLIC,
+                Map.of(),
+                2L
+        );
+        land.setParcel(shrunk);
+        ValidationResult outsideParcel = service.validateAtMutation(
+                beforeShrink, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        require(!outsideParcel.valid()
+                        && outsideParcel.reason().equals(
+                        ValidationResult.REASON_ZONE_NOT_IN_REGION),
+                "a zone region outside the parcel must reject with "
+                        + "ZONE_NOT_IN_REGION");
+        land.setParcel(parcelA());
+
+        // Player leaving the zone region rejects.
+        OnSiteContext fresh = service.issueOnSiteContext(
+                ALPHA_ID, freshZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        ValidationResult outOfRange = service.validateAtMutation(
+                fresh, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                clock.now(), DIMENSION, OUT_ZONE_X, OUT_ZONE_Y, OUT_ZONE_Z
+        );
+        require(!outOfRange.valid()
+                        && outOfRange.reason().equals(
+                        ValidationResult.REASON_PLAYER_OUT_OF_RANGE),
+                "a player outside the zone region must reject with "
+                        + "PLAYER_OUT_OF_RANGE");
+
+        // Happy path: valid presence validates.
+        ValidationResult valid = service.validateAtMutation(
+                fresh, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        require(valid.valid(), "an in-zone, unexpired context validates");
     }
 
     // ------------------------------------------------------------------
-    // acceptance: single-use — public consumes on submit, high-risk at the
-    // final boundary; public failure does not consume (FR-INST-001-B §3)
+    // acceptance: single-use consumption policy (§7)
     // ------------------------------------------------------------------
 
     private static void testSingleUseAndFailurePolicy() {
         MutableClock clock = new MutableClock(30_000);
         FakeLandService land = landWith(parcelA());
-        InstitutionAccessService service = service(
+        DefaultInstitutionAccessService service = service(
                 new SavedDataBackedTestStore(), land, clock
         );
         FacilityId parliament = registerFacility(
                 service, InstitutionType.PARLIAMENT, parcelA().parcelId()
         );
-        TerminalId routineTerminal = registerTerminal(
-                service, parliament,
-                new TerminalPosition(DIMENSION, 15, 64, 15),
-                Set.of(CapabilityClass.ONSITE_OFFICIAL_DUTY), false
+        ZoneId publicZone = addZone(
+                service, parliament, ZoneKind.PUBLIC, ZONE_A,
+                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
         );
-        TerminalId secureTerminal = registerTerminal(
-                service, parliament, terminalB(),
-                Set.of(
-                        CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                        CapabilityClass.ONSITE_OFFICIAL_DUTY
-                ),
-                true
+        ZoneId officialZone = addZone(
+                service, parliament, ZoneKind.OFFICIAL, ZONE_B,
+                Set.of(CapabilityClass.ONSITE_OFFICIAL_DUTY)
+        );
+        ZoneId secureZone = addZone(
+                service, parliament, ZoneKind.SECURE, ZONE_B,
+                Set.of(CapabilityClass.ONSITE_OFFICIAL_DUTY)
         );
 
-        // PUBLIC: consume after successful submission; a failed validation
-        // attempt does not consume and a corrected retry still works.
+        // Public contexts are single-use on successful submission only.
         OnSiteContext publicContext = service.issueOnSiteContext(
-                ALPHA_ID, secureTerminal,
-                CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                DIMENSION, 25, 64, 25
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
-        ValidationResult badAttempt = service.validateAtMutation(
+        require(service.validateAtMutation(
                 publicContext, CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                clock.now(), DIMENSION, 40, 64, 40
-        );
-        require(!badAttempt.valid(), "an out-of-range public attempt fails");
-        ValidationResult retry = service.validateAtMutation(
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        ).valid(), "a public context validates without consumption");
+        require(service.validateAtMutation(
                 publicContext, CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                clock.now(), DIMENSION, 25, 64, 25
-        );
-        require(retry.valid(), "the public context survives a failed attempt");
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        ).valid(), "revalidation without consumption stays valid");
         service.consume(publicContext);
-        ValidationResult afterConsume = service.validateAtMutation(
+        require(!service.validateAtMutation(
                 publicContext, CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                clock.now(), DIMENSION, 25, 64, 25
-        );
-        require(!afterConsume.valid()
-                        && afterConsume.reason().equals(ValidationResult.REASON_CONSUMED),
-                "a consumed public context cannot be replayed");
-        // Consume is idempotent.
-        service.consume(publicContext);
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        ).valid(), "a consumed public context must not validate");
 
-        // HIGH_RISK: the final mutation boundary consumes the authorization
-        // even when the business mutation later fails; replay is impossible.
-        OnSiteContext official = service.issueOnSiteContext(
-                ALPHA_ID, routineTerminal,
-                CapabilityClass.ONSITE_OFFICIAL_DUTY,
-                DIMENSION, 15, 64, 15
+        // High-risk authorizations are consumed at the final mutation
+        // boundary whether the business mutation later succeeds or fails.
+        service.issueOnSiteContext(
+                ALPHA_ID, officialZone, CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
-        require(official.workflowKind() == WorkflowKind.OFFICIAL_ROUTINE,
-                "the official routine session is issued first");
         OnSiteContext highRisk = service.issueOnSiteContext(
-                ALPHA_ID, secureTerminal,
-                CapabilityClass.ONSITE_OFFICIAL_DUTY,
-                DIMENSION, 25, 64, 25
+                ALPHA_ID, secureZone, CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
-        require(highRisk.workflowKind() == WorkflowKind.HIGH_RISK,
-                "secure terminal yields the high-risk workflow");
-        ValidationResult highRiskValid = service.validateAtMutation(
+        require(service.validateAtMutation(
                 highRisk, CapabilityClass.ONSITE_OFFICIAL_DUTY,
-                clock.now(), DIMENSION, 25, 64, 25
-        );
-        require(highRiskValid.valid(),
-                "the high-risk authorization validates at the final boundary");
-        ValidationResult replayed = service.validateAtMutation(
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        ).valid(), "the high-risk authorization validates once");
+        require(!service.validateAtMutation(
                 highRisk, CapabilityClass.ONSITE_OFFICIAL_DUTY,
-                clock.now(), DIMENSION, 25, 64, 25
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        ).valid(), "the high-risk authorization is consumed at the boundary");
+
+        // Official routine sessions are not single-use; consume is a no-op.
+        OnSiteContext official = service.issueOnSiteContext(
+                ALPHA_ID, officialZone, CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
-        require(!replayed.valid()
-                        && replayed.reason().equals(ValidationResult.REASON_CONSUMED),
-                "a consumed high-risk authorization cannot be replayed");
+        service.consume(official);
+        require(service.validateAtMutation(
+                official, CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        ).valid(), "official routine sessions are not consumed by consume()");
     }
 
     // ------------------------------------------------------------------
-    // acceptance: workflow default parameters per FR-INST-001-B §3
+    // acceptance: three workflow default parameters (§7, FR-INST-001-B §3)
     // ------------------------------------------------------------------
 
     private static void testWorkflowDefaults() {
-        InstitutionAccessConfig defaults = InstitutionAccessConfig.DEFAULT;
-        require(defaults.publicDistanceBlocks() == 6,
-                "public workflow terminal distance defaults to 6 blocks");
-        require(defaults.publicContextLifetimeMillis() == 120_000L,
-                "public workflow lifetime defaults to 2 minutes");
-        require(defaults.officialIdleTimeoutMillis() == 600_000L,
+        // The three workflow parameter groups have server-configured defaults.
+        require(InstitutionAccessConfig.DEFAULT.publicContextLifetimeMillis() == 120_000L,
+                "public workflow context lifetime defaults to 2 minutes");
+        require(InstitutionAccessConfig.DEFAULT.officialIdleTimeoutMillis() == 600_000L,
                 "official routine idle timeout defaults to 10 minutes");
-        require(defaults.officialHardLimitMillis() == 3_600_000L,
+        require(InstitutionAccessConfig.DEFAULT.officialHardLimitMillis() == 3_600_000L,
                 "official routine hard limit defaults to 60 minutes");
-        require(defaults.highRiskDistanceBlocks() == 6,
-                "high-risk terminal distance defaults to 6 blocks");
-        require(defaults.highRiskLifetimeMillis() == 30_000L,
-                "high-risk lifetime defaults to 30 seconds");
-        require(defaults.presenceCheckIntervalTicks() == 20,
-                "presence check defaults to 1 second at 20 TPS");
-        require(defaults.officialHardLimitMillis() >= defaults.officialIdleTimeoutMillis(),
-                "the hard limit must not be below the idle timeout");
+        require(InstitutionAccessConfig.DEFAULT.highRiskLifetimeMillis() == 30_000L,
+                "high-risk authorization lifetime defaults to 30 seconds");
+        require(InstitutionAccessConfig.DEFAULT.maxZoneXSize() == 16
+                        && InstitutionAccessConfig.DEFAULT.maxZoneYSize() == 8
+                        && InstitutionAccessConfig.DEFAULT.maxZoneZSize() == 16,
+                "the small-size zone budget defaults to 16×8×16");
+        require(InstitutionAccessConfig.DEFAULT.presenceCheckIntervalTicks() == 20,
+                "the presence check interval defaults to 1 second at 20 TPS");
 
-        // The final revalidation has no configuration switch.
-        for (Field field : InstitutionAccessConfig.class.getDeclaredFields()) {
-            require(!field.getName().toLowerCase(java.util.Locale.ROOT)
+        // The final mutation-time revalidation has no disable switch.
+        for (java.lang.reflect.RecordComponent component
+                : InstitutionAccessConfig.class.getRecordComponents()) {
+            require(!component.getName().toLowerCase(java.util.Locale.ROOT)
                             .contains("disable"),
-                    "the final mutation-time revalidation cannot be disabled: "
-                            + field.getName());
+                    "the final mutation revalidation must not be configurable "
+                            + "off: " + component.getName());
         }
 
-        // Official sessions live until the hard limit and idle evaluation
-        // uses the activity clock refreshed by valid actions.
+        // Official routine idle refresh: only valid institutional actions
+        // refresh the idle clock.
         MutableClock clock = new MutableClock(40_000);
         FakeLandService land = landWith(parcelA());
         DefaultInstitutionAccessService service = service(
@@ -836,93 +1058,79 @@ public final class InstitutionAccessFoundationTestMain {
         FacilityId parliament = registerFacility(
                 service, InstitutionType.PARLIAMENT, parcelA().parcelId()
         );
-        TerminalId routineTerminal = registerTerminal(
-                service, parliament,
-                new TerminalPosition(DIMENSION, 15, 64, 15),
-                Set.of(CapabilityClass.ONSITE_OFFICIAL_DUTY), false
+        ZoneId officialZone = addZone(
+                service, parliament, ZoneKind.OFFICIAL, ZONE_B,
+                Set.of(CapabilityClass.ONSITE_OFFICIAL_DUTY)
         );
         OnSiteContext official = service.issueOnSiteContext(
-                ALPHA_ID, routineTerminal,
-                CapabilityClass.ONSITE_OFFICIAL_DUTY,
-                DIMENSION, 15, 64, 15
+                ALPHA_ID, officialZone, CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
-        require(official.workflowKind() == WorkflowKind.OFFICIAL_ROUTINE,
-                "a normal terminal yields the official routine workflow");
-        require(official.expiryTime() - official.issueTime()
-                        == InstitutionAccessConfig.DEFAULT.officialHardLimitMillis(),
-                "the official session expires at the 60-minute hard limit");
 
-        // A valid action refreshes the idle clock; without it the session
-        // times out at the idle threshold.
-        clock.setNow(40_000 + 300_000);
-        ValidationResult refreshed = service.validateAtMutation(
+        // Valid institutional action refreshes the idle clock: after a
+        // validation at t+5min, presence survives until t+15min (5 + 10).
+        clock.setNow(clock.now() + 5 * 60_000L);
+        require(service.validateAtMutation(
                 official, CapabilityClass.ONSITE_OFFICIAL_DUTY,
-                clock.now(), DIMENSION, 15, 64, 15
-        );
-        require(refreshed.valid(),
-                "a valid official action keeps the session valid");
-        clock.setNow(40_000 + 300_000 + 600_000 + 1);
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        ).valid(), "an official routine context validates within the session");
+        clock.setNow(clock.now() + 6 * 60_000L);
+        require(service.evaluatePresence(
+                official, DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z,
+                clock.now()
+        ), "idle timeout counts from the last valid action");
+
+        // Without refresh, the 10-minute idle timeout expires the session.
+        clock.setNow(clock.now() + 6 * 60_000L);
         require(!service.evaluatePresence(
-                        official, DIMENSION, 15, 64, 15, clock.now()),
-                "idle past the 10-minute timeout invalidates the official session");
-        require(service.contextCount() == 0,
-                "the idle-invalidated session is removed from the runtime registry");
+                official, DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z,
+                clock.now()
+        ), "an idle official session must expire after the idle timeout");
+        require(!service.validateAtMutation(
+                official, CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        ).valid(), "an idle-expired official session must not validate");
+
+        // The 60-minute hard session limit applies regardless of activity;
+        // the idle clock must be refreshed by valid actions along the way.
+        MutableClock hardClock = new MutableClock(50_000);
+        DefaultInstitutionAccessService hardService = service(
+                new SavedDataBackedTestStore(), landWith(parcelA()), hardClock
+        );
+        FacilityId bank = registerFacility(
+                hardService, InstitutionType.CENTRAL_BANK, parcelA().parcelId()
+        );
+        ZoneId bankOfficialZone = addZone(
+                hardService, bank, ZoneKind.OFFICIAL, ZONE_B,
+                Set.of(CapabilityClass.ONSITE_OFFICIAL_DUTY)
+        );
+        OnSiteContext session = hardService.issueOnSiteContext(
+                ALPHA_ID, bankOfficialZone, CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        long sessionStart = hardClock.now();
+        for (int i = 1; i <= 11; i++) {
+            hardClock.setNow(sessionStart + i * 5 * 60_000L);
+            require(hardService.validateAtMutation(
+                    session, CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                    hardClock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+            ).valid(), "a valid official action within the session validates");
+        }
+        require(hardService.evaluatePresence(
+                session, DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z,
+                sessionStart + 59 * 60_000L
+        ), "the session survives within the 60-minute hard limit");
+        require(!hardService.evaluatePresence(
+                session, DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z,
+                sessionStart + 61 * 60_000L
+        ), "the session must expire at the 60-minute hard limit");
     }
 
     // ------------------------------------------------------------------
-    // acceptance: leave invalidates; return does not restore (§7.3)
+    // acceptance: leave/return — invalidation without restore (§7)
     // ------------------------------------------------------------------
 
     private static void testLeaveInvalidatesNoRestore() {
-        MutableClock clock = new MutableClock(50_000);
-        FakeLandService land = landWith(parcelA());
-        DefaultInstitutionAccessService service = service(
-                new SavedDataBackedTestStore(), land, clock
-        );
-        FacilityId parliament = registerFacility(
-                service, InstitutionType.PARLIAMENT, parcelA().parcelId()
-        );
-        TerminalId publicTerminal = registerTerminal(
-                service, parliament, terminalA(),
-                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE), false
-        );
-
-        OnSiteContext context = service.issueOnSiteContext(
-                ALPHA_ID, publicTerminal,
-                CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                DIMENSION, 20, 64, 20
-        );
-        // Leaving the terminal range invalidates the context.
-        require(!service.evaluatePresence(
-                        context, DIMENSION, 40, 64, 40, clock.now()),
-                "leaving the terminal range invalidates the context");
-        require(!service.validateAtMutation(
-                context, CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                clock.now(), DIMENSION, 20, 64, 20
-        ).valid(), "the invalidated context cannot be used even after returning");
-
-        // Returning does not restore: a fresh interaction is required.
-        OnSiteContext fresh = service.issueOnSiteContext(
-                ALPHA_ID, publicTerminal,
-                CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                DIMENSION, 20, 64, 20
-        );
-        require(!fresh.contextId().equals(context.contextId()),
-                "returning requires a new context, never the old one");
-
-        // invalidateOnLeave covers dimension/logout/death event paths.
-        service.invalidateOnLeave(ALPHA_ID);
-        require(!service.validateAtMutation(
-                fresh, CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                clock.now(), DIMENSION, 20, 64, 20
-        ).valid(), "invalidateOnLeave invalidates every player context");
-    }
-
-    // ------------------------------------------------------------------
-    // acceptance: presence boundary — only players with active contexts
-    // ------------------------------------------------------------------
-
-    private static void testPresenceBoundary() {
         MutableClock clock = new MutableClock(60_000);
         FakeLandService land = landWith(parcelA());
         DefaultInstitutionAccessService service = service(
@@ -931,74 +1139,180 @@ public final class InstitutionAccessFoundationTestMain {
         FacilityId parliament = registerFacility(
                 service, InstitutionType.PARLIAMENT, parcelA().parcelId()
         );
-        TerminalId publicTerminal = registerTerminal(
-                service, parliament, terminalA(),
-                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE), false
+        ZoneId publicZone = addZone(
+                service, parliament, ZoneKind.PUBLIC, ZONE_A,
+                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
         );
 
-        require(service.playersWithActiveContexts().isEmpty(),
-                "no player is scanned before any context exists");
-        require(service.activeContextsOf(ALPHA_ID).isEmpty(),
-                "a player without a context yields no contexts");
-
+        // Leaving the zone invalidates the context.
         OnSiteContext context = service.issueOnSiteContext(
-                ALPHA_ID, publicTerminal,
-                CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                DIMENSION, 20, 64, 20
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
-        require(service.playersWithActiveContexts().equals(Set.of(ALPHA_ID)),
-                "only the player with an active context is in the presence set");
-        require(!service.playersWithActiveContexts().contains(BRAVO_ID),
-                "a player without a context is never scanned");
-        require(service.activeContextsOf(ALPHA_ID).equals(List.of(context)),
-                "the active context list is exact and bounded");
-
-        // In-range presence keeps the context; the monitor never consumes.
         require(service.evaluatePresence(
-                        context, DIMENSION, 21, 64, 20, clock.now()),
-                "in-range presence keeps the context alive");
-        require(service.validateAtMutation(
+                context, DIMENSION, OUT_ZONE_X, OUT_ZONE_Y, OUT_ZONE_Z,
+                clock.now()
+        ) == false, "leaving the zone region fails presence");
+        require(!service.validateAtMutation(
                 context, CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                clock.now(), DIMENSION, 20, 64, 20
-        ).valid(), "presence checks never consume single-use authorizations");
+                clock.now(), DIMENSION, OUT_ZONE_X, OUT_ZONE_Y, OUT_ZONE_Z
+        ).valid(), "a left context must not validate");
+
+        // Dimension change also invalidates.
+        OnSiteContext dimensional = service.issueOnSiteContext(
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        require(!service.evaluatePresence(
+                dimensional, "minecraft:the_nether",
+                IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z, clock.now()
+        ), "a dimension change fails presence");
+
+        // Logout/death invalidates every context of the player.
+        service.issueOnSiteContext(
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        require(service.activeContextsOf(ALPHA_ID).size() >= 1,
+                "the player holds at least one context");
+        service.invalidateOnLeave(ALPHA_ID);
+        require(service.activeContextsOf(ALPHA_ID).isEmpty(),
+                "invalidateOnLeave clears every context of the player");
+
+        // Returning to the zone never restores a context: the old one stays
+        // invalidated and a fresh issue requires an in-zone presence again.
+        OnSiteContext old = service.issueOnSiteContext(
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        service.invalidateOnLeave(ALPHA_ID);
+        require(service.validateAtMutation(
+                old, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                clock.now(), DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        ).reason().equals(ValidationResult.REASON_INVALIDATED),
+                "the pre-leave context stays invalidated");
+        OnSiteContext fresh = service.issueOnSiteContext(
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        require(!fresh.contextId().equals(old.contextId()),
+                "returning issues a fresh context instead of restoring the old one");
     }
 
     // ------------------------------------------------------------------
-    // acceptance: injection failure — nothing published (§7)
+    // acceptance: bounded presence monitoring (§7)
+    // ------------------------------------------------------------------
+
+    private static void testPresenceBoundary() {
+        MutableClock clock = new MutableClock(70_000);
+        FakeLandService land = landWith(parcelA());
+        DefaultInstitutionAccessService service = service(
+                new SavedDataBackedTestStore(), land, clock
+        );
+        FacilityId parliament = registerFacility(
+                service, InstitutionType.PARLIAMENT, parcelA().parcelId()
+        );
+        ZoneId publicZone = addZone(
+                service, parliament, ZoneKind.PUBLIC, ZONE_A,
+                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
+        );
+        ZoneId officialZone = addZone(
+                service, parliament, ZoneKind.OFFICIAL, ZONE_B,
+                Set.of(CapabilityClass.ONSITE_OFFICIAL_DUTY)
+        );
+
+        service.issueOnSiteContext(
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        service.issueOnSiteContext(
+                BRAVO_ID, officialZone, CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        require(service.playersWithActiveContexts().containsAll(
+                Set.of(ALPHA_ID, BRAVO_ID)),
+                "active-context players are exactly the bounded presence set");
+        require(service.playersWithActiveContexts().size() == 2,
+                "no other player is tracked");
+
+        // A player leaving the zone stops being tracked.
+        for (OnSiteContext context : service.activeContextsOf(ALPHA_ID)) {
+            require(service.evaluatePresence(
+                    context, DIMENSION, OUT_ZONE_X, OUT_ZONE_Y, OUT_ZONE_Z,
+                    clock.now()
+            ) == false, "leaving the zone fails bounded presence");
+        }
+        require(!service.playersWithActiveContexts().contains(ALPHA_ID),
+                "a player with no active context leaves the presence set");
+
+        // A public context has no idle clock: presence is zone containment
+        // only; expiry is enforced through the lifetime.
+        OnSiteContext publicContext = service.issueOnSiteContext(
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
+        );
+        clock.setNow(clock.now() + InstitutionAccessConfig.DEFAULT
+                .publicContextLifetimeMillis() + 1);
+        require(!service.evaluatePresence(
+                publicContext, DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z,
+                clock.now()
+        ), "an expired public context fails presence");
+    }
+
+    // ------------------------------------------------------------------
+    // acceptance: injection failure — nothing is published (§7)
     // ------------------------------------------------------------------
 
     private static void testInjectionFailureNoPublish() {
         SavedDataBackedTestStore store = new SavedDataBackedTestStore();
-        MutableClock clock = new MutableClock(70_000);
-        InstitutionAccessRepository repository = repository(store);
-        InstitutionAccessService service = service(
-                repository, landWith(parcelA()), clock
-        );
-        FacilityId id = registerFacility(
+        MutableClock clock = new MutableClock(80_000);
+        FakeLandService land = landWith(parcelA());
+        DefaultInstitutionAccessService service = service(store, land, clock);
+        FacilityId parliament = registerFacility(
                 service, InstitutionType.PARLIAMENT, parcelA().parcelId()
         );
 
-        store.setCommitFailureCode("STORE_FAILURE");
-        int commitsBefore = store.commitCount();
+        store.setCommitFailureCode("injected-commit-failure");
         expectThrows(
                 InstitutionAccessUnavailableException.class,
-                () -> service.suspendFacility(ALPHA_ID, id),
-                "a store rejection must surface as unavailability"
+                () -> service.addZone(
+                        ALPHA_ID,
+                        new ZoneRegistrationRequest(
+                                parliament, ZoneKind.PUBLIC, ZONE_A,
+                                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
+                        )
+                ),
+                "a zone add under an injected commit failure must fail closed"
         );
-        require(store.commitCount() == commitsBefore + 1,
-                "the rejected commit was attempted once");
-        require(service.getFacility(id).map(Facility::state)
-                        .orElse(null) == FacilityState.ACTIVE,
-                "a failed commit publishes no state change");
-        require(service.getFacility(id).map(Facility::facilityRevision)
-                        .orElse(-1L) == 1L,
-                "a failed commit advances no revision");
+        require(service.getZone(ZoneId.of(
+                UUID.fromString("00000000-0000-0000-0000-0000000000ee")
+        )).isEmpty(), "a failed zone add publishes no zone");
 
+        // The zone directory is unchanged: store holds only the facility.
+        require(store.commitCount() == 2,
+                "the failed zone add does not reach the durable store");
+
+        // State changes also fail without publishing.
         store.setCommitFailureCode(null);
-        service.suspendFacility(ALPHA_ID, id);
-        require(service.getFacility(id).map(Facility::state)
-                        .orElse(null) == FacilityState.SUSPENDED,
-                "the store recovers and subsequent commits publish");
+        ZoneId zone = addZone(
+                service, parliament, ZoneKind.PUBLIC, ZONE_A,
+                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
+        );
+        store.setCommitFailureCode("injected-commit-failure");
+        expectThrows(
+                InstitutionAccessUnavailableException.class,
+                () -> service.suspendZone(ALPHA_ID, zone),
+                "a zone suspend under an injected commit failure must fail closed"
+        );
+        require(service.getZone(zone).get().state() == ZoneState.ACTIVE,
+                "a failed zone suspend publishes no state change");
+
+        // Recovery: the same operation succeeds and publishes.
+        store.setCommitFailureCode(null);
+        ZoneReceipt suspended = service.suspendZone(ALPHA_ID, zone);
+        require(suspended.applied()
+                        && service.getZone(zone).get().state() == ZoneState.SUSPENDED,
+                "after recovery the zone suspend commits and publishes");
     }
 
     // ------------------------------------------------------------------
@@ -1007,20 +1321,19 @@ public final class InstitutionAccessFoundationTestMain {
 
     private static void testRestartClearsContexts() {
         SavedDataBackedTestStore store = new SavedDataBackedTestStore();
-        MutableClock clock = new MutableClock(80_000);
+        MutableClock clock = new MutableClock(90_000);
         FakeLandService land = landWith(parcelA());
         DefaultInstitutionAccessService first = service(store, land, clock);
         FacilityId parliament = registerFacility(
                 first, InstitutionType.PARLIAMENT, parcelA().parcelId()
         );
-        TerminalId publicTerminal = registerTerminal(
-                first, parliament, terminalA(),
-                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE), false
+        ZoneId publicZone = addZone(
+                first, parliament, ZoneKind.PUBLIC, ZONE_A,
+                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
         );
         first.issueOnSiteContext(
-                ALPHA_ID, publicTerminal,
-                CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                DIMENSION, 20, 64, 20
+                ALPHA_ID, publicZone, CapabilityClass.ONSITE_PUBLIC_SERVICE,
+                DIMENSION, IN_ZONE_X, IN_ZONE_Y, IN_ZONE_Z
         );
         require(first.contextCount() == 1,
                 "the first runtime holds one live context");
@@ -1035,8 +1348,8 @@ public final class InstitutionAccessFoundationTestMain {
         DefaultInstitutionAccessService second = service(restarted, land, clock);
         require(second.getFacility(parliament).isPresent(),
                 "facilities are recovered across restart");
-        require(second.getTerminal(publicTerminal).isPresent(),
-                "terminals are recovered across restart");
+        require(second.getZone(publicZone).isPresent(),
+                "zones are recovered across restart");
         require(second.contextCount() == 0,
                 "contexts never survive a restart");
         require(second.getFacility(parliament).map(Facility::facilityRevision)
@@ -1051,19 +1364,19 @@ public final class InstitutionAccessFoundationTestMain {
     private static void testStrictDeterministicCodec() {
         InstitutionAccessNbtCodec codec = new InstitutionAccessNbtCodec();
         SavedDataBackedTestStore store = new SavedDataBackedTestStore();
-        MutableClock clock = new MutableClock(90_000);
-        FakeLandService land = landWith(parcelA());
+        MutableClock clock = new MutableClock(100_000);
+        FakeLandService land = landWith(parcelA(), parcelB());
         DefaultInstitutionAccessService service = service(store, land, clock);
         FacilityId parliament = registerFacility(
                 service, InstitutionType.PARLIAMENT, parcelA().parcelId()
         );
-        registerTerminal(
-                service, parliament, terminalA(),
-                Set.of(
-                        CapabilityClass.ONSITE_PUBLIC_SERVICE,
-                        CapabilityClass.ONSITE_OFFICIAL_DUTY
-                ),
-                true
+        addZone(
+                service, parliament, ZoneKind.PUBLIC, ZONE_A,
+                Set.of(CapabilityClass.ONSITE_PUBLIC_SERVICE)
+        );
+        addZone(
+                service, parliament, ZoneKind.OFFICIAL, ZONE_B,
+                Set.of(CapabilityClass.ONSITE_OFFICIAL_DUTY)
         );
         service.suspendFacility(ALPHA_ID, parliament);
 
@@ -1091,7 +1404,13 @@ public final class InstitutionAccessFoundationTestMain {
     private static void testCorruptSnapshotFailClosed() {
         // Unknown store field.
         SavedDataBackedTestStore unknownField = new SavedDataBackedTestStore();
-        unknownField.putRaw(storeRootWithSurprise());
+        CompoundTag surprise = new CompoundTag();
+        surprise.putInt("StoreVersion", 2);
+        surprise.putLong("StoreRevision", 0L);
+        surprise.put("Facilities", new CompoundTag());
+        surprise.put("Zones", new CompoundTag());
+        surprise.putString("Surprise", "x");
+        unknownField.putRaw(surprise);
         expectThrows(
                 InstitutionAccessNbtException.class,
                 () -> repository(unknownField),
@@ -1104,7 +1423,7 @@ public final class InstitutionAccessFoundationTestMain {
         newerRoot.putInt("StoreVersion", 99);
         newerRoot.putLong("StoreRevision", 0L);
         newerRoot.put("Facilities", new CompoundTag());
-        newerRoot.put("Terminals", new CompoundTag());
+        newerRoot.put("Zones", new CompoundTag());
         newer.putRaw(newerRoot);
         expectThrows(
                 InstitutionAccessNbtException.class,
@@ -1112,52 +1431,81 @@ public final class InstitutionAccessFoundationTestMain {
                 "a newer store version is rejected fail-closed"
         );
 
-        // Terminal integrity digest does not match its anchored position.
-        SavedDataBackedTestStore tampered = new SavedDataBackedTestStore();
-        CompoundTag root = new CompoundTag();
-        root.putInt("StoreVersion", 1);
-        root.putLong("StoreRevision", 1L);
-        CompoundTag facilities = new CompoundTag();
-        CompoundTag facility = new CompoundTag();
-        facility.putInt("FacilityVersion", 1);
-        facility.putUUID("FacilityId", UUID.fromString(
-                "00000000-0000-0000-0000-0000000000f1"));
-        facility.putString("InstitutionType", "PARLIAMENT");
-        facility.putUUID("ParcelId", parcelA().parcelId().value());
-        facility.putString("State", "ACTIVE");
-        facility.putLong("FacilityRevision", 1L);
-        facilities.put("00000000-0000-0000-0000-0000000000f1", facility);
-        root.put("Facilities", facilities);
-        CompoundTag terminals = new CompoundTag();
-        CompoundTag terminal = new CompoundTag();
-        terminal.putInt("TerminalVersion", 1);
-        terminal.putUUID("TerminalId", UUID.fromString(
+        // A v2 store carrying the legacy v1 collection key is rejected
+        // (explicit migration required — nothing is silently dropped).
+        SavedDataBackedTestStore legacy = new SavedDataBackedTestStore();
+        CompoundTag legacyRoot = new CompoundTag();
+        legacyRoot.putInt("StoreVersion", 2);
+        legacyRoot.putLong("StoreRevision", 0L);
+        legacyRoot.put("Facilities", new CompoundTag());
+        legacyRoot.put("Zones", new CompoundTag());
+        legacyRoot.put("Terminals", new CompoundTag());
+        legacy.putRaw(legacyRoot);
+        expectThrows(
+                InstitutionAccessNbtException.class,
+                () -> repository(legacy),
+                "a v2 root carrying legacy terminal fields must be rejected"
+        );
+
+        // A zone referencing an unknown facility is rejected.
+        SavedDataBackedTestStore dangling = new SavedDataBackedTestStore();
+        CompoundTag danglingRoot = new CompoundTag();
+        danglingRoot.putInt("StoreVersion", 2);
+        danglingRoot.putLong("StoreRevision", 1L);
+        danglingRoot.put("Facilities", new CompoundTag());
+        CompoundTag zones = new CompoundTag();
+        CompoundTag zone = new CompoundTag();
+        zone.putInt("ZoneVersion", 1);
+        zone.putUUID("ZoneId", UUID.fromString(
                 "00000000-0000-0000-0000-0000000000f2"));
-        terminal.putUUID("FacilityId", UUID.fromString(
+        zone.putUUID("FacilityId", UUID.fromString(
                 "00000000-0000-0000-0000-0000000000f1"));
-        terminal.putString("InstitutionType", "PARLIAMENT");
-        CompoundTag position = new CompoundTag();
-        position.putString("Dimension", DIMENSION);
-        position.putInt("X", 20);
-        position.putInt("Y", 64);
-        position.putInt("Z", 20);
-        terminal.put("Position", position);
+        zone.putString("InstitutionType", "PARLIAMENT");
+        zone.putString("Kind", "PUBLIC");
+        CompoundTag region = new CompoundTag();
+        region.putString("Dimension", DIMENSION);
+        region.putInt("MinX", 12);
+        region.putInt("MinY", 62);
+        region.putInt("MinZ", 12);
+        region.putInt("MaxX", 27);
+        region.putInt("MaxY", 69);
+        region.putInt("MaxZ", 27);
+        zone.put("Region", region);
         net.minecraft.nbt.ListTag capabilities = new net.minecraft.nbt.ListTag();
         capabilities.add(net.minecraft.nbt.StringTag.valueOf(
                 "ONSITE_PUBLIC_SERVICE"));
-        terminal.put("Capabilities", capabilities);
-        terminal.putString("State", "ACTIVE");
-        terminal.putBoolean("Secure", false);
-        terminal.putString("Integrity", "deadbeef");
-        terminal.putLong("TerminalRevision", 1L);
-        terminals.put("00000000-0000-0000-0000-0000000000f2", terminal);
-        root.put("Terminals", terminals);
-        tampered.putRaw(root);
+        zone.put("Capabilities", capabilities);
+        zone.putString("State", "ACTIVE");
+        zone.putLong("ZoneRevision", 1L);
+        zones.put("00000000-0000-0000-0000-0000000000f2", zone);
+        danglingRoot.put("Zones", zones);
+        dangling.putRaw(danglingRoot);
         expectThrows(
                 InstitutionAccessNbtException.class,
-                () -> repository(tampered),
-                "a terminal integrity digest mismatch rejects the load"
+                () -> repository(dangling),
+                "a zone referencing an unknown facility rejects the load"
         );
+    }
+
+    // ------------------------------------------------------------------
+    // acceptance: v1 (terminal-model) root requires explicit migration (§7)
+    // ------------------------------------------------------------------
+
+    private static void testV1RootRejected() {
+        SavedDataBackedTestStore v1 = new SavedDataBackedTestStore();
+        CompoundTag root = new CompoundTag();
+        root.putInt("StoreVersion", 1);
+        root.putLong("StoreRevision", 0L);
+        root.put("Facilities", new CompoundTag());
+        root.put("Terminals", new CompoundTag());
+        v1.putRaw(root);
+        InstitutionAccessNbtException failure = expectThrows(
+                InstitutionAccessNbtException.class,
+                () -> repository(v1),
+                "a v1 terminal-model root must be rejected"
+        );
+        require(failure.getMessage().contains("migration"),
+                "the rejection must demand an explicit migration");
     }
 
     // ------------------------------------------------------------------
@@ -1188,20 +1536,66 @@ public final class InstitutionAccessFoundationTestMain {
                             + "coordinates: " + forbidden
             );
         }
-        // Positions may only be built from caller requests or decoded
+        // Regions may only be built from caller requests or decoded
         // persistence — never from literal coordinate tuples in code.
-        java.util.regex.Pattern literalPosition = java.util.regex.Pattern.compile(
-                "new TerminalPosition\\(\\s*[-0-9]"
+        java.util.regex.Pattern literalRegion = java.util.regex.Pattern.compile(
+                "new ZoneRegion\\(\\s*[-0-9]"
         );
         require(
-                !literalPosition.matcher(codeOnly).find(),
-                "institution-access production code must not build a position "
+                !literalRegion.matcher(codeOnly).find(),
+                "institution-access production code must not build a zone region "
                         + "from literal coordinates"
         );
     }
 
     // ------------------------------------------------------------------
-    // acceptance: command tree — exists, no privilege escalation (§7)
+    // acceptance: no terminal-model references anywhere in production code (§7)
+    // ------------------------------------------------------------------
+
+    private static void testNoTerminalReferences() throws Exception {
+        Path projectDirectory = Path.of(
+                System.getProperty(PROJECT_DIR_PROPERTY, ".")
+        ).toAbsolutePath().normalize();
+        Path mainDirectory = projectDirectory.resolve("src/main/java");
+        List<String> forbidden = List.of(
+                "TerminalId", "TerminalPosition", "TerminalState",
+                "TerminalReceipt", "TerminalChangeKind",
+                "TerminalRegistrationRequest",
+                "registerTerminal", "suspendTerminal", "disableTerminal",
+                "getTerminal", "parseTerminalId", "terminalId",
+                "invalidateByTerminal", "findByTerminalId", "terminalCount",
+                "literal(\"terminal\")"
+        );
+        List<String> violations = new ArrayList<>();
+        try (Stream<Path> paths = Files.walk(mainDirectory)) {
+            List<Path> files = paths
+                    .filter(path -> path.toString().endsWith(".java"))
+                    .sorted()
+                    .toList();
+            for (Path path : files) {
+                String codeOnly = stripComments(read(path));
+                for (String token : forbidden) {
+                    if (codeOnly.contains(token)) {
+                        violations.add(path.getFileName() + ": " + token);
+                    }
+                }
+                // The v1 migration guard in the codec must reference the
+                // legacy 'Terminals' collection key; anywhere else it is a
+                // terminal-model residue.
+                if (codeOnly.contains("Terminals")
+                        && !path.getFileName().toString()
+                        .equals("InstitutionAccessNbtCodec.java")) {
+                    violations.add(path.getFileName() + ": Terminals");
+                }
+            }
+        }
+        require(violations.isEmpty(),
+                "the terminal model must be fully removed from production "
+                        + "code, found: " + violations);
+    }
+
+    // ------------------------------------------------------------------
+    // acceptance: command tree — zones only, no privilege escalation (§7)
     // ------------------------------------------------------------------
 
     private static void testCommandTreeNoEscalation() throws Exception {
@@ -1220,19 +1614,30 @@ public final class InstitutionAccessFoundationTestMain {
         CommandNode<CommandSourceStack> institution = admin.getChild("institution");
         require(institution != null, "/fr admin institution must exist");
         CommandNode<CommandSourceStack> facility = institution.getChild("facility");
-        CommandNode<CommandSourceStack> terminal = institution.getChild("terminal");
+        CommandNode<CommandSourceStack> zone = institution.getChild("zone");
         require(facility != null, "/fr admin institution facility must exist");
-        require(terminal != null, "/fr admin institution terminal must exist");
+        require(zone != null, "/fr admin institution zone must exist; institution children="
+                + institution.getChildren().stream()
+                .map(node -> node.getName()).sorted().toList());
+        require(institution.getChild("terminal") == null,
+                "the terminal command subtree must be gone");
+        require(institution.getChild("terminal") == null,
+                "the terminal command subtree must be gone");
         require(facility.getChild("register") != null,
                 "facility register path must exist");
         require(facility.getChild("suspend") != null, "facility suspend must exist");
         require(facility.getChild("activate") != null, "facility activate must exist");
         require(facility.getChild("relocate") != null, "facility relocate must exist");
         require(facility.getChild("disable") != null, "facility disable must exist");
-        require(terminal.getChild("register") != null,
-                "terminal register path must exist");
-        require(terminal.getChild("suspend") != null, "terminal suspend must exist");
-        require(terminal.getChild("disable") != null, "terminal disable must exist");
+        require(zone.getChild("add") != null, "zone add path must exist");
+        require(zone.getChild("remove") != null, "zone remove path must exist");
+        require(zone.getChild("resize") != null, "zone resize path must exist");
+        require(zone.getChild("set-kind") != null,
+                "zone set-kind path must exist; zone children="
+                        + zone.getChildren().stream()
+                        .map(node -> node.getName()).sorted().toList());
+        require(zone.getChild("suspend") != null, "zone suspend path must exist");
+        require(zone.getChild("activate") != null, "zone activate path must exist");
 
         // OP level-2 early gate: ordinary sources cannot use the institution
         // admin paths; OP 2 sources can.
@@ -1305,7 +1710,8 @@ public final class InstitutionAccessFoundationTestMain {
                             + "political namespaces");
         }
 
-        // No business permission, emergency, GUI, or packet surface exists.
+        // No business permission, emergency, GUI, terminal, or packet surface
+        // exists.
         for (Class<?> type : List.of(
                 InstitutionAccessService.class,
                 DefaultInstitutionAccessService.class,
@@ -1315,7 +1721,8 @@ public final class InstitutionAccessFoundationTestMain {
                 String name = method.getName().toLowerCase(java.util.Locale.ROOT);
                 require(!name.contains("emergency") && !name.contains("breakglass")
                                 && !name.contains("gui") && !name.contains("screen")
-                                && !name.contains("packet"),
+                                && !name.contains("packet")
+                                && !name.contains("terminal"),
                         "institution access exposes no out-of-scope surface: "
                                 + type.getSimpleName() + "." + method.getName());
             }
@@ -1383,19 +1790,17 @@ public final class InstitutionAccessFoundationTestMain {
         ).facility().facilityId();
     }
 
-    private static TerminalId registerTerminal(
+    private static ZoneId addZone(
             InstitutionAccessService service,
             FacilityId facilityId,
-            TerminalPosition position,
-            Set<CapabilityClass> capabilities,
-            boolean secure
+            ZoneKind kind,
+            ZoneRegion region,
+            Set<CapabilityClass> capabilities
     ) {
-        return service.registerTerminal(
+        return service.addZone(
                 ALPHA_ID,
-                new TerminalRegistrationRequest(
-                        facilityId, position, capabilities, secure
-                )
-        ).terminal().terminalId();
+                new ZoneRegistrationRequest(facilityId, kind, region, capabilities)
+        ).zone().zoneId();
     }
 
     private static LandParcel parcelA() {
@@ -1436,24 +1841,6 @@ public final class InstitutionAccessFoundationTestMain {
             map.put(parcel.parcelId(), parcel);
         }
         return new FakeLandService(map);
-    }
-
-    private static TerminalPosition terminalA() {
-        return new TerminalPosition(DIMENSION, 20, 64, 20);
-    }
-
-    private static TerminalPosition terminalB() {
-        return new TerminalPosition(DIMENSION, 25, 64, 25);
-    }
-
-    private static CompoundTag storeRootWithSurprise() {
-        CompoundTag root = new CompoundTag();
-        root.putInt("StoreVersion", 1);
-        root.putLong("StoreRevision", 0L);
-        root.put("Facilities", new CompoundTag());
-        root.put("Terminals", new CompoundTag());
-        root.putString("Surprise", "x");
-        return root;
     }
 
     private static String read(Path path) {
@@ -1569,10 +1956,10 @@ public final class InstitutionAccessFoundationTestMain {
             );
         }
 
-        private void putRaw(CompoundTag raw) {
+        private void putRaw(CompoundTag root) {
             savedData.putModuleData(
                     InstitutionAccessRepository.MODULE_DATA_KEY,
-                    raw
+                    root.copy()
             );
         }
 
@@ -1629,12 +2016,16 @@ public final class InstitutionAccessFoundationTestMain {
         private final Map<ParcelId, LandParcel> parcels;
 
         private FakeLandService(Map<ParcelId, LandParcel> parcels) {
-            this.parcels = Map.copyOf(parcels);
+            this.parcels = new HashMap<>(parcels);
         }
 
         @Override
         public Optional<LandParcel> getParcel(ParcelId parcelId) {
             return Optional.ofNullable(parcels.get(parcelId));
+        }
+
+        private void setParcel(LandParcel parcel) {
+            parcels.put(parcel.parcelId(), parcel);
         }
 
         @Override

@@ -5,7 +5,7 @@ import com.fontainerepublic.server.command.CommandRuntimeResolver;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.institutionaccess.api.OnSiteContext;
 import com.fontainerepublic.server.institutionaccess.model.CapabilityClass;
-import com.fontainerepublic.server.institutionaccess.model.TerminalId;
+import com.fontainerepublic.server.institutionaccess.model.ZoneId;
 import com.fontainerepublic.server.institutionaccess.persistence.InstitutionAccessUnavailableException;
 import com.fontainerepublic.server.parliament.api.BillReceipt;
 import com.fontainerepublic.server.parliament.api.ParliamentService;
@@ -42,17 +42,17 @@ import java.util.UUID;
  * bill lookup. Never enumerates the store; output is bounded. Every
  * authoritative mutation issues a fresh {@code ONSITE_OFFICIAL_DUTY}
  * on-site context from the authoritative player position at the given
- * terminal, and the service revalidates that context at its final mutation
+ * zone, and the service revalidates that context at its final mutation
  * boundary. Execution resolves the current ACTIVE {@link ParliamentService}
  * per invocation through the {@link CommandRuntimeResolver} and never caches
  * services or state.
  *
  * <pre>
- * /fr parliament proposal submit &lt;title&gt; &lt;normLevel&gt; &lt;terminalId&gt; &lt;fullText&gt;
+ * /fr parliament proposal submit &lt;title&gt; &lt;normLevel&gt; &lt;zoneId&gt; &lt;fullText&gt;
  * /fr parliament proposal list [afterSeq] [limit]
- * /fr parliament vote open &lt;proposalId&gt; &lt;terminalId&gt;
- * /fr parliament vote cast &lt;voteId&gt; &lt;choice&gt; &lt;terminalId&gt;
- * /fr parliament vote close &lt;voteId&gt; &lt;terminalId&gt;
+ * /fr parliament vote open &lt;proposalId&gt; &lt;zoneId&gt;
+ * /fr parliament vote cast &lt;voteId&gt; &lt;choice&gt; &lt;zoneId&gt;
+ * /fr parliament vote close &lt;voteId&gt; &lt;zoneId&gt;
  * /fr parliament bill show &lt;billId&gt;
  * </pre>
  */
@@ -79,7 +79,7 @@ public final class ParliamentCommand {
                                                         StringArgumentType.string()
                                                 )
                                                 .then(Commands.argument(
-                                                                "terminalId",
+                                                                "zoneId",
                                                                 StringArgumentType.string()
                                                         )
                                                         .then(Commands.argument(
@@ -126,7 +126,7 @@ public final class ParliamentCommand {
                                                 StringArgumentType.string()
                                         )
                                         .then(Commands.argument(
-                                                        "terminalId",
+                                                        "zoneId",
                                                         StringArgumentType.string()
                                                 )
                                                 .executes(context -> voteOpen(
@@ -142,7 +142,7 @@ public final class ParliamentCommand {
                                                         StringArgumentType.string()
                                                 )
                                                 .then(Commands.argument(
-                                                                "terminalId",
+                                                                "zoneId",
                                                                 StringArgumentType.string()
                                                         )
                                                         .executes(context -> voteCast(
@@ -154,7 +154,7 @@ public final class ParliamentCommand {
                                                 StringArgumentType.string()
                                         )
                                         .then(Commands.argument(
-                                                        "terminalId",
+                                                        "zoneId",
                                                         StringArgumentType.string()
                                                 )
                                                 .executes(context -> voteClose(
@@ -195,10 +195,10 @@ public final class ParliamentCommand {
         if (level == null) {
             return CommandFeedback.FAILURE;
         }
-        TerminalId terminalId = parseTerminalId(
-                source, StringArgumentType.getString(context, "terminalId")
+        ZoneId zoneId = parseZoneId(
+                source, StringArgumentType.getString(context, "zoneId")
         );
-        if (terminalId == null) {
+        if (zoneId == null) {
             return CommandFeedback.FAILURE;
         }
         String fullText = StringArgumentType.getString(context, "fullText");
@@ -212,7 +212,7 @@ public final class ParliamentCommand {
         }
         try {
             OnSiteContext onSite = issueOfficialContext(
-                    source, access.get(), actor, terminalId
+                    source, access.get(), actor, zoneId
             );
             ProposalReceipt receipt = service.get().submitProposal(
                     new ProposalDraft(title, level, fullText),
@@ -303,10 +303,10 @@ public final class ParliamentCommand {
         if (proposalId == null) {
             return CommandFeedback.FAILURE;
         }
-        TerminalId terminalId = parseTerminalId(
-                source, StringArgumentType.getString(context, "terminalId")
+        ZoneId zoneId = parseZoneId(
+                source, StringArgumentType.getString(context, "zoneId")
         );
-        if (terminalId == null) {
+        if (zoneId == null) {
             return CommandFeedback.FAILURE;
         }
         Optional<InstitutionAccessService> access =
@@ -319,7 +319,7 @@ public final class ParliamentCommand {
         }
         try {
             OnSiteContext onSite = issueOfficialContext(
-                    source, access.get(), actor, terminalId
+                    source, access.get(), actor, zoneId
             );
             VoteReceipt receipt = service.get().openVote(
                     actor, proposalId, onSite
@@ -366,10 +366,10 @@ public final class ParliamentCommand {
         if (choice == null) {
             return CommandFeedback.FAILURE;
         }
-        TerminalId terminalId = parseTerminalId(
-                source, StringArgumentType.getString(context, "terminalId")
+        ZoneId zoneId = parseZoneId(
+                source, StringArgumentType.getString(context, "zoneId")
         );
-        if (terminalId == null) {
+        if (zoneId == null) {
             return CommandFeedback.FAILURE;
         }
         Optional<InstitutionAccessService> access =
@@ -382,7 +382,7 @@ public final class ParliamentCommand {
         }
         try {
             OnSiteContext onSite = issueOfficialContext(
-                    source, access.get(), actor, terminalId
+                    source, access.get(), actor, zoneId
             );
             VoteReceipt receipt = service.get().castVote(
                     actor, voteId, choice, onSite
@@ -420,10 +420,10 @@ public final class ParliamentCommand {
         if (voteId == null) {
             return CommandFeedback.FAILURE;
         }
-        TerminalId terminalId = parseTerminalId(
-                source, StringArgumentType.getString(context, "terminalId")
+        ZoneId zoneId = parseZoneId(
+                source, StringArgumentType.getString(context, "zoneId")
         );
-        if (terminalId == null) {
+        if (zoneId == null) {
             return CommandFeedback.FAILURE;
         }
         Optional<InstitutionAccessService> access =
@@ -436,7 +436,7 @@ public final class ParliamentCommand {
         }
         try {
             OnSiteContext onSite = issueOfficialContext(
-                    source, access.get(), actor, terminalId
+                    source, access.get(), actor, zoneId
             );
             BillReceipt receipt = service.get().closeVoteAndAdvance(
                     actor, voteId, onSite
@@ -590,12 +590,12 @@ public final class ParliamentCommand {
         return BillId.of(parsed);
     }
 
-    private static TerminalId parseTerminalId(CommandSourceStack source, String input) {
-        UUID parsed = parseCanonicalUuid(source, input, "terminalId");
+    private static ZoneId parseZoneId(CommandSourceStack source, String input) {
+        UUID parsed = parseCanonicalUuid(source, input, "zoneId");
         if (parsed == null) {
             return null;
         }
-        return TerminalId.of(parsed);
+        return ZoneId.of(parsed);
     }
 
     private static UUID parseCanonicalUuid(
@@ -624,7 +624,7 @@ public final class ParliamentCommand {
 
     /**
      * Issues a fresh {@code ONSITE_OFFICIAL_DUTY} context from the
-     * authoritative server player position at the given terminal (FR-INST-001-A
+     * authoritative server player position at the given zone (FR-INST-001-A
      * §6.3). The service revalidates this context at its final mutation
      * boundary.
      */
@@ -632,7 +632,7 @@ public final class ParliamentCommand {
             CommandSourceStack source,
             InstitutionAccessService access,
             UUID playerId,
-            TerminalId terminalId
+            ZoneId zoneId
     ) {
         ServerPlayer player = source.getPlayer();
         if (player == null) {
@@ -643,7 +643,7 @@ public final class ParliamentCommand {
         }
         return access.issueOnSiteContext(
                 playerId,
-                terminalId,
+                zoneId,
                 CapabilityClass.ONSITE_OFFICIAL_DUTY,
                 player.level().dimension().location().toString(),
                 player.blockPosition().getX(),

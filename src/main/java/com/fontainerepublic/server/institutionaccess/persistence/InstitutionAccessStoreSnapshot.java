@@ -2,8 +2,8 @@ package com.fontainerepublic.server.institutionaccess.persistence;
 
 import com.fontainerepublic.server.institutionaccess.model.Facility;
 import com.fontainerepublic.server.institutionaccess.model.FacilityId;
-import com.fontainerepublic.server.institutionaccess.model.Terminal;
-import com.fontainerepublic.server.institutionaccess.model.TerminalId;
+import com.fontainerepublic.server.institutionaccess.model.Zone;
+import com.fontainerepublic.server.institutionaccess.model.ZoneId;
 import com.fontainerepublic.server.land.model.ParcelId;
 
 import java.util.Map;
@@ -11,17 +11,16 @@ import java.util.Objects;
 
 /**
  * Immutable, fully validated representation of the complete
- * {@code institution-access} namespace (FR-INST-002-A §3).
+ * {@code institution-access} namespace (FR-INST-002-B §2).
  *
  * <p>The constructor enforces the authoritative invariants — no partially
  * consistent snapshot can exist:</p>
  * <ul>
  *   <li>every {@code Facilities} key matches its facility's canonical id;</li>
- *   <li>every {@code Terminals} key matches its terminal's canonical id;</li>
- *   <li>every terminal references an existing facility;</li>
- *   <li>no duplicate facility or terminal id;</li>
- *   <li>no two facilities share the same FR-LAND parcel (single binding);</li>
- *   <li>no two terminals share the same anchored position (anti-clone).</li>
+ *   <li>every {@code Zones} key matches its zone's canonical id;</li>
+ *   <li>every zone references an existing facility;</li>
+ *   <li>no duplicate facility or zone id;</li>
+ *   <li>no two facilities share the same FR-LAND parcel (single binding).</li>
  * </ul>
  * <p>Violations reject the whole snapshot (fail closed).</p>
  */
@@ -29,10 +28,10 @@ public record InstitutionAccessStoreSnapshot(
         int storeVersion,
         long storeRevision,
         Map<FacilityId, Facility> facilities,
-        Map<TerminalId, Terminal> terminals
+        Map<ZoneId, Zone> zones
 ) {
 
-    public static final int CURRENT_STORE_VERSION = 1;
+    public static final int CURRENT_STORE_VERSION = 2;
 
     public InstitutionAccessStoreSnapshot {
         if (storeVersion != CURRENT_STORE_VERSION) {
@@ -44,7 +43,7 @@ public record InstitutionAccessStoreSnapshot(
             throw new IllegalArgumentException("storeRevision must not be negative");
         }
         facilities = Map.copyOf(Objects.requireNonNull(facilities, "facilities"));
-        terminals = Map.copyOf(Objects.requireNonNull(terminals, "terminals"));
+        zones = Map.copyOf(Objects.requireNonNull(zones, "zones"));
 
         Map<ParcelId, FacilityId> parcelBindings = new java.util.HashMap<>();
         for (Map.Entry<FacilityId, Facility> entry : facilities.entrySet()) {
@@ -67,30 +66,18 @@ public record InstitutionAccessStoreSnapshot(
                 );
             }
         }
-        Map<String, TerminalId> anchoredPositions = new java.util.HashMap<>();
-        for (Map.Entry<TerminalId, Terminal> entry : terminals.entrySet()) {
-            if (!entry.getKey().equals(entry.getValue().terminalId())) {
+        for (Map.Entry<ZoneId, Zone> entry : zones.entrySet()) {
+            if (!entry.getKey().equals(entry.getValue().zoneId())) {
                 throw invalid(
-                        "Terminals key " + entry.getKey()
-                                + " does not match terminal id "
-                                + entry.getValue().terminalId()
+                        "Zones key " + entry.getKey()
+                                + " does not match zone id "
+                                + entry.getValue().zoneId()
                 );
             }
             if (!facilities.containsKey(entry.getValue().facilityId())) {
                 throw invalid(
-                        "Terminal " + entry.getKey() + " references unknown facility "
+                        "Zone " + entry.getKey() + " references unknown facility "
                                 + entry.getValue().facilityId()
-                );
-            }
-            String anchor = entry.getValue().position().dimension()
-                    + '|' + entry.getValue().position().x()
-                    + '|' + entry.getValue().position().y()
-                    + '|' + entry.getValue().position().z();
-            TerminalId previous = anchoredPositions.put(anchor, entry.getKey());
-            if (previous != null) {
-                throw invalid(
-                        "Terminals " + previous + " and " + entry.getKey()
-                                + " share the same anchored position"
                 );
             }
         }

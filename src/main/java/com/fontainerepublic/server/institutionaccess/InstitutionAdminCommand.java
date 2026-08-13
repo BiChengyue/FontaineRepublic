@@ -6,16 +6,16 @@ import com.fontainerepublic.server.institutionaccess.api.FacilityChangeKind;
 import com.fontainerepublic.server.institutionaccess.api.FacilityReceipt;
 import com.fontainerepublic.server.institutionaccess.api.FacilityRegistrationRequest;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
-import com.fontainerepublic.server.institutionaccess.api.TerminalReceipt;
-import com.fontainerepublic.server.institutionaccess.api.TerminalRegistrationRequest;
+import com.fontainerepublic.server.institutionaccess.api.ZoneReceipt;
+import com.fontainerepublic.server.institutionaccess.api.ZoneRegistrationRequest;
 import com.fontainerepublic.server.institutionaccess.model.CapabilityClass;
 import com.fontainerepublic.server.institutionaccess.model.FacilityId;
 import com.fontainerepublic.server.institutionaccess.model.InstitutionType;
-import com.fontainerepublic.server.institutionaccess.model.TerminalId;
-import com.fontainerepublic.server.institutionaccess.model.TerminalPosition;
+import com.fontainerepublic.server.institutionaccess.model.ZoneId;
+import com.fontainerepublic.server.institutionaccess.model.ZoneKind;
+import com.fontainerepublic.server.institutionaccess.model.ZoneRegion;
 import com.fontainerepublic.server.institutionaccess.persistence.InstitutionAccessUnavailableException;
 import com.fontainerepublic.server.land.model.ParcelId;
-import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -34,22 +34,30 @@ import java.util.UUID;
 
 /**
  * Admin command surface of the shared institution access boundary
- * (FR-INST-002-A §7, FR-INST-002 implementation task §3.3).
+ * (FR-INST-002-B §5).
  *
  * <p>Attached under {@code /fr admin institution ...} with the Minecraft OP
  * level-2 early gate inherited from the admin tree. OP is only an early gate:
  * every mutation still runs the full service validation (parcel existence and
- * binding, region checks, state machine, capability sets, actor resolution)
- * and commits through the FR-CORE-002 durable gate. Feedback is bounded and
- * never enumerates the directory.</p>
+ * binding, region checks, small-size budget, state machine, capability sets,
+ * actor resolution) and commits through the FR-CORE-002 durable gate.
+ * Feedback is bounded and never enumerates the directory.</p>
  *
  * <pre>
  * /fr admin institution facility register &lt;institutionType&gt; &lt;parcelId&gt;
  * /fr admin institution facility suspend|activate|disable &lt;facilityId&gt;
  * /fr admin institution facility relocate &lt;facilityId&gt; &lt;parcelId&gt;
- * /fr admin institution terminal register &lt;facilityId&gt; &lt;dimension&gt; &lt;x&gt; &lt;y&gt; &lt;z&gt; &lt;capabilities&gt; [secure]
- * /fr admin institution terminal suspend|disable &lt;terminalId&gt;
+ * /fr admin institution zone add &lt;facilityId&gt; &lt;kind&gt; &lt;dimension&gt;
+ *   &lt;minX&gt; &lt;minY&gt; &lt;minZ&gt; &lt;maxX&gt; &lt;maxY&gt; &lt;maxZ&gt; &lt;capabilities&gt;
+ * /fr admin institution zone remove|suspend|activate &lt;zoneId&gt;
+ * /fr admin institution zone resize &lt;zoneId&gt; &lt;dimension&gt;
+ *   &lt;minX&gt; &lt;minY&gt; &lt;minZ&gt; &lt;maxX&gt; &lt;maxY&gt; &lt;maxZ&gt;
+ * /fr admin institution zone set-kind &lt;zoneId&gt; &lt;kind&gt;
  * </pre>
+ *
+ * <p>Zone coordinates are never hard-coded: they come from the explicit
+ * bounded sub-region supplied by the operator at command time (validated
+ * against the facility's FR-LAND parcel).</p>
  */
 public final class InstitutionAdminCommand {
 
@@ -63,7 +71,7 @@ public final class InstitutionAdminCommand {
     ) {
         return Commands.literal("institution")
                 .then(facilityNode(runtimeResolver))
-                .then(terminalNode(runtimeResolver));
+                .then(zoneNode(runtimeResolver));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> facilityNode(
@@ -125,77 +133,45 @@ public final class InstitutionAdminCommand {
                                 ))));
     }
 
-    private static LiteralArgumentBuilder<CommandSourceStack> terminalNode(
+    private static LiteralArgumentBuilder<CommandSourceStack> zoneNode(
             CommandRuntimeResolver runtimeResolver
     ) {
-        return Commands.literal("terminal")
-                .then(terminalRegisterNode(runtimeResolver))
+        return Commands.literal("zone")
+                .then(Commands.literal("add")
+                        .then(Commands.argument("facilityId", StringArgumentType.string())
+                                .then(Commands.argument("kind", StringArgumentType.string())
+                                        .then(Commands.argument("dimension", StringArgumentType.string())
+                                                .then(Commands.argument("minX", IntegerArgumentType.integer())
+                                                        .then(Commands.argument("minY", IntegerArgumentType.integer())
+                                                                .then(Commands.argument("minZ", IntegerArgumentType.integer())
+                                                                        .then(Commands.argument("maxX", IntegerArgumentType.integer())
+                                                                                .then(Commands.argument("maxY", IntegerArgumentType.integer())
+                                                                                        .then(Commands.argument("maxZ", IntegerArgumentType.integer())
+                                                                                                .then(Commands.argument("capabilities", StringArgumentType.string())
+                                                                                                        .executes(context -> zoneAdd(context, runtimeResolver)))))))))))))
+                .then(Commands.literal("remove")
+                        .then(Commands.argument("zoneId", StringArgumentType.string())
+                                .executes(context -> zoneRemove(context, runtimeResolver))))
+                .then(Commands.literal("resize")
+                        .then(Commands.argument("zoneId", StringArgumentType.string())
+                                .then(Commands.argument("dimension", StringArgumentType.string())
+                                        .then(Commands.argument("minX", IntegerArgumentType.integer())
+                                                .then(Commands.argument("minY", IntegerArgumentType.integer())
+                                                        .then(Commands.argument("minZ", IntegerArgumentType.integer())
+                                                                .then(Commands.argument("maxX", IntegerArgumentType.integer())
+                                                                        .then(Commands.argument("maxY", IntegerArgumentType.integer())
+                                                                                .then(Commands.argument("maxZ", IntegerArgumentType.integer())
+                                                                                        .executes(context -> zoneResize(context, runtimeResolver)))))))))))
+                .then(Commands.literal("set-kind")
+                        .then(Commands.argument("zoneId", StringArgumentType.string())
+                                .then(Commands.argument("kind", StringArgumentType.string())
+                                        .executes(context -> zoneSetKind(context, runtimeResolver)))))
                 .then(Commands.literal("suspend")
-                        .then(Commands.argument(
-                                        "terminalId",
-                                        StringArgumentType.string()
-                                )
-                                .executes(context -> terminalSuspend(
-                                        context,
-                                        runtimeResolver
-                                ))))
-                .then(Commands.literal("disable")
-                        .then(Commands.argument(
-                                        "terminalId",
-                                        StringArgumentType.string()
-                                )
-                                .executes(context -> terminalDisable(
-                                        context,
-                                        runtimeResolver
-                                ))));
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> terminalRegisterNode(
-            CommandRuntimeResolver runtimeResolver
-    ) {
-        return Commands.literal("register")
-                .then(Commands.argument(
-                                "facilityId",
-                                StringArgumentType.string()
-                        )
-                        .then(Commands.argument(
-                                        "dimension",
-                                        StringArgumentType.string()
-                                )
-                                .then(Commands.argument(
-                                                "x",
-                                                IntegerArgumentType.integer()
-                                        )
-                                        .then(Commands.argument(
-                                                        "y",
-                                                        IntegerArgumentType.integer()
-                                                )
-                                                .then(Commands.argument(
-                                                                "z",
-                                                                IntegerArgumentType.integer()
-                                                        )
-                                                        .then(Commands.argument(
-                                                                        "capabilities",
-                                                                        StringArgumentType.string()
-                                                                )
-                                                                .executes(context -> terminalRegister(
-                                                                        context,
-                                                                        runtimeResolver,
-                                                                        false
-                                                                ))
-                                                                .then(Commands.argument(
-                                                                                "secure",
-                                                                                BoolArgumentType.bool()
-                                                                        )
-                                                                        .executes(context -> terminalRegister(
-                                                                                context,
-                                                                                runtimeResolver,
-                                                                                BoolArgumentType
-                                                                                        .getBool(
-                                                                                                context,
-                                                                                                "secure"
-                                                                                        )
-                                                                        )))))))));
+                        .then(Commands.argument("zoneId", StringArgumentType.string())
+                                .executes(context -> zoneSuspend(context, runtimeResolver))))
+                .then(Commands.literal("activate")
+                        .then(Commands.argument("zoneId", StringArgumentType.string())
+                                .executes(context -> zoneActivate(context, runtimeResolver))));
     }
 
     // ------------------------------------------------------------------
@@ -304,12 +280,9 @@ public final class InstitutionAdminCommand {
         }
         try {
             FacilityReceipt receipt = service.get().relocateFacility(
-                    actor,
-                    facilityId,
-                    parcelId
+                    actor, facilityId, parcelId
             );
-            return reportFacility(source, "relocated onto parcel "
-                    + receipt.facility().parcelId(), receipt);
+            return reportFacility(source, "relocated", receipt);
         } catch (InstitutionAccessUnavailableException failure) {
             return reject(source, "Facility relocation", failure);
         } catch (RuntimeException failure) {
@@ -334,13 +307,12 @@ public final class InstitutionAdminCommand {
     }
 
     // ------------------------------------------------------------------
-    // terminal subcommands
+    // zone subcommands
     // ------------------------------------------------------------------
 
-    private static int terminalRegister(
+    private static int zoneAdd(
             CommandContext<CommandSourceStack> context,
-            CommandRuntimeResolver runtimeResolver,
-            boolean secure
+            CommandRuntimeResolver runtimeResolver
     ) {
         CommandSourceStack source = context.getSource();
         FacilityId facilityId = parseFacilityId(source,
@@ -348,10 +320,15 @@ public final class InstitutionAdminCommand {
         if (facilityId == null) {
             return CommandFeedback.FAILURE;
         }
-        String dimension = StringArgumentType.getString(context, "dimension");
-        int x = IntegerArgumentType.getInteger(context, "x");
-        int y = IntegerArgumentType.getInteger(context, "y");
-        int z = IntegerArgumentType.getInteger(context, "z");
+        ZoneKind kind = parseZoneKind(source,
+                StringArgumentType.getString(context, "kind"));
+        if (kind == null) {
+            return CommandFeedback.FAILURE;
+        }
+        ZoneRegion region = parseZoneRegion(source, context, "zone add");
+        if (region == null) {
+            return CommandFeedback.FAILURE;
+        }
         Set<CapabilityClass> capabilities = parseCapabilities(
                 source,
                 StringArgumentType.getString(context, "capabilities")
@@ -359,7 +336,6 @@ public final class InstitutionAdminCommand {
         if (capabilities == null) {
             return CommandFeedback.FAILURE;
         }
-
         Optional<InstitutionAccessService> service = service(runtimeResolver);
         if (service.isEmpty()) {
             return unavailableRuntime(source);
@@ -368,49 +344,35 @@ public final class InstitutionAdminCommand {
         if (actor == null) {
             return CommandFeedback.FAILURE;
         }
-        TerminalPosition position;
         try {
-            position = new TerminalPosition(dimension, x, y, z);
-        } catch (IllegalArgumentException invalid) {
-            return CommandFeedback.failure(
-                    source,
-                    "Terminal registration rejected: dimension must be a canonical "
-                            + "resource location."
-            );
-        }
-        try {
-            TerminalReceipt receipt = service.get().registerTerminal(
+            ZoneReceipt receipt = service.get().addZone(
                     actor,
-                    new TerminalRegistrationRequest(
-                            facilityId,
-                            position,
-                            capabilities,
-                            secure
+                    new ZoneRegistrationRequest(
+                            facilityId, kind, region, capabilities
                     )
             );
             return CommandFeedback.success(
                     source,
-                    "Terminal " + receipt.terminal().terminalId()
-                            + " registered on facility " + facilityId
-                            + " (state=" + receipt.terminal().state()
-                            + ", revision=" + receipt.terminal().terminalRevision()
-                            + ", secure=" + receipt.terminal().secure() + ")."
+                    "Zone " + receipt.zone().zoneId() + " added to facility "
+                            + facilityId + " (kind=" + receipt.zone().kind()
+                            + ", state=" + receipt.zone().state()
+                            + ", revision=" + receipt.zone().zoneRevision() + ")."
             );
         } catch (InstitutionAccessUnavailableException failure) {
-            return reject(source, "Terminal registration", failure);
+            return reject(source, "Zone add", failure);
         } catch (RuntimeException failure) {
-            return unexpected(source, "admin.institution.terminal.register", failure);
+            return unexpected(source, "admin.institution.zone.add", failure);
         }
     }
 
-    private static int terminalSuspend(
+    private static int zoneRemove(
             CommandContext<CommandSourceStack> context,
             CommandRuntimeResolver runtimeResolver
     ) {
         CommandSourceStack source = context.getSource();
-        TerminalId terminalId = parseTerminalId(source,
-                StringArgumentType.getString(context, "terminalId"));
-        if (terminalId == null) {
+        ZoneId zoneId = parseZoneId(source,
+                StringArgumentType.getString(context, "zoneId"));
+        if (zoneId == null) {
             return CommandFeedback.FAILURE;
         }
         Optional<InstitutionAccessService> service = service(runtimeResolver);
@@ -422,23 +384,30 @@ public final class InstitutionAdminCommand {
             return CommandFeedback.FAILURE;
         }
         try {
-            TerminalReceipt receipt = service.get().suspendTerminal(actor, terminalId);
-            return reportTerminal(source, "suspended", receipt);
+            service.get().removeZone(actor, zoneId);
+            return CommandFeedback.success(
+                    source,
+                    "Zone " + zoneId + " removed."
+            );
         } catch (InstitutionAccessUnavailableException failure) {
-            return reject(source, "Terminal suspension", failure);
+            return reject(source, "Zone removal", failure);
         } catch (RuntimeException failure) {
-            return unexpected(source, "admin.institution.terminal.suspend", failure);
+            return unexpected(source, "admin.institution.zone.remove", failure);
         }
     }
 
-    private static int terminalDisable(
+    private static int zoneResize(
             CommandContext<CommandSourceStack> context,
             CommandRuntimeResolver runtimeResolver
     ) {
         CommandSourceStack source = context.getSource();
-        TerminalId terminalId = parseTerminalId(source,
-                StringArgumentType.getString(context, "terminalId"));
-        if (terminalId == null) {
+        ZoneId zoneId = parseZoneId(source,
+                StringArgumentType.getString(context, "zoneId"));
+        if (zoneId == null) {
+            return CommandFeedback.FAILURE;
+        }
+        ZoneRegion region = parseZoneRegion(source, context, "zone resize");
+        if (region == null) {
             return CommandFeedback.FAILURE;
         }
         Optional<InstitutionAccessService> service = service(runtimeResolver);
@@ -450,13 +419,88 @@ public final class InstitutionAdminCommand {
             return CommandFeedback.FAILURE;
         }
         try {
-            TerminalReceipt receipt = service.get().disableTerminal(actor, terminalId);
-            return reportTerminal(source, "disabled", receipt);
+            ZoneReceipt receipt = service.get().resizeZone(actor, zoneId, region);
+            if (!receipt.applied()) {
+                return CommandFeedback.success(
+                        source,
+                        "Zone " + zoneId + " was already at that region; no change."
+                );
+            }
+            return reportZone(source, "resized", receipt);
         } catch (InstitutionAccessUnavailableException failure) {
-            return reject(source, "Terminal disable", failure);
+            return reject(source, "Zone resize", failure);
         } catch (RuntimeException failure) {
-            return unexpected(source, "admin.institution.terminal.disable", failure);
+            return unexpected(source, "admin.institution.zone.resize", failure);
         }
+    }
+
+    private static int zoneSetKind(
+            CommandContext<CommandSourceStack> context,
+            CommandRuntimeResolver runtimeResolver
+    ) {
+        CommandSourceStack source = context.getSource();
+        ZoneId zoneId = parseZoneId(source,
+                StringArgumentType.getString(context, "zoneId"));
+        if (zoneId == null) {
+            return CommandFeedback.FAILURE;
+        }
+        ZoneKind kind = parseZoneKind(source,
+                StringArgumentType.getString(context, "kind"));
+        if (kind == null) {
+            return CommandFeedback.FAILURE;
+        }
+        Optional<InstitutionAccessService> service = service(runtimeResolver);
+        if (service.isEmpty()) {
+            return unavailableRuntime(source);
+        }
+        UUID actor = requirePlayer(source);
+        if (actor == null) {
+            return CommandFeedback.FAILURE;
+        }
+        try {
+            ZoneReceipt receipt = service.get().setZoneKind(actor, zoneId, kind);
+            if (!receipt.applied()) {
+                return CommandFeedback.success(
+                        source,
+                        "Zone " + zoneId + " was already " + kind + "; no change."
+                );
+            }
+            return reportZone(source, "re-kinded", receipt);
+        } catch (InstitutionAccessUnavailableException failure) {
+            return reject(source, "Zone kind change", failure);
+        } catch (RuntimeException failure) {
+            return unexpected(source, "admin.institution.zone.set-kind", failure);
+        }
+    }
+
+    private static int zoneSuspend(
+            CommandContext<CommandSourceStack> context,
+            CommandRuntimeResolver runtimeResolver
+    ) {
+        CommandSourceStack source = context.getSource();
+        ZoneId zoneId = parseZoneId(source,
+                StringArgumentType.getString(context, "zoneId"));
+        if (zoneId == null) {
+            return CommandFeedback.FAILURE;
+        }
+        return zoneStateChange(source, runtimeResolver, zoneId,
+                "admin.institution.zone.suspend", "suspended",
+                (service, actor) -> service.suspendZone(actor, zoneId));
+    }
+
+    private static int zoneActivate(
+            CommandContext<CommandSourceStack> context,
+            CommandRuntimeResolver runtimeResolver
+    ) {
+        CommandSourceStack source = context.getSource();
+        ZoneId zoneId = parseZoneId(source,
+                StringArgumentType.getString(context, "zoneId"));
+        if (zoneId == null) {
+            return CommandFeedback.FAILURE;
+        }
+        return zoneStateChange(source, runtimeResolver, zoneId,
+                "admin.institution.zone.activate", "activated",
+                (service, actor) -> service.activateZone(actor, zoneId));
     }
 
     // ------------------------------------------------------------------
@@ -465,6 +509,10 @@ public final class InstitutionAdminCommand {
 
     private interface FacilityMutation {
         FacilityReceipt apply(InstitutionAccessService service, UUID actor);
+    }
+
+    private interface ZoneMutation {
+        ZoneReceipt apply(InstitutionAccessService service, UUID actor);
     }
 
     private static int facilityStateChange(
@@ -500,6 +548,38 @@ public final class InstitutionAdminCommand {
         }
     }
 
+    private static int zoneStateChange(
+            CommandSourceStack source,
+            CommandRuntimeResolver runtimeResolver,
+            ZoneId zoneId,
+            String commandId,
+            String verb,
+            ZoneMutation mutation
+    ) {
+        Optional<InstitutionAccessService> service = service(runtimeResolver);
+        if (service.isEmpty()) {
+            return unavailableRuntime(source);
+        }
+        UUID actor = requirePlayer(source);
+        if (actor == null) {
+            return CommandFeedback.FAILURE;
+        }
+        try {
+            ZoneReceipt receipt = mutation.apply(service.get(), actor);
+            if (!receipt.applied()) {
+                return CommandFeedback.success(
+                        source,
+                        "Zone " + zoneId + " was already " + verb + "; no change."
+                );
+            }
+            return reportZone(source, verb, receipt);
+        } catch (InstitutionAccessUnavailableException failure) {
+            return reject(source, "Zone " + verb, failure);
+        } catch (RuntimeException failure) {
+            return unexpected(source, commandId, failure);
+        }
+    }
+
     private static int reportFacility(
             CommandSourceStack source,
             String verb,
@@ -514,16 +594,17 @@ public final class InstitutionAdminCommand {
         );
     }
 
-    private static int reportTerminal(
+    private static int reportZone(
             CommandSourceStack source,
             String verb,
-            TerminalReceipt receipt
+            ZoneReceipt receipt
     ) {
         return CommandFeedback.success(
                 source,
-                "Terminal " + receipt.terminal().terminalId() + " " + verb
-                        + " (state=" + receipt.terminal().state()
-                        + ", revision=" + receipt.terminal().terminalRevision() + ")."
+                "Zone " + receipt.zone().zoneId() + " " + verb
+                        + " (kind=" + receipt.zone().kind()
+                        + ", state=" + receipt.zone().state()
+                        + ", revision=" + receipt.zone().zoneRevision() + ")."
         );
     }
 
@@ -576,16 +657,59 @@ public final class InstitutionAdminCommand {
         return FacilityId.of(parsed);
     }
 
-    private static TerminalId parseTerminalId(CommandSourceStack source, String input) {
+    private static ZoneId parseZoneId(CommandSourceStack source, String input) {
         UUID parsed = parseCanonicalUuid(input);
         if (parsed == null) {
             CommandFeedback.failure(
                     source,
-                    "Rejected: terminalId must be a canonical UUID."
+                    "Rejected: zoneId must be a canonical UUID."
             );
             return null;
         }
-        return TerminalId.of(parsed);
+        return ZoneId.of(parsed);
+    }
+
+    private static ZoneKind parseZoneKind(CommandSourceStack source, String input) {
+        try {
+            return ZoneKind.valueOf(input.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException invalid) {
+            CommandFeedback.failure(
+                    source,
+                    "Rejected: kind must be one of PUBLIC, OFFICIAL, SECURE."
+            );
+            return null;
+        }
+    }
+
+    /**
+     * Parses the explicit bounded sub-region of a zone from operator-supplied
+     * coordinates (never hard-coded). The canonical dimension and the
+     * inclusive min/max block coordinates come from the command arguments;
+     * the service re-validates the region against the facility parcel and the
+     * small-size budget.
+     */
+    private static ZoneRegion parseZoneRegion(
+            CommandSourceStack source,
+            CommandContext<CommandSourceStack> context,
+            String action
+    ) {
+        String dimension = StringArgumentType.getString(context, "dimension");
+        int minX = IntegerArgumentType.getInteger(context, "minX");
+        int minY = IntegerArgumentType.getInteger(context, "minY");
+        int minZ = IntegerArgumentType.getInteger(context, "minZ");
+        int maxX = IntegerArgumentType.getInteger(context, "maxX");
+        int maxY = IntegerArgumentType.getInteger(context, "maxY");
+        int maxZ = IntegerArgumentType.getInteger(context, "maxZ");
+        try {
+            return new ZoneRegion(dimension, minX, minY, minZ, maxX, maxY, maxZ);
+        } catch (IllegalArgumentException invalid) {
+            CommandFeedback.failure(
+                    source,
+                    action + " rejected: dimension must be a canonical resource "
+                            + "location and min must not exceed max on any axis."
+            );
+            return null;
+        }
     }
 
     private static UUID parseCanonicalUuid(String input) {
@@ -655,16 +779,20 @@ public final class InstitutionAdminCommand {
                     "the facility is not ACTIVE.";
             case InstitutionAccessUnavailableException.CODE_INVALID_STATE_TRANSITION ->
                     "the requested state change is not permitted.";
-            case InstitutionAccessUnavailableException.CODE_TERMINAL_NOT_FOUND ->
-                    "the terminal does not exist.";
-            case InstitutionAccessUnavailableException.CODE_TERMINAL_NOT_ACTIVE ->
-                    "the terminal is not ACTIVE.";
-            case InstitutionAccessUnavailableException.CODE_TERMINAL_OUTSIDE_REGION ->
-                    "the terminal position is outside the facility parcel region.";
+            case InstitutionAccessUnavailableException.CODE_ZONE_NOT_FOUND ->
+                    "the zone does not exist.";
+            case InstitutionAccessUnavailableException.CODE_ZONE_NOT_ACTIVE ->
+                    "the zone is not ACTIVE.";
+            case InstitutionAccessUnavailableException.CODE_ZONE_OUTSIDE_REGION ->
+                    "the zone region is outside the facility parcel region.";
+            case InstitutionAccessUnavailableException.CODE_ZONE_SIZE_EXCEEDED ->
+                    "the zone region exceeds the small-size budget.";
             case InstitutionAccessUnavailableException.CODE_INSTITUTION_MISMATCH ->
                     "the institution type does not match the facility.";
+            case InstitutionAccessUnavailableException.CODE_KIND_CAPABILITY_MISMATCH ->
+                    "the capability set does not match the zone kind.";
             case InstitutionAccessUnavailableException.CODE_CAPABILITY_NOT_ALLOWED ->
-                    "the terminal does not allow the requested capability.";
+                    "the zone does not allow the requested capability.";
             case InstitutionAccessUnavailableException.CODE_PLAYER_NOT_PROVISIONED,
                  InstitutionAccessUnavailableException.CODE_INVALID_HOLDER,
                  InstitutionAccessUnavailableException.CODE_HOLDER_DIRECTORY_UNAVAILABLE ->

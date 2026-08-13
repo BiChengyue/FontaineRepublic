@@ -7,7 +7,7 @@ import com.fontainerepublic.server.economy.persistence.EconomyUnavailableExcepti
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.institutionaccess.api.OnSiteContext;
 import com.fontainerepublic.server.institutionaccess.model.CapabilityClass;
-import com.fontainerepublic.server.institutionaccess.model.TerminalId;
+import com.fontainerepublic.server.institutionaccess.model.ZoneId;
 import com.fontainerepublic.server.institutionaccess.persistence.InstitutionAccessUnavailableException;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -30,15 +30,15 @@ import java.util.UUID;
  * treasury total and the on-site official duties deposit / withdraw /
  * freeze / unfreeze. Every official mutation is gated on a fresh
  * {@code ONSITE_OFFICIAL_DUTY} on-site context issued from a registered
- * central-bank terminal; the economy service revalidates the context at its
+ * central-bank zone; the economy service revalidates the context at its
  * final mutation boundary. OP permission alone is never sufficient.
  *
  * <pre>
  * /fr bank balance
- * /fr bank deposit &lt;target&gt; &lt;amount&gt; &lt;terminalId&gt; [reason]
- * /fr bank withdraw &lt;target&gt; &lt;amount&gt; &lt;terminalId&gt; [reason]
- * /fr bank freeze &lt;target&gt; &lt;terminalId&gt; [reason]
- * /fr bank unfreeze &lt;target&gt; &lt;terminalId&gt; [reason]
+ * /fr bank deposit &lt;target&gt; &lt;amount&gt; &lt;zoneId&gt; [reason]
+ * /fr bank withdraw &lt;target&gt; &lt;amount&gt; &lt;zoneId&gt; [reason]
+ * /fr bank freeze &lt;target&gt; &lt;zoneId&gt; [reason]
+ * /fr bank unfreeze &lt;target&gt; &lt;zoneId&gt; [reason]
  * </pre>
  *
  * The target accepts a canonical UUID, a registry number, or an exact game
@@ -69,26 +69,26 @@ public final class BankCommand {
                                 runtimeResolver
                         )))
                 .then(Commands.literal("deposit")
-                        .then(targetAmountTerminal(runtimeResolver, "deposit")))
+                        .then(targetAmountZone(runtimeResolver, "deposit")))
                 .then(Commands.literal("withdraw")
-                        .then(targetAmountTerminal(runtimeResolver, "withdraw")))
+                        .then(targetAmountZone(runtimeResolver, "withdraw")))
                 .then(Commands.literal("freeze")
-                        .then(targetTerminal(runtimeResolver, "freeze")))
+                        .then(targetZone(runtimeResolver, "freeze")))
                 .then(Commands.literal("unfreeze")
-                        .then(targetTerminal(runtimeResolver, "unfreeze")));
+                        .then(targetZone(runtimeResolver, "unfreeze")));
     }
 
     /**
      * Shared subtree for deposit/withdraw:
-     * {@code <target> <amount> <terminalId> [reason]}.
+     * {@code <target> <amount> <zoneId> [reason]}.
      */
-    private static RequiredArgumentBuilder<CommandSourceStack, String> targetAmountTerminal(
+    private static RequiredArgumentBuilder<CommandSourceStack, String> targetAmountZone(
             CommandRuntimeResolver runtimeResolver,
             String action
     ) {
         return Commands.argument("target", StringArgumentType.string())
                 .then(Commands.argument("amount", LongArgumentType.longArg(1))
-                        .then(Commands.argument("terminalId", StringArgumentType.string())
+                        .then(Commands.argument("zoneId", StringArgumentType.string())
                                 .executes(context -> amountDuty(
                                         context,
                                         runtimeResolver,
@@ -111,14 +111,14 @@ public final class BankCommand {
 
     /**
      * Shared subtree for freeze/unfreeze:
-     * {@code <target> <terminalId> [reason]}.
+     * {@code <target> <zoneId> [reason]}.
      */
-    private static RequiredArgumentBuilder<CommandSourceStack, String> targetTerminal(
+    private static RequiredArgumentBuilder<CommandSourceStack, String> targetZone(
             CommandRuntimeResolver runtimeResolver,
             String action
     ) {
         return Commands.argument("target", StringArgumentType.string())
-                .then(Commands.argument("terminalId", StringArgumentType.string())
+                .then(Commands.argument("zoneId", StringArgumentType.string())
                         .executes(context -> stateDuty(
                                 context,
                                 runtimeResolver,
@@ -196,10 +196,10 @@ public final class BankCommand {
             return CommandFeedback.FAILURE;
         }
         long amount = LongArgumentType.getLong(context, "amount");
-        TerminalId terminalId = parseTerminalId(
-                source, StringArgumentType.getString(context, "terminalId")
+        ZoneId zoneId = parseZoneId(
+                source, StringArgumentType.getString(context, "zoneId")
         );
-        if (terminalId == null) {
+        if (zoneId == null) {
             return CommandFeedback.FAILURE;
         }
         Optional<InstitutionAccessService> access =
@@ -215,7 +215,7 @@ public final class BankCommand {
                     source,
                     access.get(),
                     actor,
-                    terminalId,
+                    zoneId,
                     CapabilityClass.ONSITE_OFFICIAL_DUTY
             );
             EconomyTransaction transaction;
@@ -277,10 +277,10 @@ public final class BankCommand {
         if (target == null) {
             return CommandFeedback.FAILURE;
         }
-        TerminalId terminalId = parseTerminalId(
-                source, StringArgumentType.getString(context, "terminalId")
+        ZoneId zoneId = parseZoneId(
+                source, StringArgumentType.getString(context, "zoneId")
         );
-        if (terminalId == null) {
+        if (zoneId == null) {
             return CommandFeedback.FAILURE;
         }
         Optional<InstitutionAccessService> access =
@@ -296,7 +296,7 @@ public final class BankCommand {
                     source,
                     access.get(),
                     actor,
-                    terminalId,
+                    zoneId,
                     CapabilityClass.ONSITE_OFFICIAL_DUTY
             );
             EconomyAccount updated;
@@ -379,15 +379,15 @@ public final class BankCommand {
         return player.getUUID();
     }
 
-    private static TerminalId parseTerminalId(
+    private static ZoneId parseZoneId(
             CommandSourceStack source,
             String input
     ) {
-        UUID parsed = parseCanonicalUuid(source, input, "terminalId");
+        UUID parsed = parseCanonicalUuid(source, input, "zoneId");
         if (parsed == null) {
             return null;
         }
-        return TerminalId.of(parsed);
+        return ZoneId.of(parsed);
     }
 
     private static UUID parseCanonicalUuid(
@@ -416,7 +416,7 @@ public final class BankCommand {
 
     /**
      * Issues a fresh {@code ONSITE_OFFICIAL_DUTY} context from the
-     * authoritative server player position at the given terminal
+     * authoritative server player position at the given zone
      * (FR-INST-001-A §6.3). The economy service revalidates this context at
      * its final mutation boundary.
      */
@@ -424,7 +424,7 @@ public final class BankCommand {
             CommandSourceStack source,
             InstitutionAccessService access,
             UUID playerId,
-            TerminalId terminalId,
+            ZoneId zoneId,
             CapabilityClass capability
     ) {
         ServerPlayer player = source.getPlayer();
@@ -436,7 +436,7 @@ public final class BankCommand {
         }
         return access.issueOnSiteContext(
                 playerId,
-                terminalId,
+                zoneId,
                 capability,
                 player.level().dimension().location().toString(),
                 player.blockPosition().getX(),

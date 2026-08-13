@@ -5,10 +5,11 @@ import com.fontainerepublic.server.institutionaccess.model.Facility;
 import com.fontainerepublic.server.institutionaccess.model.FacilityId;
 import com.fontainerepublic.server.institutionaccess.model.FacilityState;
 import com.fontainerepublic.server.institutionaccess.model.InstitutionType;
-import com.fontainerepublic.server.institutionaccess.model.Terminal;
-import com.fontainerepublic.server.institutionaccess.model.TerminalId;
-import com.fontainerepublic.server.institutionaccess.model.TerminalPosition;
-import com.fontainerepublic.server.institutionaccess.model.TerminalState;
+import com.fontainerepublic.server.institutionaccess.model.Zone;
+import com.fontainerepublic.server.institutionaccess.model.ZoneId;
+import com.fontainerepublic.server.institutionaccess.model.ZoneKind;
+import com.fontainerepublic.server.institutionaccess.model.ZoneRegion;
+import com.fontainerepublic.server.institutionaccess.model.ZoneState;
 import com.fontainerepublic.server.land.model.ParcelId;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -29,22 +30,25 @@ import java.util.UUID;
 
 /**
  * Strict, versioned, deterministic NBT codec for the
- * {@code institution-access} namespace (FR-INST-002-A §3).
+ * {@code institution-access} namespace (FR-INST-002-B §2, store v2).
  *
- * <p>Encoding writes the facility and terminal collections in deterministic
+ * <p>Encoding writes the facility and zone collections in deterministic
  * lexical key order so the same immutable snapshot always produces an
  * equivalent ordered NBT. Decoding accepts only declared fields with exact
- * NBT types, canonical ids, valid enums/dimensions/positions, a non-empty
- * bounded capability set, the integrity digest matching the anchored
- * position, and consistent key/record ids. Unknown newer versions and any
- * inconsistency are rejected; nothing is ever auto-repaired.</p>
+ * NBT types, canonical ids, valid enums/dimensions/regions, a non-empty
+ * bounded capability set, and consistent key/record ids. Unknown newer
+ * versions and any inconsistency are rejected; a v1 store (the removed
+ * terminal model) fails closed with an explicit migration requirement —
+ * nothing is ever auto-repaired or silently dropped.</p>
  */
 public final class InstitutionAccessNbtCodec {
 
     private static final String STORE_VERSION = "StoreVersion";
     private static final String STORE_REVISION = "StoreRevision";
     private static final String FACILITIES = "Facilities";
-    private static final String TERMINALS = "Terminals";
+    private static final String ZONES = "Zones";
+    /** Legacy v1 collection key of the removed terminal model. */
+    private static final String LEGACY_TERMINALS = "Terminals";
 
     private static final String FACILITY_VERSION = "FacilityVersion";
     private static final String FACILITY_ID = "FacilityId";
@@ -53,36 +57,40 @@ public final class InstitutionAccessNbtCodec {
     private static final String STATE = "State";
     private static final String FACILITY_REVISION = "FacilityRevision";
 
-    private static final String TERMINAL_VERSION = "TerminalVersion";
-    private static final String TERMINAL_ID = "TerminalId";
-    private static final String POSITION = "Position";
+    private static final String ZONE_VERSION = "ZoneVersion";
+    private static final String ZONE_ID = "ZoneId";
+    private static final String KIND = "Kind";
+    private static final String REGION = "Region";
     private static final String CAPABILITIES = "Capabilities";
-    private static final String SECURE = "Secure";
-    private static final String INTEGRITY = "Integrity";
-    private static final String TERMINAL_REVISION = "TerminalRevision";
+    private static final String ZONE_REVISION = "ZoneRevision";
 
     private static final String DIMENSION = "Dimension";
-    private static final String X = "X";
-    private static final String Y = "Y";
-    private static final String Z = "Z";
+    private static final String MIN_X = "MinX";
+    private static final String MIN_Y = "MinY";
+    private static final String MIN_Z = "MinZ";
+    private static final String MAX_X = "MaxX";
+    private static final String MAX_Y = "MaxY";
+    private static final String MAX_Z = "MaxZ";
 
     /** Hard structural caps, independent of the configurable budget. */
     private static final int HARD_MAX_FACILITIES = 1_000;
-    private static final int HARD_MAX_TERMINALS = 10_000;
+    private static final int HARD_MAX_ZONES = 10_000;
     private static final int HARD_MAX_CAPABILITIES = 8;
 
     private static final Set<String> STORE_KEYS = Set.of(
-            STORE_VERSION, STORE_REVISION, FACILITIES, TERMINALS
+            STORE_VERSION, STORE_REVISION, FACILITIES, ZONES
     );
     private static final Set<String> FACILITY_KEYS = Set.of(
             FACILITY_VERSION, FACILITY_ID, INSTITUTION_TYPE, PARCEL_ID,
             STATE, FACILITY_REVISION
     );
-    private static final Set<String> TERMINAL_KEYS = Set.of(
-            TERMINAL_VERSION, TERMINAL_ID, FACILITY_ID, INSTITUTION_TYPE,
-            POSITION, CAPABILITIES, STATE, SECURE, INTEGRITY, TERMINAL_REVISION
+    private static final Set<String> ZONE_KEYS = Set.of(
+            ZONE_VERSION, ZONE_ID, FACILITY_ID, INSTITUTION_TYPE,
+            KIND, REGION, CAPABILITIES, STATE, ZONE_REVISION
     );
-    private static final Set<String> POSITION_KEYS = Set.of(DIMENSION, X, Y, Z);
+    private static final Set<String> REGION_KEYS = Set.of(
+            DIMENSION, MIN_X, MIN_Y, MIN_Z, MAX_X, MAX_Y, MAX_Z
+    );
 
     // ------------------------------------------------------------------
     // decode
@@ -99,12 +107,27 @@ public final class InstitutionAccessNbtCodec {
                     "institution-access namespace is empty; it must be a valid initialized store"
             );
         }
+        if (root.contains(STORE_VERSION, Tag.TAG_INT)
+                && root.getInt(STORE_VERSION) == 1) {
+            throw invalid(
+                    "institution-access v1 store (terminal model) detected; "
+                            + "an explicit migration is required before this "
+                            + "v2 zone-based store can load it"
+            );
+        }
+        if (root.contains(LEGACY_TERMINALS)) {
+            throw invalid(
+                    "institution-access store contains legacy v1 field '"
+                            + LEGACY_TERMINALS + "'; an explicit migration is "
+                            + "required before the v2 zone-based store can load it"
+            );
+        }
 
         requireOnlyKeys(root, STORE_KEYS, "institution-access");
         requireType(root, STORE_VERSION, Tag.TAG_INT, "institution-access");
         requireType(root, STORE_REVISION, Tag.TAG_LONG, "institution-access");
         requireType(root, FACILITIES, Tag.TAG_COMPOUND, "institution-access");
-        requireType(root, TERMINALS, Tag.TAG_COMPOUND, "institution-access");
+        requireType(root, ZONES, Tag.TAG_COMPOUND, "institution-access");
 
         int storeVersion = root.getInt(STORE_VERSION);
         if (storeVersion != InstitutionAccessStoreSnapshot.CURRENT_STORE_VERSION) {
@@ -118,8 +141,8 @@ public final class InstitutionAccessNbtCodec {
         Map<FacilityId, Facility> facilities = decodeFacilities(
                 root.getCompound(FACILITIES)
         );
-        Map<TerminalId, Terminal> terminals = decodeTerminals(
-                root.getCompound(TERMINALS),
+        Map<ZoneId, Zone> zones = decodeZones(
+                root.getCompound(ZONES),
                 facilities.keySet()
         );
 
@@ -127,7 +150,7 @@ public final class InstitutionAccessNbtCodec {
                 storeVersion,
                 storeRevision,
                 facilities,
-                terminals
+                zones
         );
     }
 
@@ -189,107 +212,112 @@ public final class InstitutionAccessNbtCodec {
         }
     }
 
-    private Map<TerminalId, Terminal> decodeTerminals(
+    private Map<ZoneId, Zone> decodeZones(
             CompoundTag tag,
             Set<FacilityId> knownFacilities
     ) {
-        if (tag.getAllKeys().size() > HARD_MAX_TERMINALS) {
-            throw invalid("Terminal count exceeds " + HARD_MAX_TERMINALS);
+        if (tag.getAllKeys().size() > HARD_MAX_ZONES) {
+            throw invalid("Zone count exceeds " + HARD_MAX_ZONES);
         }
-        Map<TerminalId, Terminal> terminals = new LinkedHashMap<>();
+        Map<ZoneId, Zone> zones = new LinkedHashMap<>();
         for (String key : tag.getAllKeys().stream().sorted().toList()) {
-            TerminalId terminalId = parseCanonicalTerminalId(key);
-            requireType(tag, key, Tag.TAG_COMPOUND, "Terminals");
-            Terminal terminal = decodeTerminal(tag.getCompound(key), terminalId);
-            if (!knownFacilities.contains(terminal.facilityId())) {
+            ZoneId zoneId = parseCanonicalZoneId(key);
+            requireType(tag, key, Tag.TAG_COMPOUND, "Zones");
+            Zone zone = decodeZone(tag.getCompound(key), zoneId);
+            if (!knownFacilities.contains(zone.facilityId())) {
                 throw invalid(
-                        "Terminal " + terminalId + " references unknown facility "
-                                + terminal.facilityId()
+                        "Zone " + zoneId + " references unknown facility "
+                                + zone.facilityId()
                 );
             }
-            if (terminals.put(terminalId, terminal) != null) {
-                throw invalid("Duplicate terminal id: " + terminalId);
+            if (zones.put(zoneId, zone) != null) {
+                throw invalid("Duplicate zone id: " + zoneId);
             }
         }
-        return terminals;
+        return zones;
     }
 
-    private Terminal decodeTerminal(CompoundTag tag, TerminalId expectedId) {
-        requireOnlyKeys(tag, TERMINAL_KEYS, "terminal " + expectedId);
-        requireType(tag, TERMINAL_VERSION, Tag.TAG_INT, "terminal " + expectedId);
-        requireType(tag, TERMINAL_ID, Tag.TAG_INT_ARRAY, "terminal " + expectedId);
-        requireType(tag, FACILITY_ID, Tag.TAG_INT_ARRAY, "terminal " + expectedId);
-        requireType(tag, INSTITUTION_TYPE, Tag.TAG_STRING, "terminal " + expectedId);
-        requireType(tag, POSITION, Tag.TAG_COMPOUND, "terminal " + expectedId);
-        requireType(tag, CAPABILITIES, Tag.TAG_LIST, "terminal " + expectedId);
-        requireType(tag, STATE, Tag.TAG_STRING, "terminal " + expectedId);
-        requireType(tag, SECURE, Tag.TAG_BYTE, "terminal " + expectedId);
-        requireType(tag, INTEGRITY, Tag.TAG_STRING, "terminal " + expectedId);
-        requireType(tag, TERMINAL_REVISION, Tag.TAG_LONG, "terminal " + expectedId);
+    private Zone decodeZone(CompoundTag tag, ZoneId expectedId) {
+        requireOnlyKeys(tag, ZONE_KEYS, "zone " + expectedId);
+        requireType(tag, ZONE_VERSION, Tag.TAG_INT, "zone " + expectedId);
+        requireType(tag, ZONE_ID, Tag.TAG_INT_ARRAY, "zone " + expectedId);
+        requireType(tag, FACILITY_ID, Tag.TAG_INT_ARRAY, "zone " + expectedId);
+        requireType(tag, INSTITUTION_TYPE, Tag.TAG_STRING, "zone " + expectedId);
+        requireType(tag, KIND, Tag.TAG_STRING, "zone " + expectedId);
+        requireType(tag, REGION, Tag.TAG_COMPOUND, "zone " + expectedId);
+        requireType(tag, CAPABILITIES, Tag.TAG_LIST, "zone " + expectedId);
+        requireType(tag, STATE, Tag.TAG_STRING, "zone " + expectedId);
+        requireType(tag, ZONE_REVISION, Tag.TAG_LONG, "zone " + expectedId);
 
-        int terminalVersion = tag.getInt(TERMINAL_VERSION);
-        if (terminalVersion != Terminal.CURRENT_SCHEMA_VERSION) {
+        int zoneVersion = tag.getInt(ZONE_VERSION);
+        if (zoneVersion != Zone.CURRENT_SCHEMA_VERSION) {
             throw invalid(
-                    "Unsupported terminal version for " + expectedId + ": "
-                            + terminalVersion
+                    "Unsupported zone version for " + expectedId + ": "
+                            + zoneVersion
             );
         }
-        TerminalId storedId = TerminalId.of(tag.getUUID(TERMINAL_ID));
+        ZoneId storedId = ZoneId.of(tag.getUUID(ZONE_ID));
         if (!expectedId.equals(storedId)) {
             throw invalid(
-                    "Terminals key " + expectedId + " does not match record terminalId "
+                    "Zones key " + expectedId + " does not match record zoneId "
                             + storedId
             );
         }
         try {
-            return new Terminal(
-                    terminalVersion,
+            return new Zone(
+                    zoneVersion,
                     expectedId,
                     FacilityId.of(tag.getUUID(FACILITY_ID)),
                     enumValue(InstitutionType.class, tag.getString(INSTITUTION_TYPE),
                             "InstitutionType for " + expectedId),
-                    decodePosition(tag.getCompound(POSITION), expectedId),
+                    enumValue(ZoneKind.class, tag.getString(KIND),
+                            "Kind for " + expectedId),
+                    decodeRegion(tag.getCompound(REGION), expectedId),
                     decodeCapabilities(tag.getList(CAPABILITIES, Tag.TAG_STRING),
                             expectedId),
-                    enumValue(TerminalState.class, tag.getString(STATE),
+                    enumValue(ZoneState.class, tag.getString(STATE),
                             "State for " + expectedId),
-                    tag.getBoolean(SECURE),
-                    tag.getString(INTEGRITY),
-                    tag.getLong(TERMINAL_REVISION)
+                    tag.getLong(ZONE_REVISION)
             );
         } catch (IllegalArgumentException failure) {
             throw invalid(
-                    "Invalid terminal " + expectedId + ": " + failure.getMessage(),
+                    "Invalid zone " + expectedId + ": " + failure.getMessage(),
                     failure
             );
         }
     }
 
-    private TerminalPosition decodePosition(CompoundTag tag, TerminalId terminalId) {
-        requireOnlyKeys(tag, POSITION_KEYS, "position of " + terminalId);
-        requireType(tag, DIMENSION, Tag.TAG_STRING, "position of " + terminalId);
-        requireType(tag, X, Tag.TAG_INT, "position of " + terminalId);
-        requireType(tag, Y, Tag.TAG_INT, "position of " + terminalId);
-        requireType(tag, Z, Tag.TAG_INT, "position of " + terminalId);
+    private ZoneRegion decodeRegion(CompoundTag tag, ZoneId zoneId) {
+        requireOnlyKeys(tag, REGION_KEYS, "region of " + zoneId);
+        requireType(tag, DIMENSION, Tag.TAG_STRING, "region of " + zoneId);
+        requireType(tag, MIN_X, Tag.TAG_INT, "region of " + zoneId);
+        requireType(tag, MIN_Y, Tag.TAG_INT, "region of " + zoneId);
+        requireType(tag, MIN_Z, Tag.TAG_INT, "region of " + zoneId);
+        requireType(tag, MAX_X, Tag.TAG_INT, "region of " + zoneId);
+        requireType(tag, MAX_Y, Tag.TAG_INT, "region of " + zoneId);
+        requireType(tag, MAX_Z, Tag.TAG_INT, "region of " + zoneId);
         try {
-            return new TerminalPosition(
+            return new ZoneRegion(
                     tag.getString(DIMENSION),
-                    tag.getInt(X),
-                    tag.getInt(Y),
-                    tag.getInt(Z)
+                    tag.getInt(MIN_X),
+                    tag.getInt(MIN_Y),
+                    tag.getInt(MIN_Z),
+                    tag.getInt(MAX_X),
+                    tag.getInt(MAX_Y),
+                    tag.getInt(MAX_Z)
             );
         } catch (IllegalArgumentException failure) {
             throw invalid(
-                    "Invalid position of " + terminalId + ": " + failure.getMessage(),
+                    "Invalid region of " + zoneId + ": " + failure.getMessage(),
                     failure
             );
         }
     }
 
-    private Set<CapabilityClass> decodeCapabilities(ListTag tag, TerminalId terminalId) {
+    private Set<CapabilityClass> decodeCapabilities(ListTag tag, ZoneId zoneId) {
         if (tag.size() > HARD_MAX_CAPABILITIES) {
             throw invalid(
-                    "Capability count of " + terminalId + " exceeds "
+                    "Capability count of " + zoneId + " exceeds "
                             + HARD_MAX_CAPABILITIES
             );
         }
@@ -298,7 +326,7 @@ public final class InstitutionAccessNbtCodec {
             capabilities.add(enumValue(
                     CapabilityClass.class,
                     tag.getString(i),
-                    "Capabilities of " + terminalId
+                    "Capabilities of " + zoneId
             ));
         }
         return capabilities;
@@ -309,9 +337,9 @@ public final class InstitutionAccessNbtCodec {
     // ------------------------------------------------------------------
 
     /**
-     * Encodes a validated snapshot deterministically: facilities and
-     * terminals are written in sorted lexical key order, capabilities in
-     * sorted enum order.
+     * Encodes a validated snapshot deterministically: facilities and zones
+     * are written in sorted lexical key order, capabilities in sorted enum
+     * order.
      */
     public CompoundTag encode(InstitutionAccessStoreSnapshot snapshot) {
         CompoundTag root = new CompoundTag();
@@ -330,17 +358,17 @@ public final class InstitutionAccessNbtCodec {
         );
         root.put(FACILITIES, facilitiesTag);
 
-        CompoundTag terminalsTag = new CompoundTag();
-        TreeMap<String, Terminal> orderedTerminals = new TreeMap<>();
-        snapshot.terminals().forEach(
-                (terminalId, terminal) -> orderedTerminals.put(
-                        terminalId.canonicalKey(), terminal
+        CompoundTag zonesTag = new CompoundTag();
+        TreeMap<String, Zone> orderedZones = new TreeMap<>();
+        snapshot.zones().forEach(
+                (zoneId, zone) -> orderedZones.put(
+                        zoneId.canonicalKey(), zone
                 )
         );
-        orderedTerminals.forEach(
-                (key, terminal) -> terminalsTag.put(key, encodeTerminal(terminal))
+        orderedZones.forEach(
+                (key, zone) -> zonesTag.put(key, encodeZone(zone))
         );
-        root.put(TERMINALS, terminalsTag);
+        root.put(ZONES, zonesTag);
         return root;
     }
 
@@ -355,27 +383,29 @@ public final class InstitutionAccessNbtCodec {
         return tag;
     }
 
-    private CompoundTag encodeTerminal(Terminal terminal) {
+    private CompoundTag encodeZone(Zone zone) {
         CompoundTag tag = new CompoundTag();
-        tag.putInt(TERMINAL_VERSION, terminal.schemaVersion());
-        tag.putUUID(TERMINAL_ID, terminal.terminalId().value());
-        tag.putUUID(FACILITY_ID, terminal.facilityId().value());
-        tag.putString(INSTITUTION_TYPE, terminal.institutionType().name());
-        tag.put(POSITION, encodePosition(terminal.position()));
-        tag.put(CAPABILITIES, encodeCapabilities(terminal.orderedCapabilities()));
-        tag.putString(STATE, terminal.state().name());
-        tag.putBoolean(SECURE, terminal.secure());
-        tag.putString(INTEGRITY, terminal.integrity());
-        tag.putLong(TERMINAL_REVISION, terminal.terminalRevision());
+        tag.putInt(ZONE_VERSION, zone.schemaVersion());
+        tag.putUUID(ZONE_ID, zone.zoneId().value());
+        tag.putUUID(FACILITY_ID, zone.facilityId().value());
+        tag.putString(INSTITUTION_TYPE, zone.institutionType().name());
+        tag.putString(KIND, zone.kind().name());
+        tag.put(REGION, encodeRegion(zone.region()));
+        tag.put(CAPABILITIES, encodeCapabilities(zone.orderedCapabilities()));
+        tag.putString(STATE, zone.state().name());
+        tag.putLong(ZONE_REVISION, zone.zoneRevision());
         return tag;
     }
 
-    private CompoundTag encodePosition(TerminalPosition position) {
+    private CompoundTag encodeRegion(ZoneRegion region) {
         CompoundTag tag = new CompoundTag();
-        tag.putString(DIMENSION, position.dimension());
-        tag.putInt(X, position.x());
-        tag.putInt(Y, position.y());
-        tag.putInt(Z, position.z());
+        tag.putString(DIMENSION, region.dimension());
+        tag.putInt(MIN_X, region.minX());
+        tag.putInt(MIN_Y, region.minY());
+        tag.putInt(MIN_Z, region.minZ());
+        tag.putInt(MAX_X, region.maxX());
+        tag.putInt(MAX_Y, region.maxY());
+        tag.putInt(MAX_Z, region.maxZ());
         return tag;
     }
 
@@ -418,15 +448,15 @@ public final class InstitutionAccessNbtCodec {
         }
     }
 
-    private TerminalId parseCanonicalTerminalId(String value) {
+    private ZoneId parseCanonicalZoneId(String value) {
         try {
             UUID parsed = UUID.fromString(value);
             if (!parsed.toString().equals(value.toLowerCase(Locale.ROOT))) {
-                throw invalid("Terminals key is not canonical: " + value);
+                throw invalid("Zones key is not canonical: " + value);
             }
-            return TerminalId.of(parsed);
+            return ZoneId.of(parsed);
         } catch (IllegalArgumentException failure) {
-            throw invalid("Invalid terminal key: " + value, failure);
+            throw invalid("Invalid zone key: " + value, failure);
         }
     }
 

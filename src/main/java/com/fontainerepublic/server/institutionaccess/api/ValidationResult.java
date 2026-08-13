@@ -24,9 +24,9 @@ public record ValidationResult(
     public static final String REASON_INVALIDATED = "INVALIDATED";
     public static final String REASON_FACILITY_NOT_ACTIVE = "FACILITY_NOT_ACTIVE";
     public static final String REASON_FACILITY_REVISION = "FACILITY_REVISION";
-    public static final String REASON_TERMINAL_NOT_ACTIVE = "TERMINAL_NOT_ACTIVE";
-    public static final String REASON_TERMINAL_REVISION = "TERMINAL_REVISION";
-    public static final String REASON_TERMINAL_NOT_IN_REGION = "TERMINAL_NOT_IN_REGION";
+    public static final String REASON_ZONE_NOT_ACTIVE = "ZONE_NOT_ACTIVE";
+    public static final String REASON_ZONE_REVISION = "ZONE_REVISION";
+    public static final String REASON_ZONE_NOT_IN_REGION = "ZONE_NOT_IN_REGION";
     public static final String REASON_PLAYER_OUT_OF_RANGE = "PLAYER_OUT_OF_RANGE";
     public static final String REASON_DIMENSION_MISMATCH = "DIMENSION_MISMATCH";
 
