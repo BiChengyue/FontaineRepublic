@@ -40,6 +40,27 @@ public class ConfigManager {
     /** Default server-owned transfer cooldown in milliseconds. */
     public static final int DEFAULT_ECONOMY_TRANSFER_COOLDOWN_MILLIS = 1000;
 
+    /** Default public workflow terminal distance in blocks (FR-INST-001-B §3.1). */
+    public static final int DEFAULT_INSTITUTION_PUBLIC_DISTANCE_BLOCKS = 6;
+
+    /** Default public workflow context lifetime in milliseconds (2 minutes). */
+    public static final long DEFAULT_INSTITUTION_PUBLIC_CONTEXT_LIFETIME_MILLIS = 120_000L;
+
+    /** Default official routine idle timeout in milliseconds (10 minutes). */
+    public static final long DEFAULT_INSTITUTION_OFFICIAL_IDLE_TIMEOUT_MILLIS = 600_000L;
+
+    /** Default official routine hard session limit in milliseconds (60 minutes). */
+    public static final long DEFAULT_INSTITUTION_OFFICIAL_HARD_LIMIT_MILLIS = 3_600_000L;
+
+    /** Default high-risk workflow terminal distance in blocks (FR-INST-001-B §3.3). */
+    public static final int DEFAULT_INSTITUTION_HIGH_RISK_DISTANCE_BLOCKS = 6;
+
+    /** Default high-risk single-use authorization lifetime in milliseconds (30 seconds). */
+    public static final long DEFAULT_INSTITUTION_HIGH_RISK_LIFETIME_MILLIS = 30_000L;
+
+    /** Default bounded presence-check interval in ticks (1 second at 20 TPS). */
+    public static final int DEFAULT_INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS = 20;
+
     private static final ForgeConfigSpec.IntValue COMMIT_MIN_INTERVAL_MILLIS;
     private static final ForgeConfigSpec.IntValue COMMIT_MAX_BYTES_PER_NAMESPACE;
 
@@ -52,6 +73,14 @@ public class ConfigManager {
     private static final ForgeConfigSpec.ConfigValue<String> ECONOMY_CURRENCY_SYMBOL;
     private static final ForgeConfigSpec.BooleanValue ECONOMY_CURRENCY_GROUPING;
     private static final ForgeConfigSpec.IntValue ECONOMY_TRANSFER_COOLDOWN_MILLIS;
+
+    private static final ForgeConfigSpec.IntValue INSTITUTION_PUBLIC_DISTANCE_BLOCKS;
+    private static final ForgeConfigSpec.LongValue INSTITUTION_PUBLIC_CONTEXT_LIFETIME_MILLIS;
+    private static final ForgeConfigSpec.LongValue INSTITUTION_OFFICIAL_IDLE_TIMEOUT_MILLIS;
+    private static final ForgeConfigSpec.LongValue INSTITUTION_OFFICIAL_HARD_LIMIT_MILLIS;
+    private static final ForgeConfigSpec.IntValue INSTITUTION_HIGH_RISK_DISTANCE_BLOCKS;
+    private static final ForgeConfigSpec.LongValue INSTITUTION_HIGH_RISK_LIFETIME_MILLIS;
+    private static final ForgeConfigSpec.IntValue INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS;
 
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -151,6 +180,90 @@ public class ConfigManager {
                         DEFAULT_ECONOMY_TRANSFER_COOLDOWN_MILLIS,
                         0,
                         60_000
+                );
+        builder.pop();
+
+        builder.comment(
+                "FR-INST-002 shared institution access workflow parameters "
+                        + "(FR-INST-001-B §3). The final mutation-time "
+                        + "revalidation has no switch and cannot be disabled."
+        ).push("institution");
+        INSTITUTION_PUBLIC_DISTANCE_BLOCKS = builder
+                .comment(
+                        "Public workflow terminal distance in blocks. "
+                                + "Range [1, 256]."
+                )
+                .defineInRange(
+                        "publicDistanceBlocks",
+                        DEFAULT_INSTITUTION_PUBLIC_DISTANCE_BLOCKS,
+                        1,
+                        256
+                );
+        INSTITUTION_PUBLIC_CONTEXT_LIFETIME_MILLIS = builder
+                .comment(
+                        "Public workflow context maximum lifetime in "
+                                + "milliseconds. Range [1000, 3600000]."
+                )
+                .defineInRange(
+                        "publicContextLifetimeMillis",
+                        DEFAULT_INSTITUTION_PUBLIC_CONTEXT_LIFETIME_MILLIS,
+                        1_000,
+                        3_600_000
+                );
+        INSTITUTION_OFFICIAL_IDLE_TIMEOUT_MILLIS = builder
+                .comment(
+                        "Official routine idle timeout in milliseconds. "
+                                + "Range [1000, 3600000]."
+                )
+                .defineInRange(
+                        "officialIdleTimeoutMillis",
+                        DEFAULT_INSTITUTION_OFFICIAL_IDLE_TIMEOUT_MILLIS,
+                        1_000,
+                        3_600_000
+                );
+        INSTITUTION_OFFICIAL_HARD_LIMIT_MILLIS = builder
+                .comment(
+                        "Official routine hard session limit in milliseconds. "
+                                + "Range [60000, 86400000]."
+                )
+                .defineInRange(
+                        "officialHardLimitMillis",
+                        DEFAULT_INSTITUTION_OFFICIAL_HARD_LIMIT_MILLIS,
+                        60_000,
+                        86_400_000
+                );
+        INSTITUTION_HIGH_RISK_DISTANCE_BLOCKS = builder
+                .comment(
+                        "High-risk workflow terminal distance in blocks. "
+                                + "Range [1, 256]."
+                )
+                .defineInRange(
+                        "highRiskDistanceBlocks",
+                        DEFAULT_INSTITUTION_HIGH_RISK_DISTANCE_BLOCKS,
+                        1,
+                        256
+                );
+        INSTITUTION_HIGH_RISK_LIFETIME_MILLIS = builder
+                .comment(
+                        "High-risk single-use authorization lifetime in "
+                                + "milliseconds. Range [1000, 600000]."
+                )
+                .defineInRange(
+                        "highRiskLifetimeMillis",
+                        DEFAULT_INSTITUTION_HIGH_RISK_LIFETIME_MILLIS,
+                        1_000,
+                        600_000
+                );
+        INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS = builder
+                .comment(
+                        "Bounded presence-check interval in ticks (20 ticks = "
+                                + "1 second at 20 TPS). Range [1, 200]."
+                )
+                .defineInRange(
+                        "presenceCheckIntervalTicks",
+                        DEFAULT_INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS,
+                        1,
+                        200
                 );
         builder.pop();
         SPEC = builder.build();
@@ -264,6 +377,75 @@ public class ConfigManager {
             return ECONOMY_TRANSFER_COOLDOWN_MILLIS.get();
         } catch (IllegalStateException notLoaded) {
             return DEFAULT_ECONOMY_TRANSFER_COOLDOWN_MILLIS;
+        }
+    }
+
+    /**
+     * Configured public workflow terminal distance; falls back to the default
+     * when the config is not loaded yet.
+     */
+    public static int institutionPublicDistanceBlocks() {
+        try {
+            return INSTITUTION_PUBLIC_DISTANCE_BLOCKS.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_INSTITUTION_PUBLIC_DISTANCE_BLOCKS;
+        }
+    }
+
+    /** Configured public workflow context lifetime; falls back to the default. */
+    public static long institutionPublicContextLifetimeMillis() {
+        try {
+            return INSTITUTION_PUBLIC_CONTEXT_LIFETIME_MILLIS.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_INSTITUTION_PUBLIC_CONTEXT_LIFETIME_MILLIS;
+        }
+    }
+
+    /** Configured official routine idle timeout; falls back to the default. */
+    public static long institutionOfficialIdleTimeoutMillis() {
+        try {
+            return INSTITUTION_OFFICIAL_IDLE_TIMEOUT_MILLIS.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_INSTITUTION_OFFICIAL_IDLE_TIMEOUT_MILLIS;
+        }
+    }
+
+    /** Configured official routine hard session limit; falls back to the default. */
+    public static long institutionOfficialHardLimitMillis() {
+        try {
+            return INSTITUTION_OFFICIAL_HARD_LIMIT_MILLIS.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_INSTITUTION_OFFICIAL_HARD_LIMIT_MILLIS;
+        }
+    }
+
+    /** Configured high-risk workflow terminal distance; falls back to the default. */
+    public static int institutionHighRiskDistanceBlocks() {
+        try {
+            return INSTITUTION_HIGH_RISK_DISTANCE_BLOCKS.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_INSTITUTION_HIGH_RISK_DISTANCE_BLOCKS;
+        }
+    }
+
+    /** Configured high-risk authorization lifetime; falls back to the default. */
+    public static long institutionHighRiskLifetimeMillis() {
+        try {
+            return INSTITUTION_HIGH_RISK_LIFETIME_MILLIS.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_INSTITUTION_HIGH_RISK_LIFETIME_MILLIS;
+        }
+    }
+
+    /**
+     * Configured bounded presence-check interval; falls back to the default
+     * when the config is not loaded yet.
+     */
+    public static int institutionPresenceCheckIntervalTicks() {
+        try {
+            return INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS;
         }
     }
 }

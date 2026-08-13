@@ -14,12 +14,15 @@ import com.fontainerepublic.server.command.MoneyCommand;
 import com.fontainerepublic.server.command.registration.CommandContributionRegistry;
 import com.fontainerepublic.server.command.registration.CommandContributionSpec;
 import com.fontainerepublic.server.audit.AuditModule;
+import com.fontainerepublic.server.audit.api.AuditService;
 import com.fontainerepublic.server.citizen.CitizenModule;
 import com.fontainerepublic.server.citizen.api.CitizenService;
 import com.fontainerepublic.server.economy.EconomyModule;
 import com.fontainerepublic.server.economy.api.EconomyService;
+import com.fontainerepublic.server.institutionaccess.InstitutionAccessModule;
 import com.fontainerepublic.server.login.LoginProvisioningHook;
 import com.fontainerepublic.server.land.LandModule;
+import com.fontainerepublic.server.land.api.LandService;
 import com.fontainerepublic.server.network.NetworkRuntimeModule;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
@@ -80,6 +83,7 @@ public class FontaineRepublic {
         CitizenModule.register(coreManager.moduleRegistry());
         LandModule.register(coreManager.moduleRegistry());
         EconomyModule.register(coreManager.moduleRegistry());
+        InstitutionAccessModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
             TestModule.registerAll(coreManager.moduleRegistry());
             LOGGER.warn(
@@ -114,6 +118,7 @@ public class FontaineRepublic {
         bindCitizenServices();
         bindLandServices();
         bindEconomyServices();
+        bindInstitutionAccessServices();
         if (runtimeValidationEnabled) {
             TestModule.logAvailability(coreManager);
         }
@@ -179,6 +184,47 @@ public class FontaineRepublic {
                 .filter(EconomyModule.class::isInstance)
                 .map(EconomyModule.class::cast)
                 .ifPresent(module -> module.bindServices(playerData, subjectRegistry));
+    }
+
+    /**
+     * Binds the authoritative PlayerData, subject-registry, land, and audit
+     * services to the institution-access module after the runtime start
+     * (dependency order is guaranteed by module resolution, but the service
+     * references are only resolvable once containers exist).
+     */
+    private void bindInstitutionAccessServices() {
+        PlayerDataService playerData = playerDataService().orElse(null);
+        SubjectRegistryService subjectRegistry = subjectRegistryService().orElse(null);
+        LandService land = landService().orElse(null);
+        AuditService audit = auditService().orElse(null);
+        coreManager.getRuntimeContainer(InstitutionAccessModule.MODULE_ID)
+                .flatMap(container -> container.instance())
+                .filter(InstitutionAccessModule.class::isInstance)
+                .map(InstitutionAccessModule.class::cast)
+                .ifPresent(module -> module.bindServices(
+                        playerData,
+                        subjectRegistry,
+                        land,
+                        audit
+                ));
+    }
+
+    private java.util.Optional<LandService> landService() {
+        return coreManager.getRuntimeContainer(LandModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(LandModule.class::isInstance)
+                .map(LandModule.class::cast)
+                .map(LandModule::service);
+    }
+
+    private java.util.Optional<AuditService> auditService() {
+        return coreManager.getRuntimeContainer(AuditModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(AuditModule.class::isInstance)
+                .map(AuditModule.class::cast)
+                .map(AuditModule::service);
     }
 
     private java.util.Optional<SubjectRegistryService> subjectRegistryService() {
