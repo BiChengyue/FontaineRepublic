@@ -381,3 +381,12 @@
   审计、测试计划）——默认值确认后即可一键派发。
 - develop 全量集成构建通过（BUILD SUCCESSFUL，24 任务，18 模块全绿）。
 - 等待 Human：①央行 4 项默认值确认；②杂物清理分组批准；③Level 3 客户端核验。
+
+## 2026-08-13 | Human"都按建议" + 清理 + 央行派发
+
+- Human 确认：央行 4 项默认值按建议；清理按建议清单执行。
+- 清理完成：删除 10 个推荐目录（.deploy-bundle/.fix-mirror/.pnpm-store/.tmp-t39b-tests/
+  firefly-plan-stage/rotation-stage/deepseek-worktrees 下 4 个 firefly 子目录）；
+  保留项完好（credential-stage 按建议未动）。
+- 央行默认值已确认（纯账目/国库总额公开+明细受限/单次上下文/余额仅本人），
+  派发 FR-ECO-002-IMPL（wave fr-eco-002-20260813）。

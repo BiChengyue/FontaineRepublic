@@ -114,6 +114,12 @@ final phase per Human directive.
 5. Client UI mod start signal;
 6. Workspace stray-directory cleanup confirmation.
 
+Resolved 2026-08-13 ("都按建议"): legacy save = fresh world; push = done;
+Central Bank defaults = all four proposals confirmed (pure ledger / public
+treasury total with restricted details / single-use on-site context / own
+balance only); Parliament extensions = deferred; client mod = final phase;
+cleanup = approved set removed (credential-stage kept).
+
 ## Next Task
 
 Human directives (2026-08-13): after feature development completes, provide
