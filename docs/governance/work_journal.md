@@ -428,3 +428,13 @@
 - 产出 FR-PAR-002-A 议会扩展设计（守护审阅/公投/修宪，门槛按宪法第 13-15 条）
   并派发 FR-PAR-002-IMPL（wave fr-par-002-20260814）。
 - 剩余服务端暂停任务：FR-EMG 紧急动作（待议会扩展后）。
+
+## 2026-08-14 | 议会扩展交付 + FR-EMG 派发
+
+- 议会扩展子进程完成（24 文件 +6341：守护审阅 72h/7d、组织法无否决、水神回避、
+  法院时限 14d+7d（仅状态推进）、override 重投、公投门槛、修宪流水线、
+  双通道验证、命令树），提交 `32f7d64`。
+- Reviewer 独立复跑 legislativeExtensionsFoundationTest（ALL PASSED）+
+  parliamentFoundationTest（无回归）+ 完整构建全绿；审查报告 FR-PAR-002-REVIEW-01
+  （验收 10/11 PASS）；并入 develop（`1769c10`）。
+- 派发 FR-EMG-001-IMPL（wave fr-emg-001-20260814）——服务端暂停任务最后一环。
