@@ -7,6 +7,7 @@ import com.fontainerepublic.core.module.ModuleRegistry;
 import com.fontainerepublic.core.module.runtime.ModuleState;
 import com.fontainerepublic.core.module.test.TestModule;
 import com.fontainerepublic.common.network.NetworkBootstrap;
+import com.fontainerepublic.server.command.BankCommand;
 import com.fontainerepublic.server.command.CitizenCommand;
 import com.fontainerepublic.server.command.CommandBootstrap;
 import com.fontainerepublic.server.command.CommandRuntimeResolver;
@@ -110,6 +111,10 @@ public class FontaineRepublic {
                 MoneyCommand::create
         ));
         commandContributionRegistry.register(new CommandContributionSpec(
+                "bank",
+                BankCommand::create
+        ));
+        commandContributionRegistry.register(new CommandContributionSpec(
                 "citizen",
                 CitizenCommand::create
         ));
@@ -143,8 +148,8 @@ public class FontaineRepublic {
         bindSubjectRegistryPlayerData();
         bindCitizenServices();
         bindLandServices();
-        bindEconomyServices();
         bindInstitutionAccessServices();
+        bindEconomyServices();
         bindGovernmentServices();
         bindParliamentServices();
         bindJusticeServices();
@@ -200,19 +205,27 @@ public class FontaineRepublic {
     }
 
     /**
-     * Binds the authoritative PlayerData and subject-registry services to the
-     * economy module after the runtime start (dependency order is guaranteed
-     * by module resolution, but the service references are only resolvable
-     * once containers exist).
+     * Binds the authoritative PlayerData, subject-registry, institution-access,
+     * and audit services to the economy module after the runtime start
+     * (dependency order is guaranteed by module resolution, but the service
+     * references are only resolvable once containers exist).
      */
     private void bindEconomyServices() {
         PlayerDataService playerData = playerDataService().orElse(null);
         SubjectRegistryService subjectRegistry = subjectRegistryService().orElse(null);
+        InstitutionAccessService institutionAccess =
+                institutionAccessService().orElse(null);
+        AuditService audit = auditService().orElse(null);
         coreManager.getRuntimeContainer(EconomyModule.MODULE_ID)
                 .flatMap(container -> container.instance())
                 .filter(EconomyModule.class::isInstance)
                 .map(EconomyModule.class::cast)
-                .ifPresent(module -> module.bindServices(playerData, subjectRegistry));
+                .ifPresent(module -> module.bindServices(
+                        playerData,
+                        subjectRegistry,
+                        institutionAccess,
+                        audit
+                ));
     }
 
     /**

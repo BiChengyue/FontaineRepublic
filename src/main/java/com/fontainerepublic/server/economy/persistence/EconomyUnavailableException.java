@@ -61,6 +61,27 @@ public final class EconomyUnavailableException extends RuntimeException {
     /** The durable store rejected the snapshot (not COMMITTED). */
     public static final String CODE_STORE_FAILURE = "STORE_FAILURE";
 
+    /**
+     * The mandatory final on-site revalidation of an official-duty context
+     * failed (FR-ECO-002-A §4): null context or any non-VALID outcome.
+     */
+    public static final String CODE_ON_SITE_CONTEXT_INVALID =
+            "ON_SITE_CONTEXT_INVALID";
+
+    /**
+     * The target account is frozen; every balance-changing mutation is
+     * rejected until the Central Bank unfreezes it (FR-ECO-002-A §4).
+     */
+    public static final String CODE_FROZEN = "FROZEN";
+
+    /**
+     * The treasury does not hold the requested amount; official issuance
+     * (deposit) draws on the treasury and fails closed when it is empty
+     * (FR-ECO-002-A §4: supply = sum(accounts) + treasury is conserved).
+     */
+    public static final String CODE_TREASURY_INSUFFICIENT =
+            "TREASURY_INSUFFICIENT";
+
     private final String failureCode;
 
     public EconomyUnavailableException(String failureCode, String message) {

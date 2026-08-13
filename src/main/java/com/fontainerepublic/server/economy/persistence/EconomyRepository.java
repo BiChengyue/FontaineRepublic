@@ -220,7 +220,8 @@ public final class EconomyRepository {
                 0L,
                 1L,
                 timestamp,
-                0L
+                0L,
+                false
         );
         LinkedHashMap<SubjectId, EconomyAccount> nextAccounts =
                 new LinkedHashMap<>(accounts);
@@ -310,7 +311,8 @@ public final class EconomyRepository {
                     0L,
                     1L,
                     timestamp,
-                    0L
+                    0L,
+                    false
             );
         }
         long newTargetBalance;
@@ -395,6 +397,288 @@ public final class EconomyRepository {
                 memo,
                 true
         );
+    }
+
+    /**
+     * Official central-bank issuance (FR-ECO-002-A §4): one replacement
+     * snapshot that credits the target personal account, debits the treasury
+     * by the same amount, and appends one {@code DEPOSIT} transaction
+     * ({@code from} is the system, hence {@code null}). Total supply
+     * {@code = sum(accounts) + treasury} is conserved exactly. The treasury
+     * must hold the amount; a frozen target is rejected. Stale expected
+     * revisions reject at the final boundary; nothing is published on
+     * failure. No pending notification is created for the recipient (official
+     * duty; the command surface reports the outcome).
+     */
+    public EconomyTransaction deposit(
+            SubjectId to,
+            long amount,
+            String memo,
+            long expectedToAccountRevision,
+            long expectedStoreRevision,
+            long timestamp
+    ) {
+        requireOwnerThread();
+        Objects.requireNonNull(to, "to");
+        if (amount <= 0) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "Amount must be positive"
+            );
+        }
+        if (expectedStoreRevision != storeRevision) {
+            throw stale("store");
+        }
+
+        EconomyAccount target = accounts.get(to);
+        if (target == null) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_NO_ACCOUNT,
+                    "No economy account for target subject " + to
+            );
+        }
+        if (target.accountRevision() != expectedToAccountRevision) {
+            throw stale("account " + to);
+        }
+        requireNotFrozen(target);
+        if (treasuryBalance < amount) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_TREASURY_INSUFFICIENT,
+                    "Treasury does not hold the requested amount"
+            );
+        }
+        if (nextTransactionId == Long.MAX_VALUE) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_CAPACITY_EXCEEDED,
+                    "Economy transaction id space exhausted"
+            );
+        }
+        requireStoreRevisionSpace();
+
+        long newBalance;
+        try {
+            newBalance = Math.addExact(target.balance(), amount);
+        } catch (ArithmeticException overflow) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Target balance would overflow"
+            );
+        }
+        if (newBalance > limits.maxBalance()) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Target balance would exceed the maximum of " + limits.maxBalance()
+            );
+        }
+
+        long newId = nextTransactionId;
+        EconomyAccount newTarget = target.withBalance(newBalance, newId);
+        EconomyTransaction transaction = new EconomyTransaction(
+                EconomyTransaction.CURRENT_SCHEMA_VERSION,
+                newId,
+                timestamp,
+                null,
+                to,
+                amount,
+                TransactionType.DEPOSIT,
+                memo
+        );
+
+        LinkedHashMap<SubjectId, EconomyAccount> nextAccounts =
+                new LinkedHashMap<>(accounts);
+        nextAccounts.put(to, newTarget);
+
+        LinkedHashMap<Long, EconomyTransaction> nextTransactions =
+                new LinkedHashMap<>(transactions);
+        nextTransactions.put(newId, transaction);
+        if (nextTransactions.size() > limits.maxTransactions()) {
+            Long oldest = nextTransactions.keySet().iterator().next();
+            nextTransactions.remove(oldest);
+        }
+
+        commitAndPublish(buildSnapshot(
+                storeRevision + 1,
+                newId + 1,
+                treasuryBalance - amount,
+                nextAccounts,
+                nextTransactions,
+                pendingNotifications
+        ));
+        return transaction;
+    }
+
+    /**
+     * Official central-bank withdrawal (FR-ECO-002-A §4): one replacement
+     * snapshot that debits the personal account, credits the treasury by the
+     * same amount, and appends one {@code WITHDRAWAL} transaction ({@code to}
+     * is the system, hence {@code null}). Total supply
+     * {@code = sum(accounts) + treasury} is conserved exactly. The source
+     * must hold the amount and must not be frozen. Stale expected revisions
+     * reject at the final boundary; nothing is published on failure.
+     */
+    public EconomyTransaction withdraw(
+            SubjectId from,
+            long amount,
+            String memo,
+            long expectedFromAccountRevision,
+            long expectedStoreRevision,
+            long timestamp
+    ) {
+        requireOwnerThread();
+        Objects.requireNonNull(from, "from");
+        if (amount <= 0) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "Amount must be positive"
+            );
+        }
+        if (expectedStoreRevision != storeRevision) {
+            throw stale("store");
+        }
+
+        EconomyAccount source = accounts.get(from);
+        if (source == null) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_NO_ACCOUNT,
+                    "No economy account for source subject " + from
+            );
+        }
+        if (source.accountRevision() != expectedFromAccountRevision) {
+            throw stale("account " + from);
+        }
+        requireNotFrozen(source);
+        if (source.balance() < amount) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_INSUFFICIENT_FUNDS,
+                    "Insufficient balance for subject " + from
+            );
+        }
+        if (nextTransactionId == Long.MAX_VALUE) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_CAPACITY_EXCEEDED,
+                    "Economy transaction id space exhausted"
+            );
+        }
+        requireStoreRevisionSpace();
+
+        long newTreasury;
+        try {
+            newTreasury = Math.addExact(treasuryBalance, amount);
+        } catch (ArithmeticException overflow) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Treasury balance would overflow"
+            );
+        }
+        if (newTreasury > limits.maxBalance()) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Treasury balance would exceed the maximum of " + limits.maxBalance()
+            );
+        }
+
+        long newId = nextTransactionId;
+        EconomyAccount newSource = source.withBalance(
+                source.balance() - amount,
+                newId
+        );
+        EconomyTransaction transaction = new EconomyTransaction(
+                EconomyTransaction.CURRENT_SCHEMA_VERSION,
+                newId,
+                timestamp,
+                from,
+                null,
+                amount,
+                TransactionType.WITHDRAWAL,
+                memo
+        );
+
+        LinkedHashMap<SubjectId, EconomyAccount> nextAccounts =
+                new LinkedHashMap<>(accounts);
+        nextAccounts.put(from, newSource);
+
+        LinkedHashMap<Long, EconomyTransaction> nextTransactions =
+                new LinkedHashMap<>(transactions);
+        nextTransactions.put(newId, transaction);
+        if (nextTransactions.size() > limits.maxTransactions()) {
+            Long oldest = nextTransactions.keySet().iterator().next();
+            nextTransactions.remove(oldest);
+        }
+
+        commitAndPublish(buildSnapshot(
+                storeRevision + 1,
+                newId + 1,
+                newTreasury,
+                nextAccounts,
+                nextTransactions,
+                pendingNotifications
+        ));
+        return transaction;
+    }
+
+    /**
+     * Official central-bank freeze/unfreeze (FR-ECO-002-A §4): flips the
+     * account freeze flag in one replacement snapshot with the account
+     * revision +1 exactly once. No balance, transaction, or notification
+     * changes. Freezing an already-frozen account (or unfreezing an unfrozen
+     * one) is rejected; stale expected revisions reject at the final
+     * boundary; nothing is published on failure.
+     */
+    public EconomyAccount setFrozen(
+            SubjectId subjectId,
+            boolean frozen,
+            long expectedAccountRevision,
+            long expectedStoreRevision
+    ) {
+        requireOwnerThread();
+        Objects.requireNonNull(subjectId, "subjectId");
+        if (expectedStoreRevision != storeRevision) {
+            throw stale("store");
+        }
+
+        EconomyAccount account = accounts.get(subjectId);
+        if (account == null) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_NO_ACCOUNT,
+                    "No economy account for subject " + subjectId
+            );
+        }
+        if (account.accountRevision() != expectedAccountRevision) {
+            throw stale("account " + subjectId);
+        }
+        if (account.frozen() == frozen) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_FROZEN,
+                    frozen
+                            ? "Account is already frozen"
+                            : "Account is not frozen"
+            );
+        }
+        requireStoreRevisionSpace();
+
+        EconomyAccount updated = account.withFrozen(frozen);
+        LinkedHashMap<SubjectId, EconomyAccount> nextAccounts =
+                new LinkedHashMap<>(accounts);
+        nextAccounts.put(subjectId, updated);
+
+        commitAndPublish(buildSnapshot(
+                storeRevision + 1,
+                nextTransactionId,
+                treasuryBalance,
+                nextAccounts,
+                transactions,
+                pendingNotifications
+        ));
+        return updated;
+    }
+
+    private void requireNotFrozen(EconomyAccount account) {
+        if (account.frozen()) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_FROZEN,
+                    "Account of subject " + account.subjectId() + " is frozen"
+            );
+        }
     }
 
     /**

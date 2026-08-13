@@ -11,9 +11,22 @@ import com.fontainerepublic.server.economy.model.NotificationSummary;
 import com.fontainerepublic.server.economy.persistence.EconomyLimits;
 import com.fontainerepublic.server.economy.persistence.EconomyRepository;
 import com.fontainerepublic.server.economy.persistence.EconomyUnavailableException;
+import com.fontainerepublic.server.audit.api.AuditDraft;
+import com.fontainerepublic.server.audit.api.AuditReceipt;
+import com.fontainerepublic.server.audit.api.AuditService;
+import com.fontainerepublic.server.audit.model.AuditActorType;
+import com.fontainerepublic.server.audit.model.AuditCategory;
+import com.fontainerepublic.server.audit.model.AuditClassification;
+import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
+import com.fontainerepublic.server.institutionaccess.api.OnSiteContext;
+import com.fontainerepublic.server.institutionaccess.api.ValidationResult;
+import com.fontainerepublic.server.institutionaccess.model.CapabilityClass;
 import com.fontainerepublic.server.registry.api.PlayerPresence;
 import com.fontainerepublic.server.registry.model.SubjectId;
 import com.fontainerepublic.server.registry.model.SubjectStatus;
+import net.minecraft.nbt.CompoundTag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.List;
@@ -35,8 +48,18 @@ import java.util.function.LongSupplier;
  * currency presentation. Writes publish only after the durable gate commits;
  * the cooldown is an abuse-control gate only and never replaces the
  * account/store revision checks owned by the repository.</p>
+ *
+ * <p>The on-site official Central-Bank duties (FR-ECO-002-A) validate every
+ * mutation through {@link InstitutionAccessService#validateAtMutation} as
+ * {@code ONSITE_OFFICIAL_DUTY} at the final mutation boundary — a null or
+ * non-VALID context rejects the mutation fail-closed. Successful official
+ * duties are recorded through the audit service (FINANCE, secret-digest
+ * classification); audit failure never blocks an already-committed
+ * mutation.</p>
  */
 public final class DefaultEconomyService implements EconomyService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(DefaultEconomyService.class);
 
     private final EconomyRepository repository;
     private final LongSupplier clock;
@@ -44,6 +67,8 @@ public final class DefaultEconomyService implements EconomyService {
     private final SubjectDirectory subjectDirectory;
     private final EconomyLimits limits;
     private final CurrencyPresentation presentation;
+    private final InstitutionAccessService institutionAccess;
+    private final AuditService auditService;
 
     /** Server-owned cooldown: last successful transfer time per actor. */
     private final Map<SubjectId, Long> lastTransferAt = new HashMap<>();
@@ -54,7 +79,9 @@ public final class DefaultEconomyService implements EconomyService {
             PlayerPresence playerPresence,
             SubjectDirectory subjectDirectory,
             EconomyLimits limits,
-            CurrencyPresentation presentation
+            CurrencyPresentation presentation,
+            InstitutionAccessService institutionAccess,
+            AuditService auditService
     ) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -62,6 +89,9 @@ public final class DefaultEconomyService implements EconomyService {
         this.subjectDirectory = Objects.requireNonNull(subjectDirectory, "subjectDirectory");
         this.limits = Objects.requireNonNull(limits, "limits");
         this.presentation = Objects.requireNonNull(presentation, "presentation");
+        this.institutionAccess =
+                Objects.requireNonNull(institutionAccess, "institutionAccess");
+        this.auditService = auditService;
     }
 
     @Override
@@ -152,6 +182,14 @@ public final class DefaultEconomyService implements EconomyService {
         enforceCooldown(from, timestamp);
 
         EconomyAccount source = repository.requireAccount(from);
+        requireNotFrozen(source);
+        EconomyAccount target = repository.findAccount(to).orElse(null);
+        if (target != null) {
+            // A lazily created target starts unfrozen; an existing frozen
+            // target rejects the transfer too (no money may move into a
+            // frozen account, FR-ECO-002-A §4).
+            requireNotFrozen(target);
+        }
         TransferReceipt receipt = repository.transfer(
                 from,
                 to,
@@ -217,8 +255,231 @@ public final class DefaultEconomyService implements EconomyService {
     }
 
     // ------------------------------------------------------------------
+    // central-bank official duties (FR-ECO-002-A, on-site gated)
+    // ------------------------------------------------------------------
+
+    @Override
+    public long getTreasuryBalance() {
+        return repository.snapshot().treasuryBalance();
+    }
+
+    @Override
+    public EconomyTransaction deposit(
+            SubjectId to,
+            long amount,
+            String memo,
+            OnSiteContext context
+    ) {
+        Objects.requireNonNull(to, "to");
+        validateAmount(amount);
+        String normalized = normalizeMemo(memo);
+        requireActiveSubject(to);
+        long timestamp = now();
+        requireOfficialOnSite(context);
+        // The target account is ensured lazily (subject already resolved and
+        // ACTIVE); the official duty itself is the only way money enters an
+        // account without a counterparty.
+        EconomyAccount target = repository.ensure(to, timestamp);
+        requireNotFrozen(target);
+        EconomyTransaction transaction = repository.deposit(
+                to,
+                amount,
+                normalized,
+                target.accountRevision(),
+                repository.storeRevision(),
+                timestamp
+        );
+        auditOfficial(
+                context.playerId(),
+                "economy.deposit",
+                to,
+                amount,
+                normalized,
+                "Central bank deposit for subject " + to
+        );
+        return transaction;
+    }
+
+    @Override
+    public EconomyTransaction withdraw(
+            SubjectId from,
+            long amount,
+            String memo,
+            OnSiteContext context
+    ) {
+        Objects.requireNonNull(from, "from");
+        validateAmount(amount);
+        String normalized = normalizeMemo(memo);
+        requireActiveSubject(from);
+        long timestamp = now();
+        requireOfficialOnSite(context);
+        EconomyAccount source = repository.requireAccount(from);
+        requireNotFrozen(source);
+        EconomyTransaction transaction = repository.withdraw(
+                from,
+                amount,
+                normalized,
+                source.accountRevision(),
+                repository.storeRevision(),
+                timestamp
+        );
+        auditOfficial(
+                context.playerId(),
+                "economy.withdraw",
+                from,
+                amount,
+                normalized,
+                "Central bank withdrawal for subject " + from
+        );
+        return transaction;
+    }
+
+    @Override
+    public EconomyAccount freeze(SubjectId subjectId, String memo, OnSiteContext context) {
+        Objects.requireNonNull(subjectId, "subjectId");
+        normalizeMemo(memo);
+        requireActiveSubject(subjectId);
+        requireOfficialOnSite(context);
+        EconomyAccount account = repository.requireAccount(subjectId);
+        EconomyAccount frozen = repository.setFrozen(
+                subjectId,
+                true,
+                account.accountRevision(),
+                repository.storeRevision()
+        );
+        auditOfficial(
+                context.playerId(),
+                "economy.freeze",
+                subjectId,
+                0L,
+                normalizeMemo(memo),
+                "Central bank freeze for subject " + subjectId
+        );
+        return frozen;
+    }
+
+    @Override
+    public EconomyAccount unfreeze(SubjectId subjectId, String memo, OnSiteContext context) {
+        Objects.requireNonNull(subjectId, "subjectId");
+        normalizeMemo(memo);
+        requireActiveSubject(subjectId);
+        requireOfficialOnSite(context);
+        EconomyAccount account = repository.requireAccount(subjectId);
+        EconomyAccount unfrozen = repository.setFrozen(
+                subjectId,
+                false,
+                account.accountRevision(),
+                repository.storeRevision()
+        );
+        auditOfficial(
+                context.playerId(),
+                "economy.unfreeze",
+                subjectId,
+                0L,
+                normalizeMemo(memo),
+                "Central bank unfreeze for subject " + subjectId
+        );
+        return unfrozen;
+    }
+
+    // ------------------------------------------------------------------
     // internals
     // ------------------------------------------------------------------
+
+    /**
+     * Final mutation boundary of an official duty (FR-ECO-002-A §4): the
+     * on-site context must revalidate as {@code ONSITE_OFFICIAL_DUTY} at the
+     * authoritative position bound to the context. A null context and any
+     * non-VALID outcome reject the mutation fail-closed with a stable code.
+     */
+    private void requireOfficialOnSite(OnSiteContext context) {
+        ValidationResult result;
+        if (context == null) {
+            result = ValidationResult.invalid(ValidationResult.REASON_NOT_ISSUED);
+        } else {
+            result = institutionAccess.validateAtMutation(
+                    context,
+                    CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                    now(),
+                    context.dimension(),
+                    context.blockX(),
+                    context.blockY(),
+                    context.blockZ()
+            );
+        }
+        if (!result.valid()) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_ON_SITE_CONTEXT_INVALID,
+                    "On-site ONSITE_OFFICIAL_DUTY context is not valid: "
+                            + result.reason()
+            );
+        }
+    }
+
+    /** A frozen account rejects every balance-changing official mutation. */
+    private void requireNotFrozen(EconomyAccount account) {
+        if (account.frozen()) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_FROZEN,
+                    "Account of subject " + account.subjectId() + " is frozen"
+            );
+        }
+    }
+
+    /**
+     * Records an official central-bank duty (FR-ECO-002-A §4) through the
+     * audit service: FINANCE category, the on-site official as actor, the
+     * affected subject as target, secret-digest classification (the amount is
+     * never rendered into ordinary projections; the payload plaintext is
+     * never persisted). Audit failure never blocks an already-committed
+     * mutation (audit is a record, not an authority).
+     */
+    private void auditOfficial(
+            UUID actor,
+            String actionId,
+            SubjectId target,
+            long amount,
+            String memo,
+            String summary
+    ) {
+        if (auditService == null) {
+            return;
+        }
+        try {
+            CompoundTag payload = new CompoundTag();
+            payload.putLong("Amount", amount);
+            if (memo != null) {
+                payload.putString("Memo", memo);
+            }
+            AuditReceipt receipt = auditService.recordAuthoritative(
+                    new AuditDraft(
+                            AuditActorType.PLAYER,
+                            actor.toString(),
+                            AuditCategory.FINANCE,
+                            "economy",
+                            actionId,
+                            Optional.of("SUBJECT"),
+                            Optional.of(target.toString()),
+                            AuditClassification.SECRET_DIGEST_ONLY,
+                            summary,
+                            Optional.of(payload)
+                    )
+            );
+            if (!receipt.committed()) {
+                LOGGER.warn(
+                        "[Economy] Audit of {} was not durably committed: {}",
+                        actionId,
+                        receipt.failureCode()
+                );
+            }
+        } catch (RuntimeException failure) {
+            LOGGER.warn(
+                    "[Economy] Audit recording failed for {}: {}",
+                    actionId,
+                    failure.getMessage()
+            );
+        }
+    }
 
     private void validateAmount(long amount) {
         if (amount <= 0 || amount > limits.maxBalance()) {

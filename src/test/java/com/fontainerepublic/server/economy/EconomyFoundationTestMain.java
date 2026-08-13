@@ -23,6 +23,23 @@ import com.fontainerepublic.server.economy.persistence.EconomyStore;
 import com.fontainerepublic.server.economy.persistence.EconomyStoreSnapshot;
 import com.fontainerepublic.server.economy.persistence.EconomyUnavailableException;
 import com.fontainerepublic.server.economy.service.DefaultEconomyService;
+import com.fontainerepublic.server.audit.AuditModule;
+import com.fontainerepublic.server.institutionaccess.InstitutionAccessModule;
+import com.fontainerepublic.server.institutionaccess.api.FacilityReceipt;
+import com.fontainerepublic.server.institutionaccess.api.FacilityRegistrationRequest;
+import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
+import com.fontainerepublic.server.institutionaccess.api.OnSiteContext;
+import com.fontainerepublic.server.institutionaccess.api.TerminalReceipt;
+import com.fontainerepublic.server.institutionaccess.api.TerminalRegistrationRequest;
+import com.fontainerepublic.server.institutionaccess.api.ValidationResult;
+import com.fontainerepublic.server.institutionaccess.model.CapabilityClass;
+import com.fontainerepublic.server.institutionaccess.model.Facility;
+import com.fontainerepublic.server.institutionaccess.model.FacilityId;
+import com.fontainerepublic.server.institutionaccess.model.InstitutionType;
+import com.fontainerepublic.server.institutionaccess.model.Terminal;
+import com.fontainerepublic.server.institutionaccess.model.TerminalId;
+import com.fontainerepublic.server.institutionaccess.model.WorkflowKind;
+import com.fontainerepublic.server.land.model.ParcelId;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
 import com.fontainerepublic.server.registry.api.PlayerPresence;
@@ -117,6 +134,7 @@ public final class EconomyFoundationTestMain {
         testCapacityFailClosed();
         testStoreFailureAtomicity();
         testSubjectNotActiveFailClosed();
+        testBankOfficialDuties();
         testModuleContract();
         testNoEnumerationApi();
         System.out.println("[FR-ECO-001] Economy foundation validation passed");
@@ -790,15 +808,20 @@ public final class EconomyFoundationTestMain {
     // ------------------------------------------------------------------
 
     private static void testForbiddenSurfacesAbsent() throws Exception {
-        require(Set.of(TransactionType.values()).equals(Set.of(TransactionType.TRANSFER)),
-                "TransactionType exposes exactly TRANSFER — no deposit/withdrawal path");
+        require(Set.of(TransactionType.values()).equals(Set.of(
+                        TransactionType.TRANSFER,
+                        TransactionType.DEPOSIT,
+                        TransactionType.WITHDRAWAL)),
+                "TransactionType exposes exactly TRANSFER/DEPOSIT/WITHDRAWAL "
+                        + "— the official central-bank types only");
 
         for (Class<?> type : List.of(EconomyService.class, EconomyModule.class)) {
             for (Method method : type.getDeclaredMethods()) {
                 String name = method.getName().toLowerCase(java.util.Locale.ROOT);
                 for (String forbidden : List.of(
-                        "top", "leaderboard", "bank", "treasury", "freeze",
-                        "deposit", "withdraw", "atm", "interest", "tax"
+                        "top", "leaderboard", "atm", "interest", "tax",
+                        "cash", "gui", "screen", "hud", "packet", "issue",
+                        "reclaim", "c2s", "setbalance"
                 )) {
                     require(!name.contains(forbidden),
                             "no forbidden surface method in " + type.getSimpleName()
@@ -807,8 +830,8 @@ public final class EconomyFoundationTestMain {
             }
         }
 
-        // Source-level scan: no leaderboard/bank/treasury/GUI/C2S/network code
-        // exists in the economy production sources (comments excluded).
+        // Source-level scan: no leaderboard/ATM/cash/GUI/C2S/network/emergency
+        // code exists in the economy production sources (comments excluded).
         Path projectDirectory = Path.of(
                 System.getProperty(PROJECT_DIR_PROPERTY, ".")
         ).toAbsolutePath().normalize();
@@ -825,8 +848,7 @@ public final class EconomyFoundationTestMain {
         }
         String codeOnly = stripComments(source.toString());
         for (String forbidden : List.of(
-                "top", "leaderboard", "bank", "freeze",
-                "deposit", "withdraw", "atm", "interest", "tax", "cash",
+                "top", "leaderboard", "atm", "interest", "tax", "cash",
                 "gui", "screen", "hud", "packet", "NetworkMessage",
                 "SimpleChannel", "issue", "reclaim", "c2s", "setBalance",
                 "setOp", "isOp", "getPermission"
@@ -1190,6 +1212,208 @@ public final class EconomyFoundationTestMain {
     }
 
     // ------------------------------------------------------------------
+    // acceptance: central-bank official duties (FR-ECO-002-A §5)
+    // ------------------------------------------------------------------
+
+    private static void testBankOfficialDuties() {
+        SavedDataBackedTestStore store = new SavedDataBackedTestStore();
+        store.putRaw(storeWithBalances(1_000L, 200L, 0L));
+        MutableClock clock = new MutableClock(20_000);
+        FakeInstitutionAccessService access = new FakeInstitutionAccessService();
+        EconomyRepository repository = repository(store);
+        EconomyService service = service(
+                repository,
+                clock,
+                presence(ALPHA_ID, BRAVO_ID, CHARLIE_ID),
+                directory(ALPHA_ID, BRAVO_ID, CHARLIE_ID),
+                access
+        );
+        SubjectId alpha = SubjectId.of(ALPHA_SUBJECT);
+        SubjectId bravo = SubjectId.of(BRAVO_SUBJECT);
+        SubjectId charlie = SubjectId.of(CHARLIE_SUBJECT);
+
+        // treasury total is a public read-only aggregate
+        require(service.getTreasuryBalance() == 0L,
+                "the treasury starts at zero and is readable publicly");
+        require(repository.snapshot().treasuryBalance() == 0L,
+                "the treasury read is the exact store value");
+
+        // official withdrawal: player -> treasury, supply conserved
+        EconomyTransaction withdrawal = service.withdraw(
+                alpha, 100L, "treasury intake", bankContext(ALPHA_ID)
+        );
+        require(withdrawal.type() == TransactionType.WITHDRAWAL,
+                "an official withdrawal records WITHDRAWAL");
+        require(withdrawal.from().equals(alpha) && withdrawal.to() == null,
+                "WITHDRAWAL has only the source participant (system sink)");
+        require(repository.snapshot().treasuryBalance() == 100L,
+                "the treasury holds the withdrawn amount");
+        require(service.getBalance(alpha) == 900L,
+                "the source balance is debited exactly");
+        require(repository.snapshot().totalSupply() == 1_200L,
+                "withdrawal conserves the total supply identity");
+
+        // official issuance: treasury -> player, supply conserved
+        EconomyTransaction deposit = service.deposit(
+                bravo, 50L, "issuance", bankContext(ALPHA_ID)
+        );
+        require(deposit.type() == TransactionType.DEPOSIT,
+                "an official issuance records DEPOSIT");
+        require(deposit.from() == null && deposit.to().equals(bravo),
+                "DEPOSIT has only the destination participant (system source)");
+        require(repository.snapshot().treasuryBalance() == 50L,
+                "the treasury is debited exactly");
+        require(service.getBalance(bravo) == 250L,
+                "the target balance is credited exactly");
+        require(repository.snapshot().totalSupply() == 1_200L,
+                "issuance conserves the total supply identity");
+
+        // issuance beyond the treasury fails closed with no publication
+        EconomyUnavailableException poorTreasury = expectThrows(
+                EconomyUnavailableException.class,
+                () -> service.deposit(bravo, 51L, "overdraw", bankContext(ALPHA_ID)),
+                "issuance beyond the treasury is rejected"
+        );
+        require(poorTreasury.failureCode().equals(
+                        EconomyUnavailableException.CODE_TREASURY_INSUFFICIENT),
+                "treasury shortage carries the stable code");
+        require(repository.snapshot().nextTransactionId() == 3L
+                        && repository.snapshot().treasuryBalance() == 50L,
+                "the failed issuance publishes nothing");
+
+        // final on-site revalidation: null and non-VALID contexts fail closed
+        expectThrows(
+                EconomyUnavailableException.class,
+                () -> service.deposit(bravo, 10L, "no context", null),
+                "a null on-site context rejects the official duty"
+        );
+        access.setResult(ValidationResult.invalid(ValidationResult.REASON_EXPIRED));
+        EconomyUnavailableException expired = expectThrows(
+                EconomyUnavailableException.class,
+                () -> service.withdraw(alpha, 10L, "expired", bankContext(ALPHA_ID)),
+                "an expired on-site context rejects the official duty"
+        );
+        require(expired.failureCode().equals(
+                        EconomyUnavailableException.CODE_ON_SITE_CONTEXT_INVALID),
+                "invalid on-site context carries the stable code");
+        access.setResult(ValidationResult.ok());
+
+        // freeze/unfreeze are on-site official duties
+        EconomyAccount frozenAccount = service.freeze(
+                bravo, "court order", bankContext(ALPHA_ID)
+        );
+        require(frozenAccount.frozen(), "freeze flips the account flag");
+        require(repository.requireAccount(bravo).frozen()
+                        && repository.requireAccount(bravo).accountRevision() == 3L,
+                "freeze is persisted and advances the account revision once");
+
+        // a frozen account rejects transfer, withdrawal and issuance
+        EconomyUnavailableException frozenTransfer = expectThrows(
+                EconomyUnavailableException.class,
+                () -> service.transfer(bravo, alpha, 1L, null),
+                "a frozen account cannot transfer out"
+        );
+        require(frozenTransfer.failureCode().equals(
+                        EconomyUnavailableException.CODE_FROZEN),
+                "frozen transfer carries FROZEN");
+        EconomyUnavailableException frozenInbound = expectThrows(
+                EconomyUnavailableException.class,
+                () -> service.transfer(alpha, bravo, 1L, null),
+                "a frozen account cannot receive a transfer"
+        );
+        require(frozenInbound.failureCode().equals(
+                        EconomyUnavailableException.CODE_FROZEN),
+                "frozen inbound transfer carries FROZEN");
+        EconomyUnavailableException frozenWithdraw = expectThrows(
+                EconomyUnavailableException.class,
+                () -> service.withdraw(bravo, 1L, "x", bankContext(ALPHA_ID)),
+                "a frozen account cannot withdraw"
+        );
+        require(frozenWithdraw.failureCode().equals(
+                        EconomyUnavailableException.CODE_FROZEN),
+                "frozen withdrawal carries FROZEN");
+        EconomyUnavailableException frozenDeposit = expectThrows(
+                EconomyUnavailableException.class,
+                () -> service.deposit(bravo, 1L, "x", bankContext(ALPHA_ID)),
+                "a frozen account cannot receive issuance"
+        );
+        require(frozenDeposit.failureCode().equals(
+                        EconomyUnavailableException.CODE_FROZEN),
+                "frozen issuance carries FROZEN");
+        require(repository.snapshot().totalSupply() == 1_200L
+                        && repository.snapshot().nextTransactionId() == 3L,
+                "frozen rejections publish no monetary change");
+
+        // freezing twice is rejected; unfreezing restores participation
+        EconomyUnavailableException doubleFreeze = expectThrows(
+                EconomyUnavailableException.class,
+                () -> service.freeze(bravo, "again", bankContext(ALPHA_ID)),
+                "freezing an already-frozen account is rejected"
+        );
+        require(doubleFreeze.failureCode().equals(
+                        EconomyUnavailableException.CODE_FROZEN),
+                "double freeze carries FROZEN");
+        EconomyAccount unfrozenAccount = service.unfreeze(
+                bravo, "lifted", bankContext(ALPHA_ID)
+        );
+        require(!unfrozenAccount.frozen(), "unfreeze clears the account flag");
+        EconomyUnavailableException doubleUnfreeze = expectThrows(
+                EconomyUnavailableException.class,
+                () -> service.unfreeze(bravo, "again", bankContext(ALPHA_ID)),
+                "unfreezing an unfrozen account is rejected"
+        );
+        require(doubleUnfreeze.failureCode().equals(
+                        EconomyUnavailableException.CODE_FROZEN),
+                "double unfreeze carries FROZEN");
+        service.transfer(alpha, bravo, 5L, "post-freeze");
+        require(service.getBalance(bravo) == 255L,
+                "an unfrozen account participates in ordinary transfers again");
+
+        // freeze state and official transactions survive restart
+        service.freeze(bravo, "persist freeze", bankContext(ALPHA_ID));
+        require(repository.snapshot().transactions().size() == 3,
+                "freeze/unfreeze never create monetary transactions");
+        EconomyRepository restarted = restartRepository(store);
+        require(restarted.requireAccount(bravo).frozen(),
+                "freeze state survives restart");
+        require(restarted.requireAccount(bravo).accountRevision() == 6L,
+                "the revision sequence survives restart");
+        require(restarted.snapshot().transactions().size() == 3
+                        && restarted.snapshot().nextTransactionId() == 4L,
+                "official transactions survive restart with their ids");
+        require(restarted.snapshot().totalSupply() == 1_200L,
+                "total supply survives restart after official duties");
+
+        // issuance to a subject without an account lazily provisions it
+        SavedDataBackedTestStore bare = new SavedDataBackedTestStore();
+        CompoundTag bareRoot = storeWithBalances(-1L, -1L, -1L);
+        bareRoot.putLong("TreasuryBalance", 10L);
+        bare.putRaw(bareRoot);
+        EconomyRepository bareRepository = repository(bare);
+        EconomyService bareService = service(
+                bareRepository,
+                clock,
+                presence(ALPHA_ID, CHARLIE_ID),
+                directory(ALPHA_ID, CHARLIE_ID),
+                new FakeInstitutionAccessService()
+        );
+        bareService.ensureAccountForPlayer(ALPHA_ID);
+        EconomyUnavailableException seedWithdrawFailure = expectThrows(
+                EconomyUnavailableException.class,
+                () -> bareService.withdraw(alpha, 10L, "seed", bankContext(ALPHA_ID)),
+                "withdraw without funds is rejected"
+        );
+        require(seedWithdrawFailure.failureCode().equals(
+                        EconomyUnavailableException.CODE_INSUFFICIENT_FUNDS),
+                "insufficient funds carries INSUFFICIENT_FUNDS");
+        bareService.deposit(charlie, 10L, "seed", bankContext(ALPHA_ID));
+        require(bareRepository.requireAccount(charlie).balance() == 10L,
+                "issuance lazily provisions the zero-balance target account");
+        require(bareRepository.snapshot().totalSupply() == 10L,
+                "issuance into a fresh account conserves the supply identity");
+    }
+
+    // ------------------------------------------------------------------
     // module contract checks
     // ------------------------------------------------------------------
 
@@ -1201,20 +1425,32 @@ public final class EconomyFoundationTestMain {
         ModuleDefinition definition = new ModuleDefinition(
                 EconomyModule.MODULE_ID,
                 new ModuleMetadata("Economy", "1.0.0", Optional.empty(), Optional.empty()),
-                Set.of(PlayerDataModule.MODULE_ID, SubjectRegistryModule.MODULE_ID),
+                Set.of(
+                        PlayerDataModule.MODULE_ID,
+                        SubjectRegistryModule.MODULE_ID,
+                        AuditModule.MODULE_ID,
+                        InstitutionAccessModule.MODULE_ID
+                ),
                 Set.of(),
                 60,
                 EconomyModule::new
         );
         require(definition.requiredDependencies().equals(
-                        Set.of(PlayerDataModule.MODULE_ID, SubjectRegistryModule.MODULE_ID)),
-                "economy depends only on player-data and subject-registry");
+                        Set.of(
+                                PlayerDataModule.MODULE_ID,
+                                SubjectRegistryModule.MODULE_ID,
+                                AuditModule.MODULE_ID,
+                                InstitutionAccessModule.MODULE_ID
+                        )),
+                "economy depends on player-data, subject-registry, audit, "
+                        + "and institution-access only");
         for (ModuleId dependency : definition.requiredDependencies()) {
             String value = dependency.value();
             require(!value.contains("emg") && !value.contains("emergency")
-                            && !value.contains("audit") && !value.contains("citizen")
-                            && !value.contains("land"),
-                    "economy never depends on later-phase or parallel namespaces");
+                            && !value.contains("citizen") && !value.contains("land")
+                            && !value.contains("government") && !value.contains("parliament")
+                            && !value.contains("justice"),
+                    "economy never depends on later-phase or parallel namespaces: " + value);
         }
     }
 
@@ -1284,7 +1520,14 @@ public final class EconomyFoundationTestMain {
             EconomyLimits limits
     ) {
         return new DefaultEconomyService(
-                repository, clock, presence, directory, limits, CurrencyPresentation.DEFAULT
+                repository,
+                clock,
+                presence,
+                directory,
+                limits,
+                CurrencyPresentation.DEFAULT,
+                new FakeInstitutionAccessService(),
+                null
         );
     }
 
@@ -1296,7 +1539,37 @@ public final class EconomyFoundationTestMain {
             CurrencyPresentation presentation
     ) {
         return new DefaultEconomyService(
-                repository, clock, presence, directory, TEST_LIMITS, presentation
+                repository,
+                clock,
+                presence,
+                directory,
+                TEST_LIMITS,
+                presentation,
+                new FakeInstitutionAccessService(),
+                null
+        );
+    }
+
+    /**
+     * Binds a configurable institution-access double so the official-duty
+     * tests can drive the final mutation boundary.
+     */
+    private static EconomyService service(
+            EconomyRepository repository,
+            LongSupplier clock,
+            PlayerPresence presence,
+            SubjectDirectory directory,
+            FakeInstitutionAccessService access
+    ) {
+        return new DefaultEconomyService(
+                repository,
+                clock,
+                presence,
+                directory,
+                TEST_LIMITS,
+                CurrencyPresentation.DEFAULT,
+                access,
+                null
         );
     }
 
@@ -1710,6 +1983,146 @@ public final class EconomyFoundationTestMain {
 
         private void setAvailable(boolean available) {
             this.available = available;
+        }
+    }
+
+    /** Official-duty on-site context for the central-bank tests. */
+    private static OnSiteContext bankContext(UUID playerId) {
+        return new OnSiteContext(
+                UUID.randomUUID(),
+                playerId,
+                InstitutionType.CENTRAL_BANK,
+                FacilityId.of(UUID.randomUUID()),
+                TerminalId.of(UUID.randomUUID()),
+                WorkflowKind.OFFICIAL_ROUTINE,
+                CapabilityClass.ONSITE_OFFICIAL_DUTY,
+                1_000L,
+                2_000L,
+                1L,
+                1L,
+                "minecraft:overworld",
+                10,
+                20,
+                30
+        );
+    }
+
+    /**
+     * Test double of the shared institution access boundary: records every
+     * final mutation-boundary call and its capability, and returns a
+     * configurable result. Every other operation is unsupported — the economy
+     * module consumes the boundary at mutation time only.
+     */
+    private static final class FakeInstitutionAccessService
+            implements InstitutionAccessService {
+        private ValidationResult result = ValidationResult.ok();
+        private int validateCalls;
+        private CapabilityClass lastCapability;
+
+        @Override
+        public ValidationResult validateAtMutation(
+                OnSiteContext context,
+                CapabilityClass capability,
+                long now,
+                String dimension,
+                int x,
+                int y,
+                int z
+        ) {
+            validateCalls++;
+            lastCapability = capability;
+            return result;
+        }
+
+        private void setResult(ValidationResult result) {
+            this.result = result;
+        }
+
+        private int validateCalls() {
+            return validateCalls;
+        }
+
+        private CapabilityClass lastCapability() {
+            return lastCapability;
+        }
+
+        @Override
+        public FacilityReceipt registerFacility(UUID actor, FacilityRegistrationRequest request) {
+            throw unsupported();
+        }
+
+        @Override
+        public FacilityReceipt suspendFacility(UUID actor, FacilityId facilityId) {
+            throw unsupported();
+        }
+
+        @Override
+        public FacilityReceipt activateFacility(UUID actor, FacilityId facilityId) {
+            throw unsupported();
+        }
+
+        @Override
+        public FacilityReceipt relocateFacility(UUID actor, FacilityId facilityId, ParcelId newParcelId) {
+            throw unsupported();
+        }
+
+        @Override
+        public FacilityReceipt disableFacility(UUID actor, FacilityId facilityId) {
+            throw unsupported();
+        }
+
+        @Override
+        public TerminalReceipt registerTerminal(UUID actor, TerminalRegistrationRequest request) {
+            throw unsupported();
+        }
+
+        @Override
+        public TerminalReceipt suspendTerminal(UUID actor, TerminalId terminalId) {
+            throw unsupported();
+        }
+
+        @Override
+        public TerminalReceipt disableTerminal(UUID actor, TerminalId terminalId) {
+            throw unsupported();
+        }
+
+        @Override
+        public OnSiteContext issueOnSiteContext(
+                UUID playerId,
+                TerminalId terminalId,
+                CapabilityClass capability,
+                String playerDimension,
+                int x,
+                int y,
+                int z
+        ) {
+            throw unsupported();
+        }
+
+        @Override
+        public void consume(OnSiteContext context) {
+            // no-op test double
+        }
+
+        @Override
+        public void invalidateOnLeave(UUID playerId) {
+            // no-op test double
+        }
+
+        @Override
+        public java.util.Optional<Facility> getFacility(FacilityId facilityId) {
+            throw unsupported();
+        }
+
+        @Override
+        public java.util.Optional<Terminal> getTerminal(TerminalId terminalId) {
+            throw unsupported();
+        }
+
+        private UnsupportedOperationException unsupported() {
+            return new UnsupportedOperationException(
+                    "not part of the economy test double"
+            );
         }
     }
 }

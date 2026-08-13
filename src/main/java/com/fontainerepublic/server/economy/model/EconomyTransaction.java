@@ -14,6 +14,14 @@ import java.util.Objects;
  * {@code memo} (a.k.a. reason) is a normalized, bounded, display-only
  * projection; {@code null} means absent (distinct from an empty magic value,
  * FR-ECO-001-C §5.1).</p>
+ *
+ * <p>Participant cardinality follows the transaction type (FR-ECO-001-A
+ * §3.2/§3.3): a {@code TRANSFER} has both participants, an official
+ * {@code DEPOSIT} has only {@code to} (the system/treasury is the source,
+ * {@code from} is {@code null}), and an official {@code WITHDRAWAL} has only
+ * {@code from} (the treasury is the sink, {@code to} is {@code null}).
+ * Exactly one side may be {@code null} on a system transaction; both sides
+ * are never {@code null}.</p>
  */
 public record EconomyTransaction(
         int schemaVersion,
@@ -42,11 +50,39 @@ public record EconomyTransaction(
                     "timestamp must be a positive epoch millisecond"
             );
         }
-        from = Objects.requireNonNull(from, "from");
-        to = Objects.requireNonNull(to, "to");
         if (amount <= 0) {
             throw new IllegalArgumentException("Amount must be positive");
         }
         type = Objects.requireNonNull(type, "type");
+        switch (type) {
+            case TRANSFER -> {
+                requireParticipant(from, "from");
+                requireParticipant(to, "to");
+            }
+            case DEPOSIT -> {
+                requireParticipant(to, "to");
+                if (from != null) {
+                    throw new IllegalArgumentException(
+                            "A DEPOSIT has no source participant (system to account)"
+                    );
+                }
+            }
+            case WITHDRAWAL -> {
+                requireParticipant(from, "from");
+                if (to != null) {
+                    throw new IllegalArgumentException(
+                            "A WITHDRAWAL has no destination participant (account to system)"
+                    );
+                }
+            }
+        }
+    }
+
+    private static void requireParticipant(SubjectId participant, String field) {
+        if (participant == null) {
+            throw new IllegalArgumentException(
+                    "A " + field + " participant is required for this transaction type"
+            );
+        }
     }
 }
