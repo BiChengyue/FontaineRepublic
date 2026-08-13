@@ -259,3 +259,12 @@
   消费 FR-LAND 空间数据；为议会/政府/法院/央行现场工作流铺路）。
 - **玩家可用层完成**：/fr money balance|pay|history、/fr citizen info、
   登录自动开户/公民；全部经独立审查。
+
+## 2026-08-13 | FR-CMD-USER-002 交付 + 审查通过（转账三输入）
+
+- 接线子进程完成 `/fr money pay` 目标输入扩展（UUID/精确玩家名/登记号，全部收敛
+  SubjectId），提交 `931c220`（Reviewer 代提交）。
+- Reviewer 独立复跑 commandFoundationTest + 完整构建全绿；审查报告
+  FR-CMD-USER-002-REVIEW-01（验收 6/7 PASS）；并入 develop（`01dd1be`）。
+- 玩家名转账正式可用（歧义/退役/未知统一受限反馈，无枚举）。
+- 下一候选：FR-INST-002-A 共享机构访问边界实现（设计候选已备，需审）。
