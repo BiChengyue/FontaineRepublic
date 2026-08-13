@@ -248,3 +248,14 @@
 - 关注项 F-001：player-data 全量变异走确认门，与 100ms 间隔交互（实际频率远低，可接受；
   高频非权威更新需另行批准）。
 - 派发 FR-CMD-USER-001-IMPL（/fr money、/fr citizen info、登录钩子接线）。
+
+## 2026-08-13 | 命令接线交付 + 审查通过 —— 玩家可用层完成
+
+- 接线子进程完成（6 文件 +890：MoneyCommand/CitizenCommand/LoginProvisioningHook），
+  提交 `5959b0c`（Reviewer 代提交）。
+- Reviewer 独立复跑 commandFoundationTest + 完整构建全绿；审查报告
+  FR-CMD-USER-001-REVIEW-01（验收 7/8 PASS）；并入 develop（`7ed8b71`）。
+- 产出 FR-INST-002-A 共享机构访问边界设计候选（设施/终端/现场上下文；
+  消费 FR-LAND 空间数据；为议会/政府/法院/央行现场工作流铺路）。
+- **玩家可用层完成**：/fr money balance|pay|history、/fr citizen info、
+  登录自动开户/公民；全部经独立审查。
