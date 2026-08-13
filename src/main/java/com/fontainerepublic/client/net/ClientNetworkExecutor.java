@@ -1,7 +1,9 @@
 package com.fontainerepublic.client.net;
 
 import com.fontainerepublic.common.network.display.BalanceSyncPacket;
+import com.fontainerepublic.common.network.display.CitizenInfoPacket;
 import com.fontainerepublic.common.network.display.NotificationPacket;
+import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
 import com.fontainerepublic.common.network.display.TransactionNotifyPacket;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
@@ -39,6 +41,16 @@ public final class ClientNetworkExecutor {
     public static void acceptNotification(NotificationPacket message) {
         ensureLogoutCleanup();
         ClientPresentationCache.instance().setNotifications(message.entries());
+    }
+
+    public static void acceptCitizenInfo(CitizenInfoPacket message) {
+        ensureLogoutCleanup();
+        ClientPresentationCache.instance().setCitizen(message);
+    }
+
+    public static void acceptTransactionHistorySync(TransactionHistorySyncPacket message) {
+        ensureLogoutCleanup();
+        ClientPresentationCache.instance().setHistory(message);
     }
 
     private static void ensureLogoutCleanup() {

@@ -2,7 +2,9 @@ package com.fontainerepublic.client.view;
 
 import com.fontainerepublic.client.net.ClientPresentationCache;
 import com.fontainerepublic.common.network.display.BalanceSyncPacket;
+import com.fontainerepublic.common.network.display.CitizenInfoPacket;
 import com.fontainerepublic.common.network.display.NotificationPacket;
+import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
 import com.fontainerepublic.common.network.display.TransactionNotifyPacket;
 
 import java.util.ArrayList;
@@ -99,6 +101,57 @@ public final class ClientViewProjection {
         return lines;
     }
 
+    /**
+     * Bounded projection of the citizen-identity card into display lines
+     * (each: {@code Label: value}), or a single placeholder line when no
+     * snapshot has arrived yet.
+     */
+    public static List<String> citizenLines(ClientPresentationCache cache) {
+        CitizenInfoPacket snapshot = cache.citizenSnapshot();
+        if (snapshot == null) {
+            return List.of("No citizen card yet.");
+        }
+        return List.of(
+                "Registry: " + snapshot.registryNumber(),
+                "Status: " + snapshot.citizenStatus(),
+                "Rank: " + snapshot.citizenRank(),
+                "Citizen since: " + formatTime(snapshot.firstCitizenAt())
+        );
+    }
+
+    /**
+     * Bounded projection of the transaction-history page into display lines
+     * (each: {@code #<id> IN|OUT <amount> <digest-prefix> [memo]}), or a
+     * placeholder line when no page has arrived yet. The page is already
+     * bounded by the packet; this method additionally caps the returned list
+     * so a caller can never render more than the cache bound.
+     */
+    public static List<String> historyLines(ClientPresentationCache cache) {
+        TransactionHistorySyncPacket page = cache.historySnapshot();
+        if (page == null) {
+            return List.of("No history yet.");
+        }
+        List<TransactionHistorySyncPacket.HistoryEntry> entries = page.entries();
+        int cap = Math.min(entries.size(), ClientPresentationCache.MAX_HISTORY_ENTRIES);
+        List<String> lines = new ArrayList<>(cap);
+        for (int index = 0; index < cap; index++) {
+            TransactionHistorySyncPacket.HistoryEntry entry = entries.get(index);
+            String direction = entry.direction() == TransactionHistorySyncPacket.HistoryEntry.DIRECTION_IN
+                    ? "IN"
+                    : "OUT";
+            StringBuilder line = new StringBuilder()
+                    .append('#').append(entry.transactionId())
+                    .append(' ').append(direction)
+                    .append(' ').append(formatAmount(entry.amount()))
+                    .append(' ').append(digestPrefix(entry.counterpartyDigest()));
+            if (entry.memo() != null && !entry.memo().isEmpty()) {
+                line.append(" \"").append(entry.memo()).append('"');
+            }
+            lines.add(line.toString());
+        }
+        return lines;
+    }
+
     /** Bounded digest prefix for display (first 8 hex characters). */
     public static String digestPrefix(String counterpartyDigest) {
         if (counterpartyDigest == null || counterpartyDigest.isEmpty()) {
@@ -106,6 +159,17 @@ public final class ClientViewProjection {
         }
         int prefix = Math.min(8, counterpartyDigest.length());
         return counterpartyDigest.substring(0, prefix);
+    }
+
+    /**
+     * Deterministic UTC timestamp projection of a positive epoch millisecond
+     * (display only). Returns the raw value when it is non-positive.
+     */
+    public static String formatTime(long epochMillis) {
+        if (epochMillis <= 0) {
+            return Long.toString(epochMillis);
+        }
+        return java.time.Instant.ofEpochMilli(epochMillis).toString();
     }
 
     /**

@@ -9,7 +9,12 @@ import com.fontainerepublic.server.citizen.api.CitizenService;
 import com.fontainerepublic.server.citizen.api.SubjectDirectory;
 import com.fontainerepublic.server.citizen.persistence.CitizenNbtCodec;
 import com.fontainerepublic.server.citizen.persistence.CitizenRepository;
+import com.fontainerepublic.server.citizen.presentation.CitizenPresentationNotifier;
+import com.fontainerepublic.server.citizen.presentation.PresentationAwareCitizenService;
+import com.fontainerepublic.server.citizen.presentation.ServerCitizenPresentationNotifier;
 import com.fontainerepublic.server.citizen.service.DefaultCitizenService;
+import com.fontainerepublic.server.network.NetworkRuntimeModule;
+import com.fontainerepublic.server.network.NetworkSendService;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
@@ -18,6 +23,9 @@ import com.fontainerepublic.server.registry.api.SubjectRegistryService;
 import com.fontainerepublic.server.registry.model.SubjectId;
 import com.fontainerepublic.server.registry.model.SubjectRecord;
 import com.mojang.logging.LogUtils;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.server.ServerLifecycleHooks;
 import org.slf4j.Logger;
 
 import java.util.Objects;
@@ -46,6 +54,8 @@ public final class CitizenModule implements IModule {
     private CitizenService service;
     private volatile PlayerDataService boundPlayerData;
     private volatile SubjectRegistryService boundSubjectRegistry;
+    private volatile NetworkSendService boundSendService;
+    private volatile CitizenPresentationNotifier presentationNotifier;
 
     public static void register(ModuleRegistry registry) {
         Objects.requireNonNull(registry, "registry");
@@ -57,7 +67,11 @@ public final class CitizenModule implements IModule {
                         Optional.of("Citizenship status and political rank infrastructure"),
                         Optional.of("FontaineRepublic")
                 ),
-                Set.of(PlayerDataModule.MODULE_ID, SubjectRegistryModule.MODULE_ID),
+                Set.of(
+                        PlayerDataModule.MODULE_ID,
+                        SubjectRegistryModule.MODULE_ID,
+                        NetworkRuntimeModule.MODULE_ID
+                ),
                 Set.of(),
                 50,
                 CitizenModule::new
@@ -75,12 +89,6 @@ public final class CitizenModule implements IModule {
     @Override
     public void init() {
         repository = CitizenRepository.createProduction(new CitizenNbtCodec());
-        service = new DefaultCitizenService(
-                repository,
-                System::currentTimeMillis,
-                new ModulePlayerPresence(),
-                new ModuleSubjectDirectory()
-        );
         LOGGER.info(
                 "[Citizen] Runtime initialized (revision={}, citizens={})",
                 repository.snapshot().storeRevision(),
@@ -90,24 +98,45 @@ public final class CitizenModule implements IModule {
 
     /**
      * Binds the authoritative PlayerData and subject-registry services after
-     * the runtime start so provisioning can enforce the §4.1 chain. Until
-     * bound, ensure calls fail closed with {@code PLAYER_DATA_UNAVAILABLE} /
+     * the runtime start so provisioning can enforce the §4.1 chain, and
+     * builds the presentation-aware runtime service (FR-CLIENT-001-IMPL-B2).
+     * Until bound, ensure calls fail closed with {@code PLAYER_DATA_UNAVAILABLE} /
      * {@code SUBJECT_REGISTRY_UNAVAILABLE}.
      */
     public void bindServices(
             PlayerDataService playerDataService,
-            SubjectRegistryService subjectRegistryService
+            SubjectRegistryService subjectRegistryService,
+            NetworkSendService sendService
     ) {
         this.boundPlayerData = playerDataService;
         this.boundSubjectRegistry = subjectRegistryService;
+        this.boundSendService = sendService;
+        this.presentationNotifier = new ServerCitizenPresentationNotifier(
+                sendService,
+                subjectRegistryService,
+                System::currentTimeMillis,
+                CitizenModule::onlineServerPlayer
+        );
+        CitizenService baseService = new DefaultCitizenService(
+                repository,
+                System::currentTimeMillis,
+                new ModulePlayerPresence(),
+                new ModuleSubjectDirectory()
+        );
+        this.service = new PresentationAwareCitizenService(
+                baseService,
+                presentationNotifier
+        );
     }
 
     @Override
     public void shutdown() {
         service = null;
         repository = null;
+        presentationNotifier = null;
         boundPlayerData = null;
         boundSubjectRegistry = null;
+        boundSendService = null;
         LOGGER.info("[Citizen] Runtime closed");
     }
 
@@ -116,6 +145,17 @@ public final class CitizenModule implements IModule {
             throw new IllegalStateException("Citizen service is not active");
         }
         return service;
+    }
+
+    /** Production online-player resolution via the current server. */
+    private static Optional<ServerPlayer> onlineServerPlayer(UUID playerId) {
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(
+                server.getPlayerList().getPlayer(playerId)
+        );
     }
 
     private final class ModulePlayerPresence implements PlayerPresence {

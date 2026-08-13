@@ -2,16 +2,20 @@ package com.fontainerepublic.server.economy.presentation;
 
 import com.fontainerepublic.common.network.display.BalanceSyncPacket;
 import com.fontainerepublic.common.network.display.NotificationPacket;
+import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
 import com.fontainerepublic.common.network.display.TransactionNotifyPacket;
 import com.fontainerepublic.server.economy.api.CurrencyPresentation;
+import com.fontainerepublic.server.economy.api.EconomyPage;
 import com.fontainerepublic.server.economy.api.TransferReceipt;
 import com.fontainerepublic.server.economy.model.EconomyAccount;
+import com.fontainerepublic.server.economy.model.EconomyTransaction;
 import com.fontainerepublic.server.economy.model.NotificationSummary;
 import com.fontainerepublic.server.network.NetworkSendService;
 import com.fontainerepublic.server.registry.api.SubjectRegistryService;
 import com.fontainerepublic.server.registry.model.OwnerReference;
 import com.fontainerepublic.server.registry.model.OwnerReferenceKind;
 import com.fontainerepublic.server.registry.model.SubjectId;
+import com.fontainerepublic.server.registry.model.SubjectRecord;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +44,9 @@ public final class ServerEconomyPresentationNotifier implements EconomyPresentat
     private static final Logger LOGGER = LoggerFactory.getLogger(
             ServerEconomyPresentationNotifier.class
     );
+
+    /** Fixed counterparty identity of official treasury transactions. */
+    private static final String TREASURY_DIGEST_SOURCE = "fontainerepublic:treasury";
 
     private final NetworkSendService sendService;
     private final SubjectRegistryService subjectRegistry;
@@ -117,6 +124,26 @@ public final class ServerEconomyPresentationNotifier implements EconomyPresentat
         });
     }
 
+    @Override
+    public void syncHistory(UUID playerId, EconomyPage<EconomyTransaction> page) {
+        Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(page, "page");
+        Optional<ServerPlayer> player = onlinePlayer.apply(playerId);
+        if (player.isEmpty()) {
+            return;
+        }
+        Optional<SubjectId> ownSubject = subjectRegistry.findSubjectForPlayer(playerId)
+                .map(SubjectRecord::subjectId);
+        if (ownSubject.isEmpty()) {
+            LOGGER.debug(
+                    "[Economy] History sync skipped for {}: player subject not resolvable",
+                    playerId
+            );
+            return;
+        }
+        send(player.get(), historySync(ownSubject.get(), page));
+    }
+
     // ------------------------------------------------------------------
     // payload assembly
     // ------------------------------------------------------------------
@@ -159,6 +186,59 @@ public final class ServerEconomyPresentationNotifier implements EconomyPresentat
                 receipt.memo(),
                 receipt.timestamp()
         );
+    }
+
+    /**
+     * Receiver-relative history page: every transaction where the receiver's
+     * subject participated, direction and counterparty digest resolved for
+     * the receiver. Official treasury transactions (deposit/issue/withdrawal/
+     * reclaim) use the fixed treasury digest as the counterparty.
+     */
+    private TransactionHistorySyncPacket historySync(
+            SubjectId ownSubject,
+            EconomyPage<EconomyTransaction> page
+    ) {
+        List<TransactionHistorySyncPacket.HistoryEntry> entries = new ArrayList<>();
+        for (EconomyTransaction transaction : page.items()) {
+            if (entries.size() >= TransactionHistorySyncPacket.MAX_ENTRIES) {
+                break;
+            }
+            boolean incoming = transaction.to() != null
+                    && transaction.to().equals(ownSubject);
+            byte direction = incoming
+                    ? TransactionHistorySyncPacket.HistoryEntry.DIRECTION_IN
+                    : TransactionHistorySyncPacket.HistoryEntry.DIRECTION_OUT;
+            String counterparty = counterpartyDigest(ownSubject, transaction);
+            entries.add(new TransactionHistorySyncPacket.HistoryEntry(
+                    transaction.transactionId(),
+                    direction,
+                    transaction.amount(),
+                    counterparty,
+                    transaction.memo(),
+                    transaction.timestamp()
+            ));
+        }
+        return new TransactionHistorySyncPacket(
+                entries,
+                page.nextAfterId(),
+                page.hasMore(),
+                now()
+        );
+    }
+
+    /**
+     * Counterparty digest of one transaction relative to the receiver: the
+     * other participant's subject identity, or the fixed treasury identity
+     * for official system transactions.
+     */
+    private String counterpartyDigest(SubjectId ownSubject, EconomyTransaction transaction) {
+        if (transaction.from() != null && !transaction.from().equals(ownSubject)) {
+            return digest(transaction.from());
+        }
+        if (transaction.to() != null && !transaction.to().equals(ownSubject)) {
+            return digest(transaction.to());
+        }
+        return digest(TREASURY_DIGEST_SOURCE);
     }
 
     // ------------------------------------------------------------------
@@ -213,11 +293,14 @@ public final class ServerEconomyPresentationNotifier implements EconomyPresentat
      * subject identity. Display-only projection, never a routing key.
      */
     private static String digest(SubjectId subjectId) {
+        return digest(subjectId.canonicalKey());
+    }
+
+    /** SHA-256 hex digest of an arbitrary identity source string. */
+    private static String digest(String source) {
         try {
             MessageDigest algorithm = MessageDigest.getInstance("SHA-256");
-            byte[] hash = algorithm.digest(
-                    subjectId.canonicalKey().getBytes(StandardCharsets.UTF_8)
-            );
+            byte[] hash = algorithm.digest(source.getBytes(StandardCharsets.UTF_8));
             StringBuilder hex = new StringBuilder(hash.length * 2);
             for (byte value : hash) {
                 hex.append(Character.forDigit((value >> 4) & 0xF, 16));

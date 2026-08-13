@@ -31,6 +31,9 @@ public final class PresentationAwareEconomyService implements EconomyService {
             PresentationAwareEconomyService.class
     );
 
+    /** First history page size sent on login/account-ready. */
+    static final int FIRST_HISTORY_PAGE_SIZE = 50;
+
     private final EconomyService delegate;
     private final EconomyPresentationNotifier notifier;
 
@@ -48,6 +51,14 @@ public final class PresentationAwareEconomyService implements EconomyService {
         try {
             List<NotificationSummary> pending = delegate.pendingNotifications(account.subjectId());
             notifier.syncAccount(playerId, account, pending);
+            notifier.syncHistory(
+                    playerId,
+                    delegate.getRecentTransactions(
+                            account.subjectId(),
+                            0,
+                            FIRST_HISTORY_PAGE_SIZE
+                    )
+            );
         } catch (RuntimeException failure) {
             LOGGER.debug(
                     "[Economy] Presentation sync failed for {}: {}",

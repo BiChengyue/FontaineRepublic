@@ -44,4 +44,20 @@ public final class DisplayMessageHandlers {
                         .acceptNotification(message)
         );
     }
+
+    public static NetworkMessageHandler<CitizenInfoPacket> citizenInfo() {
+        return (message, context) -> DistExecutor.safeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> com.fontainerepublic.client.net.ClientNetworkExecutor
+                        .acceptCitizenInfo(message)
+        );
+    }
+
+    public static NetworkMessageHandler<TransactionHistorySyncPacket> transactionHistorySync() {
+        return (message, context) -> DistExecutor.safeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> com.fontainerepublic.client.net.ClientNetworkExecutor
+                        .acceptTransactionHistorySync(message)
+        );
+    }
 }

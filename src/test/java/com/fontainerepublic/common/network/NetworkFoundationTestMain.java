@@ -117,17 +117,17 @@ public final class NetworkFoundationTestMain {
     }
 
     private static void testProtocolPredicates() {
-        check(NetworkProtocol.clientAccepts("2"), "Client must accept exact protocol");
-        check(!NetworkProtocol.clientAccepts("1"), "Client must reject the previous protocol");
+        check(NetworkProtocol.clientAccepts("3"), "Client must accept exact protocol");
+        check(!NetworkProtocol.clientAccepts("2"), "Client must reject the previous protocol");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ABSENT.version()),
                 "Client must reject an absent server channel");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Client must reject ACCEPTVANILLA");
 
-        check(NetworkProtocol.serverAccepts("2"), "Server must accept exact protocol");
+        check(NetworkProtocol.serverAccepts("3"), "Server must accept exact protocol");
         check(NetworkProtocol.serverAccepts(NetworkRegistry.ABSENT.version()),
                 "Server must accept ABSENT.version()");
-        check(!NetworkProtocol.serverAccepts("1"),
+        check(!NetworkProtocol.serverAccepts("2"),
                 "Server must reject the previous protocol");
         check(!NetworkProtocol.serverAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Server must reject ACCEPTVANILLA");
@@ -289,16 +289,16 @@ public final class NetworkFoundationTestMain {
         int count = registrar.freeze();
         check(count == NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT,
                 "Production message table must register the expected ledger count");
-        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 3,
-                "Protocol v2 expects exactly three display messages");
+        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 5,
+                "Protocol v3 expects exactly five display messages");
         check(registrar.isFrozen(), "Production message table must be frozen");
 
         List<NetworkMessageRegistrar.LedgerEntry> ledger = registrar.ledger();
         check(ledger.stream().map(NetworkMessageRegistrar.LedgerEntry::id).toList()
-                        .equals(List.of(0, 1, 2)),
-                "Ledger IDs are exactly 0, 1, 2 in ascending order");
+                        .equals(List.of(0, 1, 2, 3, 4)),
+                "Ledger IDs are exactly 0, 1, 2, 3, 4 in ascending order");
         check(ledger.stream().map(NetworkMessageRegistrar.LedgerEntry::messageClassName)
-                        .distinct().count() == 3,
+                        .distinct().count() == 5,
                 "Ledger message classes are unique");
         for (NetworkMessageRegistrar.LedgerEntry entry : ledger) {
             check(entry.direction() == NetworkDirection.PLAY_TO_CLIENT,

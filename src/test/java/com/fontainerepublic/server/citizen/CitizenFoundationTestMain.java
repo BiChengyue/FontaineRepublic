@@ -21,6 +21,7 @@ import com.fontainerepublic.server.citizen.persistence.CitizenStore;
 import com.fontainerepublic.server.citizen.persistence.CitizenStoreSnapshot;
 import com.fontainerepublic.server.citizen.persistence.CitizenUnavailableException;
 import com.fontainerepublic.server.citizen.service.DefaultCitizenService;
+import com.fontainerepublic.server.network.NetworkRuntimeModule;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
 import com.fontainerepublic.server.registry.api.PlayerPresence;
@@ -593,14 +594,22 @@ public final class CitizenFoundationTestMain {
         ModuleDefinition definition = new ModuleDefinition(
                 CitizenModule.MODULE_ID,
                 new ModuleMetadata("Citizen", "1.0.0", Optional.empty(), Optional.empty()),
-                Set.of(PlayerDataModule.MODULE_ID, SubjectRegistryModule.MODULE_ID),
+                Set.of(
+                        PlayerDataModule.MODULE_ID,
+                        SubjectRegistryModule.MODULE_ID,
+                        NetworkRuntimeModule.MODULE_ID
+                ),
                 Set.of(),
                 50,
                 CitizenModule::new
         );
         require(definition.requiredDependencies().equals(
-                        Set.of(PlayerDataModule.MODULE_ID, SubjectRegistryModule.MODULE_ID)),
-                "citizen depends only on player-data and subject-registry");
+                        Set.of(
+                                PlayerDataModule.MODULE_ID,
+                                SubjectRegistryModule.MODULE_ID,
+                                NetworkRuntimeModule.MODULE_ID
+                        )),
+                "citizen depends only on player-data, subject-registry, and network");
         for (ModuleId dependency : definition.requiredDependencies()) {
             String value = dependency.value();
             require(!value.contains("emg") && !value.contains("emergency")
