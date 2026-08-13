@@ -107,8 +107,9 @@ approved. Committed on `codex/fr-inst-001-a-design`.
 - Phase 2 design candidates passed independent review (conditional) but await
   Human confirmation; two blockers remain: account-key alignment (resolved by
   FR-ECO-001-C-ACCOUNT-ALIGN-01 candidate) and the FR-CORE-002 durability gate.
-- Implementation dispatch network to opencode.ai was unreachable on
-  2026-08-13 (probe shelved until network/proxy available).
+- Dispatch pipeline verified working on 2026-08-13 (reasonix-cli v1.21.2 with
+  `--output-format text -p`; probe succeeded). Early "network unreachable"
+  conclusion was a sandbox test artifact and is retracted.
 - `develop` is two commits ahead of `origin/develop` (FR-CMD-001 not pushed).
 - Workspace contains historical uncommitted changes and stray directories
   (`.reasonix` state, deepseek-worktrees, credential-stage, etc.) not yet

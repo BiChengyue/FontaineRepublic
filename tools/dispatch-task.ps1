@@ -26,7 +26,7 @@ $env:REASONIX_METRICS_PATH = Join-Path $logDir "$TaskName.metrics.json"
 Write-Output "[Dispatch] task=$TaskName model=$Model maxSteps=$MaxSteps wave=$Wave"
 Write-Output "[Dispatch] log=$logDir"
 
-& $Cli --permission-mode auto run --model $Model --max-steps $MaxSteps $prompt *> (Join-Path $logDir "$TaskName.out.log")
+& $Cli run --permission-mode auto --model $Model --max-steps $MaxSteps --output-format text -p $prompt *> (Join-Path $logDir "$TaskName.out.log")
 $code = $LASTEXITCODE
 Write-Output "[Dispatch] EXIT=$code"
 exit $code

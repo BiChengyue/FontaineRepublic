@@ -74,7 +74,7 @@
 $log = 'D:\MC\FontaineRepublic\deepseek-worktrees-v2\dispatch-logs\<wave>'
 $env:REASONIX_METRICS_PATH = "$log\<task>.metrics.json"
 $prompt = Get-Content -LiteralPath '<TASK>-PROMPT.md' -Raw -Encoding UTF8
-& 'E:\Reasonix\versions\v1.25.0\reasonix-cli.exe' --permission-mode auto run --model opencode-go/deepseek-v4-flash --max-steps 60 $prompt *> "$log\<task>.out.log"
+& 'E:\Reasonix\versions\v1.21.2\reasonix-cli.exe' run --permission-mode auto --model opencode-go/deepseek-v4-flash --max-steps 60 --output-format text -p $prompt *> "$log\<task>.out.log"
 ```
 
 推荐直接使用封装运行器：
@@ -83,9 +83,11 @@ $prompt = Get-Content -LiteralPath '<TASK>-PROMPT.md' -Raw -Encoding UTF8
 powershell -File tools\dispatch-task.ps1 -TaskName <task> -PromptFile <TASK>-PROMPT.md
 ```
 
-> 注意：派发需要能访问 `opencode.ai`（OpenAI 兼容网关）。若直连不可达，
-> 需先启动本地代理（全局配置 `[network] proxy_mode = "auto"` 读取环境代理），
-> 或由用户在 Reasonix 桌面端完成网络配置后再派发。2026-08-13 探针因网络不可达搁置。
+> 注意：
+> 1. **必须加 `--output-format text -p`**：非交互环境默认 TUI 接管会卡死
+>    （2026-08-13 排查确认；详见工作日志）。
+> 2. 网络可达性判断必须用**沙箱外**测试（沙箱限制外网会误报）。
+> 3. 历史成功波次使用 v1.21.2；CLI 版本升级需先探针验证。
 
 ### 4.3 派发纪律
 
