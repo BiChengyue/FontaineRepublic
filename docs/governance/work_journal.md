@@ -216,3 +216,14 @@
   并入 develop（`e3db90f`）。
 - 派发 FR-LAND-001-IMPL（土地模块，wave fr-land-001-20260813）；
   FR-ECO-001-IMPL 就绪工件已备（实现顺序最后一环）。
+
+## 2026-08-13 | 土地模块交付 + 审查通过 + 经济派发
+
+- 土地子进程完成实现（39 文件 +4479 行：api/model/event/persistence/service/LandModule），
+  提交 `d9cc20c`（Reviewer 代提交）。
+- Reviewer 独立复跑 landFoundationTest + 完整构建全绿；审查报告 FR-LAND-001-REVIEW-01
+  （验收 11/12 PASS；ownership 不可变、rank 无绕过、无硬编码坐标均有专项测试）；
+  并入 develop（`157f986`）。
+- 细化 FR-ECO-001 实现任务文档（账户 SubjectId 键、原子转账快照、供给守恒、测试计划）
+  并派发 FR-ECO-001-IMPL（wave fr-eco-001-20260813）——批准序列最后一环。
+- 序列进度：Core/Audit/ID/Bootstrap/Citizen/Land 全部实现+审查+并入；Economy 进行中。
