@@ -1,7 +1,8 @@
 # Task Card — FR-CLIENT-001-IMPL-B（客户端 GUI/HUD）
 
-> Status: Prepared（依赖 Stage A 并入 develop 后派发）
-> Task Type: 客户端阶段 B — 可视化界面（展示/输入转发）
+> Status: Authorized（Stage A 已并入 develop）
+> Task Type: 客户端阶段 B-1 — 可视化界面（balance HUD/卡、转账表单、通知、
+> 流水视图、引导屏；公民卡/完整历史页留待 Stage B-2）
 > Design Reference: docs/architecture/fr-client-001-a-client-ui-module-architecture.md v1.1
 > Dependency: FR-CLIENT-001-IMPL-A（S2C 展示网络面）、FR-CMD-001（命令路径）
 
@@ -13,12 +14,13 @@
 
 ## Scope
 
-**Allowed:** balance card/HUD、transfer 表单（/fr 命令路径提交）、citizen 卡、
-通知 HUD、交易历史视图（需追加 S2C 历史页消息）、游戏内引导页；
-必要时追加 `CitizenInfoPacket(3)` / `TransactionHistorySyncPacket(4)`。
+**Allowed:** balance card/HUD、transfer 表单（/fr money pay 命令路径提交）、
+通知 HUD、实时交易流水视图（读 Stage A 缓存）、游戏内引导页；
+客户端命令/按键打开界面。
 
 **Forbidden:** 客户端权威状态/存储/权限判定；权威 C2S 包；新依赖；
-紧急动作客户端界面；服务端业务逻辑改动（除必要的展示消息与查询投影）。
+紧急动作客户端界面；新增 S2C 消息/服务端业务改动（Stage B-2 范围）；
+公民卡/完整历史页。
 
 ## Acceptance
 

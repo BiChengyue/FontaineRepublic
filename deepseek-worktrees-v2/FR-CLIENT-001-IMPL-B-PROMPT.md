@@ -29,7 +29,7 @@
 ## 4. 验收（FR-CLIENT-001-A v1.1 §5）
 
 - balance card/HUD、transfer 表单、citizen 卡、通知 HUD、历史视图、引导页
-  可打开且数据来自展示缓存；
+  可打开且数据来自展示缓存（citizen 卡/完整历史页不属于本阶段 B-1）；
 - 表单提交失败（服务端拒绝）时界面给出有界反馈，不乐观落账；
 - 无 FR 客户端时功能不受影响；
 - `gradlew build` 全绿。
