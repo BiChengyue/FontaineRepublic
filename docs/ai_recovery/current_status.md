@@ -120,6 +120,10 @@ treasury total with restricted details / single-use on-site context / own
 balance only); Parliament extensions = deferred; client mod = final phase;
 cleanup = approved set removed (credential-stage kept).
 
+2026-08-14 Human directives: resume paused server-side tasks (Parliament
+extensions, FR-EMG); institutions switch from terminals to registered zones
+(FR-INST-002-B, dispatched). Client mod remains paused.
+
 ## Next Task
 
 Human directives (2026-08-13): after feature development completes, provide
