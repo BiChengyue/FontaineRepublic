@@ -18,11 +18,11 @@ import org.slf4j.LoggerFactory;
 /**
  * FR client entry (FR-CLIENT-001-IMPL-B): registers the {@code /frclient}
  * client command surface and the balance/notification HUD. This class lives
- * in {@code client/} and is referenced from the main mod class only inside a
- * {@code DistExecutor.safeRunWhenOn(Dist.CLIENT, ...)} supplier, so a
- * dedicated server never loads it. All screens are thin views over the
- * non-authoritative presentation cache; every mutation path re-enters the
- * server command surface.
+ * in {@code client/} and is referenced only from the main mod class's
+ * client-setup listener ({@code FMLClientSetupEvent}), which fires only on
+ * the physical client; a dedicated server never loads it. All screens are
+ * thin views over the non-authoritative presentation cache; every mutation
+ * path re-enters the server command surface.
  */
 public final class ClientManager {
 

@@ -41,16 +41,15 @@ import com.fontainerepublic.server.registry.SubjectRegistryModule;
 import com.fontainerepublic.server.registry.api.SubjectRegistryService;
 import com.mojang.logging.LogUtils;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
-import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
 
@@ -87,13 +86,24 @@ public class FontaineRepublic {
         MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
         MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggedOut);
         MinecraftForge.EVENT_BUS.addListener(commandBootstrap::onRegisterCommands);
-        // Client-only surface (GUI/HUD/forms): the supplier is never evaluated
-        // on a dedicated server, so no client/ class is loaded there
-        // (FR-CLIENT-001-A §4.3 side isolation).
-        DistExecutor.safeRunWhenOn(
-                Dist.CLIENT,
-                () -> () -> com.fontainerepublic.client.ClientManager.init()
-        );
+        // Client-only surface (GUI/HUD/forms): FMLClientSetupEvent fires only
+        // on the physical client, so the handler below — and therefore
+        // ClientManager and every client/ class it references — is never
+        // executed or loaded on a dedicated server (FR-CLIENT-001-A §4.3 side
+        // isolation). Forge's DistExecutor.safeRunWhenOn cannot be used here
+        // because its safe-referent validation rejects mod-owned client
+        // classes; the client-setup listener is the equivalent isolation.
+        modEventBus.addListener(this::onClientSetup);
+    }
+
+    /**
+     * Client-side initialization (FR-CLIENT-001-IMPL-B): invoked only when
+     * the physical client fires {@link FMLClientSetupEvent}. The method body
+     * reference to {@code ClientManager} resolves lazily, so a dedicated
+     * server never loads any {@code client/} class.
+     */
+    private void onClientSetup(FMLClientSetupEvent event) {
+        com.fontainerepublic.client.ClientManager.init();
     }
 
     private void onCommonSetup(FMLCommonSetupEvent event) {
