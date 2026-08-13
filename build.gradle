@@ -193,6 +193,15 @@ tasks.register('justiceFoundationTest', JavaExec) {
     systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
 }
 
+tasks.register('emergencyFoundationTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-EMG-001 emergency foundation validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.server.emergency.EmergencyFoundationTestMain'
+    systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
+}
+
 tasks.named('check') {
     dependsOn tasks.named('playerDataTest')
     dependsOn tasks.named('playerDirectoryFoundationTest')
@@ -210,4 +219,5 @@ tasks.named('check') {
     dependsOn tasks.named('parliamentFoundationTest')
     dependsOn tasks.named('legislativeExtensionsFoundationTest')
     dependsOn tasks.named('justiceFoundationTest')
+    dependsOn tasks.named('emergencyFoundationTest')
 }

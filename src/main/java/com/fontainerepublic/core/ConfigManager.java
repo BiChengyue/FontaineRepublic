@@ -64,6 +64,9 @@ public class ConfigManager {
     /** Default bounded presence-check interval in ticks (1 second at 20 TPS). */
     public static final int DEFAULT_INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS = 20;
 
+    /** Default: no Hydro Archon emergency authority UUID configured. */
+    public static final String DEFAULT_EMERGENCY_HYDRO_ARCHON_UUID = "";
+
     private static final ForgeConfigSpec.IntValue COMMIT_MIN_INTERVAL_MILLIS;
     private static final ForgeConfigSpec.IntValue COMMIT_MAX_BYTES_PER_NAMESPACE;
 
@@ -85,6 +88,7 @@ public class ConfigManager {
     private static final ForgeConfigSpec.IntValue INSTITUTION_MAX_ZONE_Y_SIZE;
     private static final ForgeConfigSpec.IntValue INSTITUTION_MAX_ZONE_Z_SIZE;
     private static final ForgeConfigSpec.IntValue INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS;
+    private static final ForgeConfigSpec.ConfigValue<String> EMERGENCY_HYDRO_ARCHON_UUID;
 
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -281,6 +285,25 @@ public class ConfigManager {
                         200
                 );
         builder.pop();
+
+        builder.comment(
+                "FR-EMG-001 shared emergency authority configuration. "
+                        + "The configured Hydro Archon UUID is the candidate "
+                        + "value; the shared emergency namespace holds the last "
+                        + "accepted digest and revision. Merely editing this "
+                        + "file is NOT an authorized change — drift fails "
+                        + "closed until the real local console recovers."
+        ).push("emergency");
+        EMERGENCY_HYDRO_ARCHON_UUID = builder
+                .comment(
+                        "Candidate Hydro Archon Minecraft UUID (canonical "
+                                + "lowercase hyphenated). Empty = none."
+                )
+                .define(
+                        "hydroArchonUuid",
+                        DEFAULT_EMERGENCY_HYDRO_ARCHON_UUID
+                );
+        builder.pop();
         SPEC = builder.build();
     }
 
@@ -474,6 +497,37 @@ public class ConfigManager {
             return INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS.get();
         } catch (IllegalStateException notLoaded) {
             return DEFAULT_INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS;
+        }
+    }
+
+    /**
+     * Candidate Hydro Archon emergency authority UUID (canonical lowercase
+     * hyphenated string, or empty when none); falls back to the default when
+     * the config is not loaded yet.
+     */
+    public static String emergencyHydroArchonUuid() {
+        try {
+            String value = EMERGENCY_HYDRO_ARCHON_UUID.get();
+            return value == null ? DEFAULT_EMERGENCY_HYDRO_ARCHON_UUID : value;
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_EMERGENCY_HYDRO_ARCHON_UUID;
+        }
+    }
+
+    /**
+     * Sets the candidate Hydro Archon emergency authority UUID. The value is
+     * the candidate only; the durable accepted state lives in the shared
+     * emergency namespace.
+     */
+    public static void setEmergencyHydroArchonUuid(String canonicalUuid) {
+        try {
+            EMERGENCY_HYDRO_ARCHON_UUID.set(canonicalUuid == null
+                    ? DEFAULT_EMERGENCY_HYDRO_ARCHON_UUID : canonicalUuid);
+        } catch (IllegalStateException notLoaded) {
+            // Config not loaded; caller should treat as unavailable.
+            throw new IllegalStateException(
+                    "Emergency authority config is not loaded", notLoaded
+            );
         }
     }
 }
