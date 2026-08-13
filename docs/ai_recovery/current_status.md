@@ -175,6 +175,16 @@ stages A/B-1/B-2 complete. Remaining: Stage B-3 (institution/land views),
 Stage C (real-machine visual verification with Human), and the Level 3 server
 verification awaiting Human.
 
+2026-08-14: FR-CLIENT-001-IMPL-B3a (government/parliament public info views,
+protocol v4, ledger IDs 0-6, login snapshot via InstitutionPresentationSync)
+implemented, independently reviewed (Level 1-2, full build green, 32 tasks),
+merged into develop, and full-stack smoke passed (protocol 4, 7 messages, 12
+modules, Ready, ExitCode=0, no client classloading). Player guide updated with
+the FR Client usage section. Client stages A/B-1/B-2/B-3a complete. Remaining:
+Stage B-3b (court/land views; land needs a new bounded read projection plus
+design review), Stage C (real-machine visual verification with Human), and
+the Level 3 server verification awaiting Human.
+
 ## Phase 2 Design Candidates (added 2026-08-02)
 
 All are design candidates only — implementation is not authorized until

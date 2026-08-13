@@ -612,3 +612,23 @@
 - 派发 FR-CLIENT-001-IMPL-B3a（wave fr-client-001-b3a-20260814，工作树
   fr-client-001-impl-b3a）。
 - 待交付后：独立审查 → 完整构建 → 并入 develop → 与早间真机核验一并验收。
+## 2026-08-14（深夜）| 客户端 Stage B-3a 交付 + 审查通过 + 并入 develop
+
+- 派发 FR-CLIENT-001-IMPL-B3a（wave fr-client-001-b3a-20260814）：子进程完成
+  协议 v4、账本追加 GovernmentInfoPacket(5)/ParliamentInfoPacket(6)、
+  InstitutionPresentationSync（登录快照，复用 ministries()/proposals()）、
+  客户端缓存/执行器/handler、GovernmentScreen/ParliamentScreen、
+  /frclient government|parliament 与测试后达轮次上限退出。
+- Reviewer 修复：FontaineRepublic 缺 governmentService()/parliamentService()
+  辅助方法与 UUID import；测试 stub 缺政府/议会类型 import（改通配）；
+  同步既有测试（NetworkFoundationTestMain v4/7 条、ClientPresentationFoundation
+  TestMain v4/handler 7 引用）；接线 build.gradle。
+- 验证：`clientStageB3aFoundationTest` 通过；完整 `gradlew build`
+  BUILD SUCCESSFUL（32 tasks）。
+- 审查报告 FR-CLIENT-001-IMPL-B3a-REVIEW-01（PASS → ROUTE TO HUMAN）；提交
+  `d8c83e2` 并入 develop（merge `1a04559`）。
+- 全栈冒烟（tmp/smoke-client-b3a-20260814）：**Channel fontainerepublic:main
+  protocol 4 frozen with 7 production messages**；12 模块全部初始化；
+  无 client 类加载/ERROR；Ready、干净关停、ExitCode=0。
+- 客户端阶段：A/B-1/B-2/B-3a ✓；剩余 B-3b（法院/土地，土地需新只读投影 +
+  设计审查）与 Stage C（真机目视核验，含全部 /frclient 界面）。

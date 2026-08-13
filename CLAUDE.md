@@ -115,17 +115,19 @@ DistExecutor.safeRunWhenOn rejects mod-owned client referents, so the mod
 entry uses an FMLClientSetupEvent listener for client init (dedicated server
 never loads client classes). FR-CLIENT-001-IMPL-B2 (citizen card + transaction
 history view, protocol v3, ledger IDs 0-4) is also implemented, reviewed,
-merged, and smoke-verified. Stage B-3 (institution/land views) and Stage C
-(real-machine verification) remain.
+merged, and smoke-verified. FR-CLIENT-001-IMPL-B3a (government/parliament
+public info views, protocol v4, ledger IDs 0-6, login snapshot) is also
+implemented, reviewed, merged, and smoke-verified. Stage B-3b (court/land
+views) and Stage C (real-machine verification) remain.
 
 Next:
 
-Optionally continue Stage B-3 (institution/land views per a future task card),
-then coordinate real-machine (Level 3) verification of the server surface,
-the client network surface, and the GUI with Human (emergency
-bootstrap/preview/confirm, central-bank on-site, crash window, FR client
-connect). See docs/governance/continuous_development_ops.md for the operating
-handbook.
+Optionally continue Stage B-3b (court/land views; land needs a new bounded
+read projection plus design review), then coordinate real-machine (Level 3)
+verification of the server surface, the client network surface, and the GUI
+with Human (emergency bootstrap/preview/confirm, central-bank on-site, crash
+window, FR client connect). See docs/governance/continuous_development_ops.md
+for the operating handbook.
 
 Always read this section before starting work.
 
