@@ -4,13 +4,10 @@ import com.fontainerepublic.FontaineRepublic;
 import com.fontainerepublic.server.command.registration.CommandContributionSpec;
 import com.fontainerepublic.server.command.registration.CommandRegistrationException;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
-import com.mojang.brigadier.context.CommandContext;
-import com.mojang.brigadier.tree.CommandNode;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -37,7 +34,7 @@ final class FRCommand {
                         "FontaineRepublic " + FontaineRepublic.MOD_VERSION
                                 + " commands are available. Use /fr help."
                 ));
-        root.then(Commands.literal("help").executes(FRCommand::showHelp));
+        root.then(HelpCommand.create());
         root.then(FrameworkAdminCommand.create(runtimeResolver));
 
         for (CommandContributionSpec specification : specifications) {
@@ -70,25 +67,5 @@ final class FRCommand {
             root.then(child);
         }
         return root;
-    }
-
-    private static int showHelp(CommandContext<CommandSourceStack> context) {
-        CommandNode<CommandSourceStack> root =
-                context.getRootNode().getChild(ROOT_LITERAL);
-        ArrayList<String> visible = new ArrayList<>();
-        if (root != null) {
-            root.getChildren().stream()
-                    .filter(node -> node.canUse(context.getSource()))
-                    .map(CommandNode::getName)
-                    .sorted()
-                    .forEach(visible::add);
-        }
-        String suffix = visible.isEmpty()
-                ? "No subcommands are available."
-                : "Available: " + String.join(", ", visible) + ".";
-        return CommandFeedback.success(
-                context.getSource(),
-                "FontaineRepublic command help. " + suffix
-        );
     }
 }
