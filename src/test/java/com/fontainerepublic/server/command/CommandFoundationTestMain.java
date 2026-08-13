@@ -6,9 +6,22 @@ import com.fontainerepublic.core.module.ModuleDefinition;
 import com.fontainerepublic.core.module.ModuleId;
 import com.fontainerepublic.core.module.ModuleMetadata;
 import com.fontainerepublic.core.module.ModuleRegistry;
+import com.fontainerepublic.server.citizen.api.CitizenReceipt;
+import com.fontainerepublic.server.citizen.api.CitizenService;
+import com.fontainerepublic.server.citizen.model.CitizenRank;
+import com.fontainerepublic.server.citizen.model.CitizenRecord;
+import com.fontainerepublic.server.citizen.model.CitizenStatus;
 import com.fontainerepublic.server.command.registration.CommandContributionRegistry;
 import com.fontainerepublic.server.command.registration.CommandContributionSpec;
 import com.fontainerepublic.server.command.registration.CommandRegistrationException;
+import com.fontainerepublic.server.economy.api.EconomyPage;
+import com.fontainerepublic.server.economy.api.EconomyService;
+import com.fontainerepublic.server.economy.api.TransferReceipt;
+import com.fontainerepublic.server.economy.model.EconomyAccount;
+import com.fontainerepublic.server.economy.model.EconomyTransaction;
+import com.fontainerepublic.server.economy.model.NotificationSummary;
+import com.fontainerepublic.server.login.LoginProvisioningHook;
+import com.fontainerepublic.server.registry.model.SubjectId;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -29,6 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Dependency-free, outcome-asserting FR-CMD-001 validation entry point.
@@ -48,6 +62,8 @@ public final class CommandFoundationTestMain {
         testPermissionAndRuntimeOutcomes();
         testFeedbackBounds();
         testProductionBoundaries();
+        testBusinessCommandTree();
+        testLoginProvisioningHook();
         System.out.println("[FR-CMD-001] Command foundation validation passed");
     }
 
@@ -350,27 +366,32 @@ public final class CommandFoundationTestMain {
                             + forbidden
             );
         }
-        // Argument parsing is allowed only inside the foundation-owned admin
+        // Argument parsing is allowed only in the foundation-owned admin
         // child adapter (FrameworkAdminCommand), which hosts the approved
         // /fr admin bootstrap subject-hydro <uuid> <reason> command
-        // (FR-ID-BOOTSTRAP-001-A §3). Every other command source file must
-        // remain argument-free.
+        // (FR-ID-BOOTSTRAP-001-A §3), and in the approved business command
+        // surfaces MoneyCommand (UUID/amount/memo/page arguments) and
+        // CitizenCommand (read-only, argument-free by design,
+        // FR-CIT-001-A §5). Every other command source file must remain
+        // argument-free.
         for (Path file : commandFiles(commandDirectory)) {
-            if (file.getFileName().toString().equals("FrameworkAdminCommand.java")) {
+            String fileName = file.getFileName().toString();
+            if (fileName.equals("FrameworkAdminCommand.java")
+                    || fileName.equals("MoneyCommand.java")
+                    || fileName.equals("CitizenCommand.java")) {
                 continue;
             }
             check(
                     !read(file).contains("Commands.argument("),
                     "Command argument parsing is only permitted in "
-                            + "FrameworkAdminCommand (foundation-owned admin child adapter): "
+                            + "FrameworkAdminCommand/MoneyCommand/CitizenCommand: "
                             + file.getFileName()
             );
         }
-        for (String businessLiteral : List.of(
-                "literal(\"citizen\")",
+        for (String forbiddenLiteral : List.of(
                 "literal(\"economy\")",
-                "literal(\"money\")",
                 "literal(\"bank\")",
+                "literal(\"top\")",
                 "literal(\"land\")",
                 "literal(\"court\")",
                 "literal(\"election\")",
@@ -378,9 +399,19 @@ public final class CommandFoundationTestMain {
                 "literal(\"reload\")"
         )) {
             check(
-                    !production.contains(businessLiteral),
-                    "Production command tree must not contain business literal "
-                            + businessLiteral
+                    !production.contains(forbiddenLiteral),
+                    "Production command tree must not contain forbidden literal "
+                            + forbiddenLiteral
+            );
+        }
+        for (String approvedLiteral : List.of(
+                "literal(\"money\")",
+                "literal(\"citizen\")"
+        )) {
+            check(
+                    production.contains(approvedLiteral),
+                    "Production command tree must contain approved literal "
+                            + approvedLiteral
             );
         }
 
@@ -415,8 +446,128 @@ public final class CommandFoundationTestMain {
         }
     }
 
-    private static List<Path> commandFiles(Path commandDirectory) throws Exception {
-        List<Path> files = new java.util.ArrayList<>();
+    private static void testBusinessCommandTree() throws Exception {
+        CommandContributionRegistry registry = new CommandContributionRegistry();
+        registry.register(new CommandContributionSpec("money", MoneyCommand::create));
+        registry.register(new CommandContributionSpec("citizen", CitizenCommand::create));
+        registry.freeze();
+
+        CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
+        bootstrap(registry, new CoreManager(new ModuleRegistry()))
+                .register(dispatcher, null, Commands.CommandSelection.ALL);
+
+        CommandNode<CommandSourceStack> root = dispatcher.getRoot().getChild("fr");
+        check(root != null, "Business contributions must attach under /fr");
+        CommandNode<CommandSourceStack> money = root.getChild("money");
+        CommandNode<CommandSourceStack> citizen = root.getChild("citizen");
+        check(money != null, "Approved /fr money tree must be contributed");
+        check(citizen != null, "Approved /fr citizen tree must be contributed");
+        check(money.getChild("balance") != null, "/fr money balance must exist");
+        check(money.getChild("pay") != null, "/fr money pay must exist");
+        check(money.getChild("history") != null, "/fr money history must exist");
+        check(citizen.getChild("info") != null, "/fr citizen info must exist");
+
+        // 禁用命令守卫:top / bank / 他人余额 / rank 变更一律不注册。
+        check(money.getChild("top") == null, "Forbidden /fr money top must not be registered");
+        check(root.getChild("bank") == null, "Forbidden /fr bank must not be registered");
+        check(money.getChild("balance").getChild("player") == null,
+                "Forbidden other-player balance path must not be registered");
+        check(citizen.getChild("rank") == null, "Forbidden /fr citizen rank must not be registered");
+        check(citizen.getChild("set") == null, "Forbidden /fr citizen set must not be registered");
+
+        // 服务不可用反馈(空 runtime,无玩家实体)。
+        CapturingSource unavailableCapture = new CapturingSource();
+        CommandSourceStack unavailableSource = source(unavailableCapture, 0);
+        int balanceResult = dispatcher.execute("fr money balance", unavailableSource);
+        check(balanceResult == CommandFeedback.FAILURE,
+                "Unavailable economy runtime must fail balance");
+        check(unavailableCapture.lastMessage().contains("Economy runtime is unavailable"),
+                "Unavailable economy feedback must be explicit");
+        int payResult = dispatcher.execute(
+                "fr money pay 00000000-0000-0000-0000-000000000001 5",
+                unavailableSource
+        );
+        check(payResult == CommandFeedback.FAILURE,
+                "Unavailable economy runtime must fail pay");
+        check(unavailableCapture.lastMessage().contains("Economy runtime is unavailable"),
+                "Unavailable pay feedback must be explicit");
+        int historyResult = dispatcher.execute("fr money history", unavailableSource);
+        check(historyResult == CommandFeedback.FAILURE,
+                "Unavailable economy runtime must fail history");
+        int infoResult = dispatcher.execute("fr citizen info", unavailableSource);
+        check(infoResult == CommandFeedback.FAILURE,
+                "Unavailable citizen runtime must fail info");
+        check(unavailableCapture.lastMessage().contains("Citizen runtime is unavailable"),
+                "Unavailable citizen feedback must be explicit");
+
+        // 参数校验:非法 UUID / 超长 memo 拒绝;非法数字 / 多余参数走 Brigadier 语法失败。
+        CapturingSource invalidCapture = new CapturingSource();
+        CommandSourceStack invalidSource = source(invalidCapture, 0);
+        int invalidUuid = dispatcher.execute("fr money pay not-a-uuid 5", invalidSource);
+        check(invalidUuid == CommandFeedback.FAILURE, "Invalid target UUID must fail");
+        check(invalidCapture.lastMessage().contains("invalid target UUID"),
+                "Invalid UUID feedback must be explicit");
+        int invalidMemo = dispatcher.execute(
+                "fr money pay 00000000-0000-0000-0000-000000000001 5 "
+                        + "x".repeat(129),
+                invalidSource
+        );
+        check(invalidMemo == CommandFeedback.FAILURE, "Oversized memo must fail");
+        check(invalidCapture.lastMessage().contains("memo must be at most"),
+                "Oversized memo feedback must be explicit");
+
+        CapturingSource syntaxCapture = new CapturingSource();
+        CommandSourceStack syntaxSource = source(syntaxCapture, 0);
+        expectThrows(CommandSyntaxException.class,
+                () -> dispatcher.execute("fr money history 0", syntaxSource));
+        expectThrows(CommandSyntaxException.class,
+                () -> dispatcher.execute(
+                        "fr money pay 00000000-0000-0000-0000-000000000001 0",
+                        syntaxSource
+                ));
+        expectThrows(CommandSyntaxException.class,
+                () -> dispatcher.execute("fr money balance extra", syntaxSource));
+        check(syntaxCapture.messages().isEmpty(),
+                "Rejected syntax must not emit feedback");
+    }
+
+    private static void testLoginProvisioningHook() {
+        UUID playerId = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+
+        CountingCitizen citizen = new CountingCitizen();
+        CountingEconomy economy = new CountingEconomy();
+        LoginProvisioningHook hook = new LoginProvisioningHook(
+                () -> Optional.of(citizen),
+                () -> Optional.of(economy)
+        );
+        hook.provision(playerId, "alpha");
+        check(citizen.ensureCalls == 1, "Citizen provisioning must be invoked once");
+        check(economy.ensureCalls == 1, "Economy provisioning must be invoked once");
+
+        hook.provision(playerId, "alpha");
+        check(citizen.ensureCalls == 2 && economy.ensureCalls == 2,
+                "Hook must remain safely callable (idempotency owned by services)");
+
+        FailingCitizen failing = new FailingCitizen();
+        CountingEconomy resilient = new CountingEconomy();
+        LoginProvisioningHook failureHook = new LoginProvisioningHook(
+                () -> Optional.of(failing),
+                () -> Optional.of(resilient)
+        );
+        failureHook.provision(playerId, "alpha");
+        check(resilient.ensureCalls == 1,
+                "Economy provisioning must still run when citizen provisioning fails");
+
+        LoginProvisioningHook emptyHook = new LoginProvisioningHook(
+                Optional::empty,
+                Optional::empty
+        );
+        emptyHook.provision(playerId, "alpha");
+        check(failing.ensureCalls == 1,
+                "Unavailable services must be skipped without failure");
+    }
+
+    private static List<Path> commandFiles(Path commandDirectory) throws Exception {        List<Path> files = new java.util.ArrayList<>();
         try (var paths = Files.walk(commandDirectory)) {
             paths.filter(path -> path.toString().endsWith(".java"))
                     .sorted()
@@ -551,6 +702,125 @@ public final class CommandFoundationTestMain {
     @FunctionalInterface
     private interface ThrowingRunnable {
         void run() throws Exception;
+    }
+
+    private static final class CountingCitizen implements CitizenService {
+        private int ensureCalls;
+
+        @Override
+        public CitizenRecord ensureCitizen(UUID playerId) {
+            ensureCalls++;
+            return null;
+        }
+
+        @Override
+        public Optional<CitizenRecord> getCitizen(UUID playerId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public CitizenReceipt setRank(UUID playerId, CitizenRank rank) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public CitizenReceipt setStatus(UUID playerId, CitizenStatus status) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+    }
+
+    private static final class FailingCitizen implements CitizenService {
+        private int ensureCalls;
+
+        @Override
+        public CitizenRecord ensureCitizen(UUID playerId) {
+            ensureCalls++;
+            throw new IllegalStateException("simulated citizen provisioning failure");
+        }
+
+        @Override
+        public Optional<CitizenRecord> getCitizen(UUID playerId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public CitizenReceipt setRank(UUID playerId, CitizenRank rank) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public CitizenReceipt setStatus(UUID playerId, CitizenStatus status) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+    }
+
+    private static final class CountingEconomy implements EconomyService {
+        private int ensureCalls;
+
+        @Override
+        public EconomyAccount ensureAccountForPlayer(UUID playerId) {
+            ensureCalls++;
+            return null;
+        }
+
+        @Override
+        public EconomyAccount ensureAccount(SubjectId subjectId) {
+            return null;
+        }
+
+        @Override
+        public Optional<EconomyAccount> getAccount(SubjectId subjectId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public long getBalance(SubjectId subjectId) {
+            return 0L;
+        }
+
+        @Override
+        public EconomyPage<EconomyTransaction> getRecentTransactions(
+                SubjectId subjectId,
+                long afterId,
+                int limit
+        ) {
+            return EconomyPage.empty(afterId);
+        }
+
+        @Override
+        public TransferReceipt transfer(
+                SubjectId from,
+                SubjectId to,
+                long amount,
+                String memo
+        ) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public TransferReceipt transferByPlayer(
+                UUID fromPlayerId,
+                UUID toPlayerId,
+                long amount,
+                String memo
+        ) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public List<NotificationSummary> pendingNotifications(SubjectId subjectId) {
+            return List.of();
+        }
+
+        @Override
+        public void acknowledgeNotification(SubjectId subjectId, long notificationId) {
+            // no-op stub
+        }
+
+        @Override
+        public String formatBalance(long amount) {
+            return Long.toString(amount);
+        }
     }
 
     private static final class CapturingSource implements CommandSource {
