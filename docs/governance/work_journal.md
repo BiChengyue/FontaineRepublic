@@ -167,3 +167,14 @@
 - 产出 FR-ID-BOOTSTRAP-001-A 设计候选：真实本地 Dedicated Server 控制台为唯一
   Human 授权源；`subject-registry` 命名空间内 append-only 尝试链（摘要链防篡改）；
   绑定不可变；重启对账失败关闭；与 FR-EMG 严格隔离。
+
+## 2026-08-13 | 基础设施阶段完成 + 暂停推进（用户指示）
+
+- FR-ID-001 实现（30 文件 +3704 行）经独立验证（subjectRegistryFoundationTest +
+  完整构建全绿）后提交 `2b46fd6` 并并入 develop（`2abf639`）。
+- 产出阶段性细致审查 `docs/ai_recovery/evidence/FR-INFRA-STAGE-REVIEW-01-AUDIT-REPORT.md`：
+  FR-CORE-002 / FR-AUD-001 / FR-ID-001 三个模块 Level 1-2 全部独立验证通过
+  （CONDITIONAL PASS，ROUTE TO HUMAN）；主要未验证项 = Level 3 真机运行时验证；
+  阻断项 = FR-ID bootstrap（设计候选已备）。
+- **按用户指示暂停继续派发**：Citizen/Land/Economy 不再自动推进；
+  后续仅维护台账、处理反馈、必要时修订既有实现。
