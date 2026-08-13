@@ -3,11 +3,13 @@ package com.fontainerepublic.server.economy.persistence;
 import com.fontainerepublic.core.DataManager;
 import com.fontainerepublic.core.DurableCommitResult;
 import com.fontainerepublic.core.DurableCommitStatus;
+import com.fontainerepublic.server.economy.model.EconomyEmergencyReceipt;
 import com.fontainerepublic.server.economy.api.TransferReceipt;
 import com.fontainerepublic.server.economy.model.EconomyAccount;
 import com.fontainerepublic.server.economy.model.EconomyTransaction;
 import com.fontainerepublic.server.economy.model.NotificationSummary;
 import com.fontainerepublic.server.economy.model.TransactionType;
+import com.fontainerepublic.server.emergency.model.EmergencyDigests;
 import com.fontainerepublic.server.registry.model.SubjectId;
 import net.minecraft.nbt.CompoundTag;
 
@@ -48,6 +50,9 @@ public final class EconomyRepository {
     /** Reserved module-data key for the economy namespace. */
     public static final String MODULE_DATA_KEY = "economy";
 
+    /** Hard bound on permanent emergency success receipts (never pruned). */
+    public static final int MAX_EMERGENCY_RECEIPTS = 100_000;
+
     private final EconomyStore store;
     private final EconomyNbtCodec codec;
     private final EconomyLimits limits;
@@ -56,6 +61,8 @@ public final class EconomyRepository {
     private final LinkedHashMap<SubjectId, EconomyAccount> accounts = new LinkedHashMap<>();
     private final LinkedHashMap<Long, EconomyTransaction> transactions = new LinkedHashMap<>();
     private final Map<SubjectId, Deque<NotificationSummary>> pendingNotifications =
+            new LinkedHashMap<>();
+    private final LinkedHashMap<Long, EconomyEmergencyReceipt> emergencyReceipts =
             new LinkedHashMap<>();
     private long storeRevision;
     private long nextTransactionId;
@@ -125,6 +132,12 @@ public final class EconomyRepository {
         return storeRevision;
     }
 
+    /** Configured maximum balance/supply bound used by preview validation. */
+    public long maxBalance() {
+        requireOwnerThread();
+        return limits.maxBalance();
+    }
+
     public long nextTransactionId() {
         requireOwnerThread();
         return nextTransactionId;
@@ -139,7 +152,8 @@ public final class EconomyRepository {
                 treasuryBalance,
                 accounts,
                 transactions,
-                notificationsCopy()
+                notificationsCopy(),
+                new LinkedHashMap<>(emergencyReceipts)
         );
     }
 
@@ -182,6 +196,55 @@ public final class EconomyRepository {
                 Objects.requireNonNull(subjectId, "subjectId")
         );
         return queue == null ? List.of() : List.copyOf(queue);
+    }
+
+    /** Highest permanent emergency receipt sequence (0 when none). */
+    public long highestReceiptSequence() {
+        requireOwnerThread();
+        long highest = 0L;
+        for (EconomyEmergencyReceipt receipt : emergencyReceipts.values()) {
+            highest = Math.max(highest, receipt.sequence());
+        }
+        return highest;
+    }
+
+    /**
+     * Bounded ascending page of permanent emergency receipts strictly after
+     * {@code afterSequence}. The list is immutable; never pruned by ordinary
+     * operational-history trimming.
+     */
+    public List<EconomyEmergencyReceipt> receiptsAfter(long afterSequence, int limit) {
+        requireOwnerThread();
+        if (limit <= 0) {
+            return List.of();
+        }
+        List<EconomyEmergencyReceipt> result = new ArrayList<>();
+        for (EconomyEmergencyReceipt receipt : emergencyReceipts.values()) {
+            if (receipt.sequence() <= afterSequence) {
+                continue;
+            }
+            result.add(receipt);
+            if (result.size() >= limit) {
+                break;
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    /** Exact lookup by action id + canonical envelope digest. */
+    public Optional<EconomyEmergencyReceipt> findReceipt(
+            String actionId, String envelopeDigest
+    ) {
+        requireOwnerThread();
+        Objects.requireNonNull(actionId, "actionId");
+        Objects.requireNonNull(envelopeDigest, "envelopeDigest");
+        for (EconomyEmergencyReceipt receipt : emergencyReceipts.values()) {
+            if (receipt.actionId().equals(actionId)
+                    && receipt.envelopeDigest().equals(envelopeDigest)) {
+                return Optional.of(receipt);
+            }
+        }
+        return Optional.empty();
     }
 
     // ------------------------------------------------------------------
@@ -232,7 +295,8 @@ public final class EconomyRepository {
                 treasuryBalance,
                 nextAccounts,
                 transactions,
-                pendingNotifications
+                pendingNotifications,
+                receiptsCopy()
         ));
         return created;
     }
@@ -386,7 +450,8 @@ public final class EconomyRepository {
                 treasuryBalance,
                 nextAccounts,
                 nextTransactions,
-                nextNotifications
+                nextNotifications,
+                receiptsCopy()
         ));
         return new TransferReceipt(
                 newId,
@@ -502,7 +567,8 @@ public final class EconomyRepository {
                 treasuryBalance - amount,
                 nextAccounts,
                 nextTransactions,
-                pendingNotifications
+                pendingNotifications,
+                receiptsCopy()
         ));
         return transaction;
     }
@@ -611,7 +677,8 @@ public final class EconomyRepository {
                 newTreasury,
                 nextAccounts,
                 nextTransactions,
-                pendingNotifications
+                pendingNotifications,
+                receiptsCopy()
         ));
         return transaction;
     }
@@ -667,9 +734,314 @@ public final class EconomyRepository {
                 treasuryBalance,
                 nextAccounts,
                 transactions,
-                pendingNotifications
+                pendingNotifications,
+                receiptsCopy()
         ));
         return updated;
+    }
+
+    /**
+     * Emergency money creation for one player account (FR-ECO-001-C 搂10):
+     * one replacement snapshot containing the credited account (lazily
+     * created at zero when absent), one emergency {@code ISSUE} transaction,
+     * the advanced next id, account/store revisions +1 exactly once, the
+     * pending system notification, and the permanent success receipt chained
+     * to the previous receipt. Total digital supply
+     * {@code = sum(accounts) + treasury} increases by exactly {@code amount}
+     * (treasury unchanged). This path is reached only through a confirmed
+     * FR-EMG envelope; the design does not require the official freeze gate
+     * for break-glass actions.
+     */
+    public EconomyEmergencyReceipt emergencyIssue(
+            SubjectId target,
+            long amount,
+            String actionId,
+            String actionVersion,
+            String providerIdentity,
+            String category,
+            String reason,
+            long attemptId,
+            long at,
+            long expectedStoreRevision,
+            String envelopeDigest
+    ) {
+        requireOwnerThread();
+        Objects.requireNonNull(target, "target");
+        requireAmount(amount);
+        requireAttempt(attemptId, at);
+        if (expectedStoreRevision != storeRevision) {
+            throw stale("store");
+        }
+        if (nextTransactionId == Long.MAX_VALUE) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_CAPACITY_EXCEEDED,
+                    "Economy transaction id space exhausted"
+            );
+        }
+        requireStoreRevisionSpace();
+
+        EconomyAccount existing = accounts.get(target);
+        long balanceBefore = existing == null ? 0L : existing.balance();
+        long accountRevisionBefore = existing == null ? 0L : existing.accountRevision();
+        long newBalance;
+        try {
+            newBalance = Math.addExact(balanceBefore, amount);
+        } catch (ArithmeticException overflow) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Target balance would overflow"
+            );
+        }
+        if (newBalance > limits.maxBalance()) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Target balance would exceed the maximum of " + limits.maxBalance()
+            );
+        }
+
+        LinkedHashMap<SubjectId, EconomyAccount> nextAccounts =
+                new LinkedHashMap<>(accounts);
+        if (existing == null) {
+            if (accounts.size() >= limits.maxAccounts()) {
+                throw new EconomyUnavailableException(
+                        EconomyUnavailableException.CODE_CAPACITY_EXCEEDED,
+                        "Account count would exceed the budget of " + limits.maxAccounts()
+                );
+            }
+            existing = new EconomyAccount(
+                    EconomyAccount.CURRENT_SCHEMA_VERSION,
+                    target,
+                    0L,
+                    1L,
+                    at,
+                    0L,
+                    false
+            );
+        }
+        long newId = nextTransactionId;
+        EconomyAccount newTarget = existing.withBalance(newBalance, newId);
+        nextAccounts.put(target, newTarget);
+
+        LinkedHashMap<Long, EconomyTransaction> nextTransactions =
+                new LinkedHashMap<>(transactions);
+        EconomyTransaction transaction = new EconomyTransaction(
+                EconomyTransaction.CURRENT_SCHEMA_VERSION,
+                newId,
+                at,
+                null,
+                target,
+                amount,
+                TransactionType.ISSUE,
+                null
+        );
+        nextTransactions.put(newId, transaction);
+        if (nextTransactions.size() > limits.maxTransactions()) {
+            Long oldest = nextTransactions.keySet().iterator().next();
+            nextTransactions.remove(oldest);
+        }
+
+        Map<SubjectId, Deque<NotificationSummary>> nextNotifications =
+                copyNotifications(pendingNotifications);
+        Deque<NotificationSummary> queue = nextNotifications.computeIfAbsent(
+                target,
+                ignored -> new ArrayDeque<>()
+        );
+        queue.addLast(new NotificationSummary(
+                NotificationSummary.CURRENT_SCHEMA_VERSION,
+                newId,
+                newId,
+                at,
+                null,
+                amount,
+                null
+        ));
+        while (queue.size() > limits.maxPendingNotificationsPerSubject()) {
+            queue.pollFirst();
+        }
+
+        long supplyBefore = snapshot().totalSupply();
+        long supplyAfter = supplyBefore + amount;
+        if (supplyAfter < 0 || supplyAfter > limits.maxBalance()) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Total supply would exceed the maximum of " + limits.maxBalance()
+            );
+        }
+
+        EconomyEmergencyReceipt receipt = buildReceipt(
+                target,
+                amount,
+                actionId,
+                actionVersion,
+                providerIdentity,
+                category,
+                reason,
+                attemptId,
+                at,
+                newId,
+                balanceBefore,
+                newBalance,
+                supplyBefore,
+                supplyAfter,
+                accountRevisionBefore,
+                newTarget.accountRevision(),
+                envelopeDigest
+        );
+        LinkedHashMap<Long, EconomyEmergencyReceipt> nextReceipts =
+                new LinkedHashMap<>(emergencyReceipts);
+        nextReceipts.put(receipt.sequence(), receipt);
+
+        commitAndPublish(buildSnapshot(
+                storeRevision + 1,
+                newId + 1,
+                treasuryBalance,
+                nextAccounts,
+                nextTransactions,
+                nextNotifications,
+                nextReceipts
+        ));
+        return receipt;
+    }
+
+    /**
+     * Emergency money destruction from one player account (FR-ECO-001-C
+     * 搂11): one replacement snapshot containing the debited account, one
+     * emergency {@code RECLAIM} transaction, the advanced next id,
+     * account/store revisions +1 exactly once, the pending system
+     * notification, and the permanent success receipt. Total digital supply
+     * decreases by exactly {@code amount} (treasury unchanged). The target
+     * must hold the complete amount; partial reclaim is rejected.
+     */
+    public EconomyEmergencyReceipt emergencyReclaim(
+            SubjectId target,
+            long amount,
+            String actionId,
+            String actionVersion,
+            String providerIdentity,
+            String category,
+            String reason,
+            long attemptId,
+            long at,
+            long expectedStoreRevision,
+            String envelopeDigest
+    ) {
+        requireOwnerThread();
+        Objects.requireNonNull(target, "target");
+        requireAmount(amount);
+        requireAttempt(attemptId, at);
+        if (expectedStoreRevision != storeRevision) {
+            throw stale("store");
+        }
+
+        EconomyAccount source = accounts.get(target);
+        if (source == null) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_NO_ACCOUNT,
+                    "No economy account for target subject " + target
+            );
+        }
+        if (source.balance() < amount) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_INSUFFICIENT_FUNDS,
+                    "Insufficient balance for subject " + target
+            );
+        }
+        if (nextTransactionId == Long.MAX_VALUE) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_CAPACITY_EXCEEDED,
+                    "Economy transaction id space exhausted"
+            );
+        }
+        requireStoreRevisionSpace();
+
+        long newId = nextTransactionId;
+        EconomyAccount newSource = source.withBalance(
+                source.balance() - amount,
+                newId
+        );
+        LinkedHashMap<SubjectId, EconomyAccount> nextAccounts =
+                new LinkedHashMap<>(accounts);
+        nextAccounts.put(target, newSource);
+
+        LinkedHashMap<Long, EconomyTransaction> nextTransactions =
+                new LinkedHashMap<>(transactions);
+        EconomyTransaction transaction = new EconomyTransaction(
+                EconomyTransaction.CURRENT_SCHEMA_VERSION,
+                newId,
+                at,
+                target,
+                null,
+                amount,
+                TransactionType.RECLAIM,
+                null
+        );
+        nextTransactions.put(newId, transaction);
+        if (nextTransactions.size() > limits.maxTransactions()) {
+            Long oldest = nextTransactions.keySet().iterator().next();
+            nextTransactions.remove(oldest);
+        }
+
+        Map<SubjectId, Deque<NotificationSummary>> nextNotifications =
+                copyNotifications(pendingNotifications);
+        Deque<NotificationSummary> queue = nextNotifications.computeIfAbsent(
+                target,
+                ignored -> new ArrayDeque<>()
+        );
+        queue.addLast(new NotificationSummary(
+                NotificationSummary.CURRENT_SCHEMA_VERSION,
+                newId,
+                newId,
+                at,
+                null,
+                amount,
+                null
+        ));
+        while (queue.size() > limits.maxPendingNotificationsPerSubject()) {
+            queue.pollFirst();
+        }
+
+        long supplyBefore = snapshot().totalSupply();
+        long supplyAfter = supplyBefore - amount;
+        if (supplyAfter < 0) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_INSUFFICIENT_FUNDS,
+                    "Total supply cannot fall below zero"
+            );
+        }
+
+        EconomyEmergencyReceipt receipt = buildReceipt(
+                target,
+                amount,
+                actionId,
+                actionVersion,
+                providerIdentity,
+                category,
+                reason,
+                attemptId,
+                at,
+                newId,
+                source.balance(),
+                source.balance() - amount,
+                supplyBefore,
+                supplyAfter,
+                source.accountRevision(),
+                newSource.accountRevision(),
+                envelopeDigest
+        );
+        LinkedHashMap<Long, EconomyEmergencyReceipt> nextReceipts =
+                new LinkedHashMap<>(emergencyReceipts);
+        nextReceipts.put(receipt.sequence(), receipt);
+
+        commitAndPublish(buildSnapshot(
+                storeRevision + 1,
+                newId + 1,
+                treasuryBalance,
+                nextAccounts,
+                nextTransactions,
+                nextNotifications,
+                nextReceipts
+        ));
+        return receipt;
     }
 
     private void requireNotFrozen(EconomyAccount account) {
@@ -723,7 +1095,8 @@ public final class EconomyRepository {
                 treasuryBalance,
                 accounts,
                 transactions,
-                nextNotifications
+                nextNotifications,
+                receiptsCopy()
         ));
         return true;
     }
@@ -738,7 +1111,8 @@ public final class EconomyRepository {
             long treasuryBalance,
             Map<SubjectId, EconomyAccount> accounts,
             Map<Long, EconomyTransaction> transactions,
-            Map<SubjectId, Deque<NotificationSummary>> notifications
+            Map<SubjectId, Deque<NotificationSummary>> notifications,
+            Map<Long, EconomyEmergencyReceipt> receipts
     ) {
         Map<SubjectId, List<NotificationSummary>> frozen = new LinkedHashMap<>();
         notifications.forEach((subjectId, queue) -> frozen.put(subjectId, List.copyOf(queue)));
@@ -749,8 +1123,115 @@ public final class EconomyRepository {
                 treasuryBalance,
                 accounts,
                 transactions,
-                frozen
+                frozen,
+                new LinkedHashMap<>(receipts)
         );
+    }
+
+    private void requireAmount(long amount) {
+        if (amount <= 0) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "Amount must be positive"
+            );
+        }
+    }
+
+    private void requireAttempt(long attemptId, long at) {
+        if (attemptId <= 0 || at <= 0) {
+            throw new IllegalArgumentException(
+                    "Attempt id and timestamp must be positive"
+            );
+        }
+    }
+
+    private EconomyEmergencyReceipt buildReceipt(
+            SubjectId target,
+            long amount,
+            String actionId,
+            String actionVersion,
+            String providerIdentity,
+            String category,
+            String reason,
+            long attemptId,
+            long at,
+            long transactionId,
+            long balanceBefore,
+            long balanceAfter,
+            long supplyBefore,
+            long supplyAfter,
+            long accountRevisionBefore,
+            long accountRevisionAfter,
+            String envelopeDigest
+    ) {
+        if (emergencyReceipts.size() >= MAX_EMERGENCY_RECEIPTS) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_CAPACITY_EXCEEDED,
+                    "Emergency receipt budget of " + MAX_EMERGENCY_RECEIPTS
+                            + " is exhausted"
+            );
+        }
+        long sequence = highestReceiptSequence() + 1L;
+        String prevDigest = emergencyReceipts.isEmpty()
+                ? EmergencyDigests.toHex(EmergencyDigests.ZERO_DIGEST)
+                : lastReceipt().selfDigest();
+        String selfDigest = EconomyEmergencyReceipt.selfDigest(
+                EconomyEmergencyReceipt.CURRENT_SCHEMA_VERSION,
+                sequence,
+                attemptId,
+                actionId,
+                actionVersion,
+                providerIdentity,
+                transactionId,
+                target,
+                amount,
+                category,
+                reason,
+                balanceBefore,
+                balanceAfter,
+                supplyBefore,
+                supplyAfter,
+                accountRevisionBefore,
+                accountRevisionAfter,
+                storeRevision,
+                storeRevision + 1L,
+                at,
+                envelopeDigest,
+                prevDigest
+        );
+        return new EconomyEmergencyReceipt(
+                EconomyEmergencyReceipt.CURRENT_SCHEMA_VERSION,
+                sequence,
+                attemptId,
+                actionId,
+                actionVersion,
+                providerIdentity,
+                transactionId,
+                target,
+                amount,
+                category,
+                reason,
+                balanceBefore,
+                balanceAfter,
+                supplyBefore,
+                supplyAfter,
+                accountRevisionBefore,
+                accountRevisionAfter,
+                storeRevision,
+                storeRevision + 1L,
+                at,
+                envelopeDigest,
+                prevDigest,
+                selfDigest
+        );
+    }
+
+    private EconomyEmergencyReceipt lastReceipt() {
+        EconomyEmergencyReceipt last = null;
+        for (EconomyEmergencyReceipt receipt : emergencyReceipts.values()) {
+            last = receipt;
+        }
+        return last;
     }
 
     private static Map<SubjectId, Deque<NotificationSummary>> copyNotifications(
@@ -767,6 +1248,10 @@ public final class EconomyRepository {
                 (subjectId, queue) -> copy.put(subjectId, List.copyOf(queue))
         );
         return copy;
+    }
+
+    private Map<Long, EconomyEmergencyReceipt> receiptsCopy() {
+        return new LinkedHashMap<>(emergencyReceipts);
     }
 
     private EconomyUnavailableException stale(String what) {
@@ -828,6 +1313,8 @@ public final class EconomyRepository {
                         subjectId, new ArrayDeque<>(list)
                 )
         );
+        emergencyReceipts.clear();
+        emergencyReceipts.putAll(snapshot.emergencyReceipts());
         storeRevision = snapshot.storeRevision();
         nextTransactionId = snapshot.nextTransactionId();
         treasuryBalance = snapshot.treasuryBalance();
@@ -858,6 +1345,14 @@ public final class EconomyRepository {
                                 + limits.maxPendingNotificationsPerSubject()
                 );
             }
+        }
+        if (snapshot.emergencyReceipts().size() > MAX_EMERGENCY_RECEIPTS) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_CAPACITY_EXCEEDED,
+                    "Loaded emergency receipt count "
+                            + snapshot.emergencyReceipts().size()
+                            + " exceeds the budget of " + MAX_EMERGENCY_RECEIPTS
+            );
         }
     }
 

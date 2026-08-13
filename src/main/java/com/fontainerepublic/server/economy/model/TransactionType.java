@@ -21,5 +21,21 @@ public enum TransactionType {
     DEPOSIT,
 
     /** Official withdrawal: personal account to the system (treasury). */
-    WITHDRAWAL
+    WITHDRAWAL,
+
+    /**
+     * Emergency issuance (FR-ECO-001-C §10): system to a personal account,
+     * {@code from == null}. Increases total digital supply by exactly the
+     * issued amount. Only reachable through a confirmed FR-EMG emergency
+     * envelope; never a normal official deposit.
+     */
+    ISSUE,
+
+    /**
+     * Emergency reclaim (FR-ECO-001-C §11): personal account back to the
+     * system, {@code to == null}. Decreases total digital supply by exactly
+     * the reclaimed amount. Only reachable through a confirmed FR-EMG
+     * emergency envelope; never a normal official withdrawal.
+     */
+    RECLAIM
 }

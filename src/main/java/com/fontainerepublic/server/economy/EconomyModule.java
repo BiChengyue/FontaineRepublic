@@ -11,10 +11,17 @@ import com.fontainerepublic.server.audit.api.AuditService;
 import com.fontainerepublic.server.economy.api.CurrencyPresentation;
 import com.fontainerepublic.server.economy.api.EconomyService;
 import com.fontainerepublic.server.economy.api.SubjectDirectory;
+import com.fontainerepublic.server.economy.emergency.EconomyEmergencyProvider;
+import com.fontainerepublic.server.economy.emergency.EconomyEmergencyProviders;
+import com.fontainerepublic.server.economy.emergency.EconomyEmergencyReceiptProvider;
 import com.fontainerepublic.server.economy.persistence.EconomyLimits;
 import com.fontainerepublic.server.economy.persistence.EconomyNbtCodec;
 import com.fontainerepublic.server.economy.persistence.EconomyRepository;
 import com.fontainerepublic.server.economy.service.DefaultEconomyService;
+import com.fontainerepublic.server.emergency.api.EmergencyActionDescriptor;
+import com.fontainerepublic.server.emergency.api.EmergencyActionRegistry;
+import com.fontainerepublic.server.emergency.model.EmergencyCategory;
+import com.fontainerepublic.server.emergency.model.EmergencyTargetType;
 import com.fontainerepublic.server.institutionaccess.InstitutionAccessModule;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
@@ -55,6 +62,8 @@ public final class EconomyModule implements IModule {
 
     private EconomyRepository repository;
     private EconomyService service;
+    private volatile EconomyEmergencyProvider emergencyProvider;
+    private volatile EconomyEmergencyReceiptProvider receiptProvider;
     private volatile PlayerDataService boundPlayerData;
     private volatile SubjectRegistryService boundSubjectRegistry;
     private volatile InstitutionAccessService boundInstitutionAccess;
@@ -117,6 +126,18 @@ public final class EconomyModule implements IModule {
         this.boundSubjectRegistry = subjectRegistryService;
         this.boundInstitutionAccess = institutionAccessService;
         this.boundAudit = auditService;
+        this.emergencyProvider = new EconomyEmergencyProvider(
+                repository,
+                EconomyEmergencyProvider.PROVIDER_IDENTITY_ISSUE
+        );
+        this.receiptProvider = new EconomyEmergencyReceiptProvider(repository);
+        EconomyEmergencyProviders.bind(
+                emergencyProvider,
+                new EconomyEmergencyProvider(
+                        repository,
+                        EconomyEmergencyProvider.PROVIDER_IDENTITY_RECLAIM
+                )
+        );
         this.service = new DefaultEconomyService(
                 repository,
                 System::currentTimeMillis,
@@ -142,6 +163,9 @@ public final class EconomyModule implements IModule {
     @Override
     public void shutdown() {
         service = null;
+        EconomyEmergencyProviders.unbind();
+        emergencyProvider = null;
+        receiptProvider = null;
         repository = null;
         boundPlayerData = null;
         boundSubjectRegistry = null;
@@ -155,6 +179,64 @@ public final class EconomyModule implements IModule {
             throw new IllegalStateException("Economy service is not active");
         }
         return service;
+    }
+
+    /**
+     * Registers the two Economy emergency-action descriptors
+     * ({@code economy.issue}, {@code economy.reclaim}) into the shared FR-EMG
+     * registry before it is frozen (FR-EMG-001-A 搂5). The descriptors hold
+     * only immutable metadata and the stateless runtime resolver; they never
+     * capture this module or the provider.
+     */
+    public void registerEmergencyActions(EmergencyActionRegistry registry) {
+        Objects.requireNonNull(registry, "registry");
+        registry.register(new EmergencyActionDescriptor(
+                "economy",
+                EconomyEmergencyProvider.ACTION_ISSUE,
+                "1.0.0",
+                EmergencyTargetType.PLAYER_UUID,
+                Set.of(
+                        EmergencyCategory.DEBUG,
+                        EmergencyCategory.CORRECTION,
+                        EmergencyCategory.COMPENSATION,
+                        EmergencyCategory.DISASTER_RELIEF,
+                        EmergencyCategory.EMERGENCY_RESPONSE
+                ),
+                Set.of(EconomyEmergencyProvider.PARAM_AMOUNT),
+                EconomyEmergencyProvider.PROVIDER_IDENTITY_ISSUE,
+                EconomyEmergencyProvider.PROVIDER_VERSION,
+                true,
+                EconomyEmergencyProviders::resolveIssue
+        ));
+        registry.register(new EmergencyActionDescriptor(
+                "economy",
+                EconomyEmergencyProvider.ACTION_RECLAIM,
+                "1.0.0",
+                EmergencyTargetType.PLAYER_UUID,
+                Set.of(
+                        EmergencyCategory.DEBUG,
+                        EmergencyCategory.CORRECTION,
+                        EmergencyCategory.COMPENSATION,
+                        EmergencyCategory.DISASTER_RELIEF,
+                        EmergencyCategory.EMERGENCY_RESPONSE
+                ),
+                Set.of(EconomyEmergencyProvider.PARAM_AMOUNT),
+                EconomyEmergencyProvider.PROVIDER_IDENTITY_RECLAIM,
+                EconomyEmergencyProvider.PROVIDER_VERSION,
+                true,
+                EconomyEmergencyProviders::resolveReclaim
+        ));
+    }
+
+    /** Read-only receipt provider for FR-EMG reconciliation. */
+    public EconomyEmergencyReceiptProvider emergencyReceiptProvider() {
+        EconomyEmergencyReceiptProvider bound = receiptProvider;
+        if (bound == null) {
+            throw new IllegalStateException(
+                    "Economy receipt provider is not active"
+            );
+        }
+        return bound;
     }
 
     private InstitutionAccessService requireInstitutionAccess() {

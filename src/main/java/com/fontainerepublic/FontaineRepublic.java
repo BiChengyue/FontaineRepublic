@@ -152,6 +152,7 @@ public class FontaineRepublic {
         bindLandServices();
         bindInstitutionAccessServices();
         bindEconomyServices();
+        bindEmergencyContributions();
         bindGovernmentServices();
         bindParliamentServices();
         bindJusticeServices();
@@ -228,6 +229,38 @@ public class FontaineRepublic {
                         institutionAccess,
                         audit
                 ));
+    }
+
+    /**
+     * Registers the Economy emergency-action descriptors into the shared
+     * FR-EMG registry, freezes the registry, and binds the Economy receipt
+     * provider (FR-EMG-001-A 搂5/搂16; FR-EMG-ECO-001). Registration happens at
+     * runtime bind time, immediately before the freeze, so every business
+     * descriptor is frozen before any preview can run.
+     */
+    private void bindEmergencyContributions() {
+        coreManager.getRuntimeContainer(EmergencyModule.MODULE_ID)
+                .flatMap(container -> container.instance())
+                .filter(EmergencyModule.class::isInstance)
+                .map(EmergencyModule.class::cast)
+                .ifPresent(emergencyModule -> {
+                    coreManager.getRuntimeContainer(EconomyModule.MODULE_ID)
+                            .flatMap(container -> container.instance())
+                            .filter(EconomyModule.class::isInstance)
+                            .map(EconomyModule.class::cast)
+                            .ifPresent(economyModule -> economyModule.registerEmergencyActions(
+                                    emergencyModule.actionRegistry()
+                            ));
+                    emergencyModule.freezeActionRegistry();
+                    coreManager.getRuntimeContainer(EconomyModule.MODULE_ID)
+                            .flatMap(container -> container.instance())
+                            .filter(EconomyModule.class::isInstance)
+                            .map(EconomyModule.class::cast)
+                            .ifPresent(economyModule ->
+                                    emergencyModule.registerReceiptProvider(
+                                            economyModule.emergencyReceiptProvider()
+                            ));
+                });
     }
 
     /**

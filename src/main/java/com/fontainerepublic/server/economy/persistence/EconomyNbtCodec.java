@@ -1,6 +1,7 @@
 package com.fontainerepublic.server.economy.persistence;
 
 import com.fontainerepublic.server.economy.model.EconomyAccount;
+import com.fontainerepublic.server.economy.model.EconomyEmergencyReceipt;
 import com.fontainerepublic.server.economy.model.EconomyTransaction;
 import com.fontainerepublic.server.economy.model.NotificationSummary;
 import com.fontainerepublic.server.economy.model.TransactionType;
@@ -44,6 +45,7 @@ public final class EconomyNbtCodec {
     private static final String ACCOUNTS = "Accounts";
     private static final String TRANSACTIONS = "Transactions";
     private static final String PENDING_NOTIFICATIONS = "PendingNotifications";
+    private static final String EMERGENCY_RECEIPTS = "EmergencyReceipts";
 
     private static final String ACCOUNT_VERSION = "AccountVersion";
     private static final String SUBJECT_ID = "SubjectId";
@@ -65,10 +67,31 @@ public final class EconomyNbtCodec {
     private static final String NOTIFICATION_VERSION = "NotificationVersion";
     private static final String NOTIFICATION_ID = "NotificationId";
 
+    private static final String RECEIPT_VERSION = "ReceiptVersion";
+    private static final String RECEIPT_SEQUENCE = "Sequence";
+    private static final String ATTEMPT_ID = "AttemptId";
+    private static final String ACTION_ID = "ActionId";
+    private static final String ACTION_VERSION = "ActionVersion";
+    private static final String PROVIDER_IDENTITY = "ProviderIdentity";
+    private static final String CATEGORY = "Category";
+    private static final String REASON = "Reason";
+    private static final String BALANCE_BEFORE = "BalanceBefore";
+    private static final String BALANCE_AFTER = "BalanceAfter";
+    private static final String SUPPLY_BEFORE = "SupplyBefore";
+    private static final String SUPPLY_AFTER = "SupplyAfter";
+    private static final String ACCOUNT_REVISION_BEFORE = "AccountRevisionBefore";
+    private static final String ACCOUNT_REVISION_AFTER = "AccountRevisionAfter";
+    private static final String STORE_REVISION_BEFORE = "StoreRevisionBefore";
+    private static final String STORE_REVISION_AFTER = "StoreRevisionAfter";
+    private static final String ENVELOPE_DIGEST = "EnvelopeDigest";
+    private static final String PREV_DIGEST = "PrevDigest";
+    private static final String SELF_DIGEST = "SelfDigest";
+
     /** Hard structural caps, independent of the configurable budget. */
     private static final int HARD_MAX_ACCOUNTS = 100_000;
     private static final int HARD_MAX_TRANSACTIONS = 100_000;
     private static final int HARD_MAX_NOTIFICATIONS_PER_SUBJECT = 1_000;
+    private static final int HARD_MAX_RECEIPTS = 100_000;
 
     private static final Set<String> STORE_KEYS = Set.of(
             STORE_VERSION,
@@ -77,7 +100,8 @@ public final class EconomyNbtCodec {
             NEXT_TRANSACTION_ID,
             ACCOUNTS,
             TRANSACTIONS,
-            PENDING_NOTIFICATIONS
+            PENDING_NOTIFICATIONS,
+            EMERGENCY_RECEIPTS
     );
     private static final Set<String> ACCOUNT_KEYS = Set.of(
             ACCOUNT_VERSION,
@@ -106,6 +130,31 @@ public final class EconomyNbtCodec {
             FROM_SUBJECT,
             AMOUNT,
             MEMO
+    );
+    private static final Set<String> RECEIPT_KEYS = Set.of(
+            RECEIPT_VERSION,
+            RECEIPT_SEQUENCE,
+            ATTEMPT_ID,
+            ACTION_ID,
+            ACTION_VERSION,
+            PROVIDER_IDENTITY,
+            TRANSACTION_ID,
+            SUBJECT_ID,
+            AMOUNT,
+            CATEGORY,
+            REASON,
+            BALANCE_BEFORE,
+            BALANCE_AFTER,
+            SUPPLY_BEFORE,
+            SUPPLY_AFTER,
+            ACCOUNT_REVISION_BEFORE,
+            ACCOUNT_REVISION_AFTER,
+            STORE_REVISION_BEFORE,
+            STORE_REVISION_AFTER,
+            TIMESTAMP,
+            ENVELOPE_DIGEST,
+            PREV_DIGEST,
+            SELF_DIGEST
     );
 
     // ------------------------------------------------------------------
@@ -146,6 +195,10 @@ public final class EconomyNbtCodec {
         );
         Map<SubjectId, List<NotificationSummary>> notifications =
                 decodeNotifications(root.getCompound(PENDING_NOTIFICATIONS));
+        // Optional field: pre-emergency archives carry no receipts.
+        Map<Long, EconomyEmergencyReceipt> receipts = root.contains(EMERGENCY_RECEIPTS)
+                ? decodeReceipts(root.getCompound(EMERGENCY_RECEIPTS))
+                : Map.of();
 
         return new EconomyStoreSnapshot(
                 storeVersion,
@@ -154,7 +207,8 @@ public final class EconomyNbtCodec {
                 treasuryBalance,
                 accounts,
                 transactions,
-                notifications
+                notifications,
+                receipts
         );
     }
 
@@ -311,7 +365,6 @@ public final class EconomyNbtCodec {
         requireType(tag, NOTIFICATION_ID, Tag.TAG_LONG, "notification for " + owner);
         requireType(tag, TRANSACTION_ID, Tag.TAG_LONG, "notification for " + owner);
         requireType(tag, TIMESTAMP, Tag.TAG_LONG, "notification for " + owner);
-        requireType(tag, FROM_SUBJECT, Tag.TAG_INT_ARRAY, "notification for " + owner);
         requireType(tag, AMOUNT, Tag.TAG_LONG, "notification for " + owner);
 
         int version = tag.getInt(NOTIFICATION_VERSION);
@@ -320,7 +373,7 @@ public final class EconomyNbtCodec {
                     "Unsupported notification version for " + owner + ": " + version
             );
         }
-        SubjectId from = parseSubjectId(tag, FROM_SUBJECT, "notification for " + owner);
+        SubjectId from = optionalSubjectId(tag, FROM_SUBJECT, "notification for " + owner);
         String memo = optionalString(tag, MEMO, "notification for " + owner);
         try {
             return new NotificationSummary(
@@ -335,6 +388,99 @@ public final class EconomyNbtCodec {
         } catch (IllegalArgumentException failure) {
             throw invalid(
                     "Invalid notification for " + owner + ": " + failure.getMessage(),
+                    failure
+            );
+        }
+    }
+
+    private Map<Long, EconomyEmergencyReceipt> decodeReceipts(CompoundTag tag) {
+        if (tag.getAllKeys().size() > HARD_MAX_RECEIPTS) {
+            throw invalid("Emergency receipt count exceeds " + HARD_MAX_RECEIPTS);
+        }
+        Map<Long, EconomyEmergencyReceipt> receipts = new LinkedHashMap<>();
+        for (String key : tag.getAllKeys().stream().sorted().toList()) {
+            long sequence = parseReceiptSequence(key);
+            requireType(tag, key, Tag.TAG_COMPOUND, "EmergencyReceipts");
+            EconomyEmergencyReceipt receipt =
+                    decodeReceipt(tag.getCompound(key), sequence);
+            if (receipts.put(sequence, receipt) != null) {
+                throw invalid("Duplicate emergency receipt sequence: " + sequence);
+            }
+        }
+        return receipts;
+    }
+
+    private EconomyEmergencyReceipt decodeReceipt(CompoundTag tag, long expectedSequence) {
+        requireOnlyKeys(tag, RECEIPT_KEYS, "receipt " + expectedSequence);
+        requireType(tag, RECEIPT_VERSION, Tag.TAG_INT, "receipt " + expectedSequence);
+        requireType(tag, RECEIPT_SEQUENCE, Tag.TAG_LONG, "receipt " + expectedSequence);
+        requireType(tag, ATTEMPT_ID, Tag.TAG_LONG, "receipt " + expectedSequence);
+        requireType(tag, ACTION_ID, Tag.TAG_STRING, "receipt " + expectedSequence);
+        requireType(tag, ACTION_VERSION, Tag.TAG_STRING, "receipt " + expectedSequence);
+        requireType(tag, PROVIDER_IDENTITY, Tag.TAG_STRING, "receipt " + expectedSequence);
+        requireType(tag, TRANSACTION_ID, Tag.TAG_LONG, "receipt " + expectedSequence);
+        requireType(tag, SUBJECT_ID, Tag.TAG_INT_ARRAY, "receipt " + expectedSequence);
+        requireType(tag, AMOUNT, Tag.TAG_LONG, "receipt " + expectedSequence);
+        requireType(tag, CATEGORY, Tag.TAG_STRING, "receipt " + expectedSequence);
+        requireType(tag, REASON, Tag.TAG_STRING, "receipt " + expectedSequence);
+        requireType(tag, BALANCE_BEFORE, Tag.TAG_LONG, "receipt " + expectedSequence);
+        requireType(tag, BALANCE_AFTER, Tag.TAG_LONG, "receipt " + expectedSequence);
+        requireType(tag, SUPPLY_BEFORE, Tag.TAG_LONG, "receipt " + expectedSequence);
+        requireType(tag, SUPPLY_AFTER, Tag.TAG_LONG, "receipt " + expectedSequence);
+        requireType(tag, ACCOUNT_REVISION_BEFORE, Tag.TAG_LONG, "receipt " + expectedSequence);
+        requireType(tag, ACCOUNT_REVISION_AFTER, Tag.TAG_LONG, "receipt " + expectedSequence);
+        requireType(tag, STORE_REVISION_BEFORE, Tag.TAG_LONG, "receipt " + expectedSequence);
+        requireType(tag, STORE_REVISION_AFTER, Tag.TAG_LONG, "receipt " + expectedSequence);
+        requireType(tag, TIMESTAMP, Tag.TAG_LONG, "receipt " + expectedSequence);
+        requireType(tag, ENVELOPE_DIGEST, Tag.TAG_STRING, "receipt " + expectedSequence);
+        requireType(tag, PREV_DIGEST, Tag.TAG_STRING, "receipt " + expectedSequence);
+        requireType(tag, SELF_DIGEST, Tag.TAG_STRING, "receipt " + expectedSequence);
+
+        int version = tag.getInt(RECEIPT_VERSION);
+        if (version != EconomyEmergencyReceipt.CURRENT_SCHEMA_VERSION) {
+            throw invalid(
+                    "Unsupported emergency receipt version for " + expectedSequence
+                            + ": " + version
+            );
+        }
+        long storedSequence = tag.getLong(RECEIPT_SEQUENCE);
+        if (storedSequence != expectedSequence) {
+            throw invalid(
+                    "Emergency receipt key " + expectedSequence
+                            + " does not match record sequence " + storedSequence
+            );
+        }
+        SubjectId target = parseSubjectId(tag, SUBJECT_ID, "receipt " + expectedSequence);
+        try {
+            return new EconomyEmergencyReceipt(
+                    version,
+                    expectedSequence,
+                    tag.getLong(ATTEMPT_ID),
+                    tag.getString(ACTION_ID),
+                    tag.getString(ACTION_VERSION),
+                    tag.getString(PROVIDER_IDENTITY),
+                    tag.getLong(TRANSACTION_ID),
+                    target,
+                    tag.getLong(AMOUNT),
+                    tag.getString(CATEGORY),
+                    tag.getString(REASON),
+                    tag.getLong(BALANCE_BEFORE),
+                    tag.getLong(BALANCE_AFTER),
+                    tag.getLong(SUPPLY_BEFORE),
+                    tag.getLong(SUPPLY_AFTER),
+                    tag.getLong(ACCOUNT_REVISION_BEFORE),
+                    tag.getLong(ACCOUNT_REVISION_AFTER),
+                    tag.getLong(STORE_REVISION_BEFORE),
+                    tag.getLong(STORE_REVISION_AFTER),
+                    tag.getLong(TIMESTAMP),
+                    tag.getString(ENVELOPE_DIGEST),
+                    tag.getString(PREV_DIGEST),
+                    tag.getString(SELF_DIGEST)
+            );
+        } catch (IllegalArgumentException failure) {
+            throw invalid(
+                    "Invalid emergency receipt " + expectedSequence + ": "
+                            + failure.getMessage(),
                     failure
             );
         }
@@ -392,6 +538,18 @@ public final class EconomyNbtCodec {
                 }
         );
         root.put(PENDING_NOTIFICATIONS, notificationsTag);
+
+        CompoundTag receiptsTag = new CompoundTag();
+        TreeMap<String, EconomyEmergencyReceipt> orderedReceipts = new TreeMap<>();
+        snapshot.emergencyReceipts().forEach(
+                (sequence, receipt) -> orderedReceipts.put(
+                        Long.toString(receipt.sequence()), receipt
+                )
+        );
+        orderedReceipts.forEach(
+                (key, receipt) -> receiptsTag.put(key, encodeReceipt(receipt))
+        );
+        root.put(EMERGENCY_RECEIPTS, receiptsTag);
         return root;
     }
 
@@ -432,11 +590,41 @@ public final class EconomyNbtCodec {
         tag.putLong(NOTIFICATION_ID, summary.notificationId());
         tag.putLong(TRANSACTION_ID, summary.transactionId());
         tag.putLong(TIMESTAMP, summary.timestamp());
-        tag.putUUID(FROM_SUBJECT, summary.from().value());
+        if (summary.from() != null) {
+            tag.putUUID(FROM_SUBJECT, summary.from().value());
+        }
         tag.putLong(AMOUNT, summary.amount());
         if (summary.memo() != null) {
             tag.putString(MEMO, summary.memo());
         }
+        return tag;
+    }
+
+    private CompoundTag encodeReceipt(EconomyEmergencyReceipt receipt) {
+        CompoundTag tag = new CompoundTag();
+        tag.putInt(RECEIPT_VERSION, receipt.schemaVersion());
+        tag.putLong(RECEIPT_SEQUENCE, receipt.sequence());
+        tag.putLong(ATTEMPT_ID, receipt.attemptId());
+        tag.putString(ACTION_ID, receipt.actionId());
+        tag.putString(ACTION_VERSION, receipt.actionVersion());
+        tag.putString(PROVIDER_IDENTITY, receipt.providerIdentity());
+        tag.putLong(TRANSACTION_ID, receipt.transactionId());
+        tag.putUUID(SUBJECT_ID, receipt.target().value());
+        tag.putLong(AMOUNT, receipt.amount());
+        tag.putString(CATEGORY, receipt.category());
+        tag.putString(REASON, receipt.reason());
+        tag.putLong(BALANCE_BEFORE, receipt.balanceBefore());
+        tag.putLong(BALANCE_AFTER, receipt.balanceAfter());
+        tag.putLong(SUPPLY_BEFORE, receipt.supplyBefore());
+        tag.putLong(SUPPLY_AFTER, receipt.supplyAfter());
+        tag.putLong(ACCOUNT_REVISION_BEFORE, receipt.accountRevisionBefore());
+        tag.putLong(ACCOUNT_REVISION_AFTER, receipt.accountRevisionAfter());
+        tag.putLong(STORE_REVISION_BEFORE, receipt.storeRevisionBefore());
+        tag.putLong(STORE_REVISION_AFTER, receipt.storeRevisionAfter());
+        tag.putLong(TIMESTAMP, receipt.at());
+        tag.putString(ENVELOPE_DIGEST, receipt.envelopeDigest());
+        tag.putString(PREV_DIGEST, receipt.prevDigest());
+        tag.putString(SELF_DIGEST, receipt.selfDigest());
         return tag;
     }
 
@@ -490,6 +678,18 @@ public final class EconomyNbtCodec {
             return Long.parseLong(value);
         } catch (NumberFormatException failure) {
             throw invalid("Invalid transaction key: " + value, failure);
+        }
+    }
+
+    private long parseReceiptSequence(String value) {
+        try {
+            long sequence = Long.parseLong(value);
+            if (sequence <= 0) {
+                throw invalid("Invalid receipt key: " + value);
+            }
+            return sequence;
+        } catch (NumberFormatException failure) {
+            throw invalid("Invalid receipt key: " + value, failure);
         }
     }
 
