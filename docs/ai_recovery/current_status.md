@@ -33,8 +33,9 @@ number) implemented, reviewed Level 1-2, and merged.
 FR-INST-002 (shared institution access boundary: facilities/terminals/on-site
 contexts) implemented, reviewed Level 1-2, and merged.
 FR-GOV-001 (government: positions/ministries/offices/appointments with on-site
-gating) implemented, reviewed Level 1-2, and merged. FR-PAR-001 (parliament)
-dispatched.
+gating) and FR-PAR-001 (parliament: proposals/votes/bills with legal state
+machine and norm-level thresholds) implemented, reviewed Level 1-2, and
+merged. FR-JUS-001 (justice) dispatched.
 
 ## Completed Tasks
 
@@ -86,10 +87,10 @@ dispatched.
 ## Current Task
 
 Approved implementation sequence complete (7 modules) plus FR-DATA-003 and
-FR-CMD-USER-001/002, FR-INST-002, and FR-GOV-001, all implemented, reviewed
-Level 1-2, merged into develop. FR-PAR-001 (parliament) dispatched; then
-FR-JUS-001 (justice). Pending: Level 3 runtime verification for all
-implemented modules (checklist:
+FR-CMD-USER-001/002, FR-INST-002, FR-GOV-001, and FR-PAR-001, all implemented,
+reviewed Level 1-2, merged into develop. FR-JUS-001 (justice) dispatched —
+last of the institution sequence. Pending: Level 3 runtime verification for
+all implemented modules (checklist:
 docs/development/LEVEL3-RUNTIME-VERIFICATION-CHECKLIST.md).
 
 ## Next Task
