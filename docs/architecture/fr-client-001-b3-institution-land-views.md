@@ -58,7 +58,7 @@
   `LandSummary publicSummary()`（返回不可变聚合记录：parcelCount、totalArea、
   各 ZoneType 计数/面积分布、storeRevision）——非列表、非枚举，符合契约；
 - 玩家个人用地权益视图（"我的地块"）需新增按主体限定的有界查询，留待后续
-  阶段单独设计；
+  阶段单独设计（见 docs/architecture/fr-land-002-a-my-usage-rights.md 设计候选）；
 - 协议 v5、账本 9 条（ID 0-8）。
 
 ## 6. Review Gate

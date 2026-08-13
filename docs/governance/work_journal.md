@@ -634,6 +634,15 @@
 - **客户端首版功能集全部完成**：余额/转账/流水、公民卡、历史、通知、引导、
   政府、议会、法院、土地 —— 十个 /frclient 视图；剩余：个人用地权益（后续
   阶段）、Stage C（真机目视核验）。
+## 2026-08-14（深夜）| 个人用地权益设计候选（FR-LAND-002-A）
+
+- 撰写 `docs/architecture/fr-land-002-a-my-usage-rights.md` 设计候选：
+  `LandService.myUsageRights(holder, afterParcelRevision, limit)` 按主体限定
+  的有界投影（≤64、仅存续权益、确定性游标、他人查询 fail closed）；
+  与 economy participantTransactions 同理作无枚举豁免（需同步土地测试契约）。
+- 客户端接入方案：账本追加 `MyLandRightsPacket(9)`、协议 v6、LandScreen
+  "我的地块"页签。
+- 不实施；待早间真机反馈 + 独立审查 + Human 批准后评估。
 ## 2026-08-14（深夜）| 客户端 Stage B-3a 交付 + 审查通过 + 并入 develop
 
 - 派发 FR-CLIENT-001-IMPL-B3a（wave fr-client-001-b3a-20260814）：子进程完成
