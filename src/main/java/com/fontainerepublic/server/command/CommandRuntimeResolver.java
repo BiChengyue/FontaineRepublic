@@ -10,6 +10,8 @@ import com.fontainerepublic.server.citizen.CitizenModule;
 import com.fontainerepublic.server.citizen.api.CitizenService;
 import com.fontainerepublic.server.economy.EconomyModule;
 import com.fontainerepublic.server.economy.api.EconomyService;
+import com.fontainerepublic.server.government.GovernmentModule;
+import com.fontainerepublic.server.government.api.GovernmentService;
 import com.fontainerepublic.server.institutionaccess.InstitutionAccessModule;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
@@ -138,6 +140,19 @@ public final class CommandRuntimeResolver {
                 .filter(InstitutionAccessModule.class::isInstance)
                 .map(InstitutionAccessModule.class::cast)
                 .map(InstitutionAccessModule::service);
+    }
+
+    /**
+     * Execution-time resolution of the current ACTIVE government service
+     * (FR-GOV-001-A §5; resolved per invocation, never cached).
+     */
+    public Optional<GovernmentService> governmentService() {
+        return coreManager.getRuntimeContainer(GovernmentModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(GovernmentModule.class::isInstance)
+                .map(GovernmentModule.class::cast)
+                .map(GovernmentModule::service);
     }
 
     private ModuleDiagnostic diagnostic(
