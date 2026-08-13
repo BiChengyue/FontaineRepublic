@@ -70,3 +70,15 @@
   无 Mod 客户端平价、网络通道协商、reload 行为、数据与世界保存均有日志证据。
 - 结论：FR-CMD-001 / FR-NET-001 基础验证通过，ROUTE TO HUMAN；
   3 项低severity建议（OP 后 help 复测、证据来源、非 OP 反馈风格）列入后续。
+
+## 2026-08-13 | 实现就绪：完整构建基线 + 派发脚手架 + FR-PM-001 收尾
+
+- 提交积压治理同步（51284fa）：ai_team_governance / decision_log / 三个模板 /
+  FR-CORE-001 任务文档（Evidence Artifact 模型、Approval Record、JUnit+GameTest 策略等），
+  工作区被跟踪文件全部干净。
+- 完整 `gradlew build` 通过（BUILD SUCCESSFUL in 11s，command/network/player-data 三个
+  验证主类全过；日志 `tmp/full-build-20260813.log`）——当前 HEAD 构建基线建立。
+- 创建派发脚手架：`tools/dispatch-task.ps1`（封装 reasonix-cli 派发）、
+  `tools/dispatch-PROMPT.template.md`（防漂移提示词模板）、`tools/README.md`；
+  运行手册 §4.2 已更新为推荐封装运行器。
+- 网络复查：opencode.ai 仍不可达、无本地代理 —— 派发保持搁置（第 2 次确认）。
