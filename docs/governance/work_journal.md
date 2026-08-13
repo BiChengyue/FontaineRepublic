@@ -158,3 +158,12 @@
 - 实现顺序进度：FR-CORE-002 ✅（已并入 develop）、FR-AUD-001 ✅（待并入 develop）、
   Citizen（设计候选 FR-CIT-001-A 待审）、Land（设计候选 FR-LAND-001-A 待审）、
   Economy（就绪工件已备）。
+
+## 2026-08-13 | FR-ID-001 派发 + FR-ID-BOOTSTRAP-001 设计
+
+- 依据依赖分析：Citizen/Land/Economy 均依赖 FR-ID 主体登记册；持久化门已就绪，
+  派发 FR-ID-001-IMPL（wave fr-id-001-20260813）：号码/MOD 97/索引/懒开户/精确查询；
+  水神初始个人绑定明确排除（独立任务）。
+- 产出 FR-ID-BOOTSTRAP-001-A 设计候选：真实本地 Dedicated Server 控制台为唯一
+  Human 授权源；`subject-registry` 命名空间内 append-only 尝试链（摘要链防篡改）；
+  绑定不可变；重启对账失败关闭；与 FR-EMG 严格隔离。
