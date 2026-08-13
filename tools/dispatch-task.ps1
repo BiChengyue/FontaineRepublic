@@ -4,7 +4,8 @@ param(
     [string]$Wave = (Get-Date -Format 'yyyyMMdd-HHmmss'),
     [string]$Model = 'opencode-go/deepseek-v4-flash',
     [int]$MaxSteps = 60,
-    [string]$Cli = 'E:\Reasonix\versions\v1.25.0\reasonix-cli.exe'
+    [string]$Cli = 'E:\Reasonix\versions\v1.21.2\reasonix-cli.exe',
+    [string]$Worktree = ''
 )
 
 # FontaineRepublic dispatch runner.
@@ -26,7 +27,13 @@ $env:REASONIX_METRICS_PATH = Join-Path $logDir "$TaskName.metrics.json"
 Write-Output "[Dispatch] task=$TaskName model=$Model maxSteps=$MaxSteps wave=$Wave"
 Write-Output "[Dispatch] log=$logDir"
 
-& $Cli run --permission-mode auto --model $Model --max-steps $MaxSteps --output-format text -p $prompt *> (Join-Path $logDir "$TaskName.out.log")
+$dirArg = @()
+if ($Worktree) {
+    $dirArg = @('--dir', $Worktree)
+    Write-Output "[Dispatch] worktree=$Worktree"
+}
+
+& $Cli run --permission-mode auto --model $Model --max-steps $MaxSteps --output-format text -p @dirArg $prompt *> (Join-Path $logDir "$TaskName.out.log")
 $code = $LASTEXITCODE
 Write-Output "[Dispatch] EXIT=$code"
 exit $code
