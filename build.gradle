@@ -149,6 +149,15 @@ tasks.register('economyFoundationTest', JavaExec) {
     systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
 }
 
+tasks.register('institutionAccessFoundationTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-INST-002 shared institution access boundary validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.server.institutionaccess.InstitutionAccessFoundationTestMain'
+    systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
+}
+
 tasks.named('check') {
     dependsOn tasks.named('playerDataTest')
     dependsOn tasks.named('playerDirectoryFoundationTest')
@@ -161,4 +170,5 @@ tasks.named('check') {
     dependsOn tasks.named('citizenFoundationTest')
     dependsOn tasks.named('landFoundationTest')
     dependsOn tasks.named('economyFoundationTest')
+    dependsOn tasks.named('institutionAccessFoundationTest')
 }

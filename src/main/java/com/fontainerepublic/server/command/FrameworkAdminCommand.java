@@ -2,6 +2,7 @@ package com.fontainerepublic.server.command;
 
 import com.fontainerepublic.server.command.CommandRuntimeResolver.ModuleDiagnostic;
 import com.fontainerepublic.server.command.CommandRuntimeResolver.RuntimeSnapshot;
+import com.fontainerepublic.server.institutionaccess.InstitutionAdminCommand;
 import com.fontainerepublic.server.registry.model.BootstrapAttemptResult;
 import com.fontainerepublic.server.registry.model.BootstrapDigests;
 import com.fontainerepublic.server.registry.model.BootstrapPhase;
@@ -63,7 +64,8 @@ final class FrameworkAdminCommand {
                                 .executes(context -> bootstrapStatus(
                                         context.getSource(),
                                         runtimeResolver
-                                ))));
+                                ))))
+                .then(InstitutionAdminCommand.create(runtimeResolver));
     }
 
     // ------------------------------------------------------------------

@@ -10,6 +10,8 @@ import com.fontainerepublic.server.citizen.CitizenModule;
 import com.fontainerepublic.server.citizen.api.CitizenService;
 import com.fontainerepublic.server.economy.EconomyModule;
 import com.fontainerepublic.server.economy.api.EconomyService;
+import com.fontainerepublic.server.institutionaccess.InstitutionAccessModule;
+import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDirectoryService;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
@@ -123,6 +125,19 @@ public final class CommandRuntimeResolver {
                 .filter(CitizenModule.class::isInstance)
                 .map(CitizenModule.class::cast)
                 .map(CitizenModule::service);
+    }
+
+    /**
+     * Execution-time resolution of the shared institution access boundary
+     * (FR-INST-002-A; resolved per invocation, never cached).
+     */
+    public Optional<InstitutionAccessService> institutionAccessService() {
+        return coreManager.getRuntimeContainer(InstitutionAccessModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(InstitutionAccessModule.class::isInstance)
+                .map(InstitutionAccessModule.class::cast)
+                .map(InstitutionAccessModule::service);
     }
 
     private ModuleDiagnostic diagnostic(
