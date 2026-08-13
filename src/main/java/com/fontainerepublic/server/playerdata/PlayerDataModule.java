@@ -6,9 +6,11 @@ import com.fontainerepublic.core.module.ModuleId;
 import com.fontainerepublic.core.module.ModuleMetadata;
 import com.fontainerepublic.core.module.ModuleRegistry;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
+import com.fontainerepublic.server.playerdata.api.PlayerDirectoryService;
 import com.fontainerepublic.server.playerdata.persistence.PlayerDataNbtCodec;
 import com.fontainerepublic.server.playerdata.persistence.PlayerDataRepository;
 import com.fontainerepublic.server.playerdata.service.DefaultPlayerDataService;
+import com.fontainerepublic.server.playerdata.service.DefaultPlayerDirectoryService;
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
 
@@ -25,6 +27,7 @@ public final class PlayerDataModule implements IModule {
 
     private PlayerDataRepository repository;
     private PlayerDataService service;
+    private PlayerDirectoryService directoryService;
 
     public static void register(ModuleRegistry registry) {
         Objects.requireNonNull(registry, "registry");
@@ -57,6 +60,7 @@ public final class PlayerDataModule implements IModule {
                 new PlayerDataNbtCodec()
         );
         service = new DefaultPlayerDataService(repository, System::currentTimeMillis);
+        directoryService = new DefaultPlayerDirectoryService(repository);
         LOGGER.info(
                 "[PlayerData] Runtime initialized with {} player records",
                 repository.size()
@@ -66,6 +70,7 @@ public final class PlayerDataModule implements IModule {
     @Override
     public void shutdown() {
         service = null;
+        directoryService = null;
         repository = null;
         LOGGER.info("[PlayerData] Runtime closed");
     }
@@ -75,5 +80,12 @@ public final class PlayerDataModule implements IModule {
             throw new IllegalStateException("Player-data service is not active");
         }
         return service;
+    }
+
+    public PlayerDirectoryService directoryService() {
+        if (directoryService == null) {
+            throw new IllegalStateException("Player directory service is not active");
+        }
+        return directoryService;
     }
 }
