@@ -41,12 +41,14 @@ import com.fontainerepublic.server.registry.SubjectRegistryModule;
 import com.fontainerepublic.server.registry.api.SubjectRegistryService;
 import com.mojang.logging.LogUtils;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -85,6 +87,13 @@ public class FontaineRepublic {
         MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
         MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggedOut);
         MinecraftForge.EVENT_BUS.addListener(commandBootstrap::onRegisterCommands);
+        // Client-only surface (GUI/HUD/forms): the supplier is never evaluated
+        // on a dedicated server, so no client/ class is loaded there
+        // (FR-CLIENT-001-A §4.3 side isolation).
+        DistExecutor.safeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> com.fontainerepublic.client.ClientManager.init()
+        );
     }
 
     private void onCommonSetup(FMLCommonSetupEvent event) {
