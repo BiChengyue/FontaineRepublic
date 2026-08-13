@@ -5,11 +5,14 @@ import com.fontainerepublic.core.RuntimeModuleContainer;
 import com.fontainerepublic.core.module.ModuleId;
 import com.fontainerepublic.core.module.runtime.AvailabilityStatus;
 import com.fontainerepublic.core.module.runtime.ModuleAvailabilityRecord;
+import com.fontainerepublic.server.registry.SubjectRegistryModule;
+import com.fontainerepublic.server.registry.service.SubjectBootstrapService;
 
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Stateless execution-time facade over the current Core runtime.
@@ -50,6 +53,18 @@ public final class CommandRuntimeResolver {
                     );
                 })
                 .orElseGet(RuntimeSnapshot::unavailable);
+    }
+
+    /**
+     * Execution-time resolution of the subject bootstrap service
+     * (foundation-owned admin child adapter; resolved per invocation).
+     */
+    public Optional<SubjectBootstrapService> subjectBootstrapService() {
+        return coreManager.getRuntimeContainer(SubjectRegistryModule.MODULE_ID)
+                .flatMap(container -> container.instance())
+                .filter(SubjectRegistryModule.class::isInstance)
+                .map(SubjectRegistryModule.class::cast)
+                .map(SubjectRegistryModule::bootstrapService);
     }
 
     private ModuleDiagnostic diagnostic(
