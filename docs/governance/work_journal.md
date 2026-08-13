@@ -123,3 +123,15 @@
 - 产出 FR-CIT-001-A 公民模块设计候选（路线图 Phase 3 前置设计）：
   公民身份/政治等级基础设施，与 FR-ID 主体登记、PlayerData、权限系统边界清晰；
   rank 永不等于技术权限；权威变更走 FR-CORE-002 门。
+
+## 2026-08-13 | FR-CORE-002 派发交付 + 独立审查通过
+
+- deepseek v4 flash 子进程完成 FR-CORE-002-IMPL 并提交：
+  `3813648 feat(core): durable commit gate (FR-CORE-002)`（12 文件，+1335 行：
+  DataManager/NbtDurableStore/ModSavedData/ConfigManager/策略与结果类型/测试）。
+- Reviewer 独立复跑：`durableCommitTest` 通过、完整 `gradlew build` 通过
+  （command/network/player-data/durableCommit 全绿）；注入失败路径日志可见。
+- 审查报告 `docs/ai_recovery/evidence/FR-CORE-002-REVIEW-01-AUDIT-REPORT.md`：
+  验收 10/11 PASS，唯一 NOT TESTED = 真机运行时验证；结论 ROUTE TO HUMAN。
+- 派发链路端到端验证成功（提示词 -> 子进程 -> 隔离提交 -> 独立审查）。
+- 子进程最终报告未落盘（out.log 空）已记录为 F-001（Minor）；工作树 .reasonix 已清理。

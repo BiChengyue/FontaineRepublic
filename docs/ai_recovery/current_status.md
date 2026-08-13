@@ -11,8 +11,9 @@ Phase 1 - Infrastructure Layer (implementation complete; pending review/merge)
 
 Phase 2 design batch was Human-confirmed on 2026-08-13
 (FR-PHASE2-HUMAN-APPROVAL-01). Implementation phase is authorized per the
-reviewed sequencing. Current step: FR-CORE-002 durable commit gate
-implementation (dispatch pending network availability).
+reviewed sequencing. FR-CORE-002 durable commit gate was implemented by the
+deepseek v4 flash subprocess (commit `3813648`) and passed independent review
+(Level 1-2; runtime verification pending).
 
 ## Completed Tasks
 
@@ -63,9 +64,9 @@ implementation (dispatch pending network availability).
 
 ## Current Task
 
-FR-CORE-002-IMPL: implement the durable commit gate (atomic whole-root write +
-fsync + replace) per FR-CORE-002-A. Task card:
-`docs/ai_recovery/task_cards/FR-CORE-002-IMPL-task-card.md`.
+FR-CORE-002-IMPL: implemented and reviewed (FR-CORE-002-REVIEW-01, ROUTE TO
+HUMAN). Next: runtime verification (Level 3), then merge decision; then
+dispatch FR-AUD-001 (audit module).
 
 ## Next Task
 
