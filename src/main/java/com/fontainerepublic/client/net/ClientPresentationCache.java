@@ -3,6 +3,8 @@ package com.fontainerepublic.client.net;
 import com.fontainerepublic.common.network.display.BalanceSyncPacket;
 import com.fontainerepublic.common.network.display.CitizenInfoPacket;
 import com.fontainerepublic.common.network.display.GovernmentInfoPacket;
+import com.fontainerepublic.common.network.display.JusticeInfoPacket;
+import com.fontainerepublic.common.network.display.LandInfoPacket;
 import com.fontainerepublic.common.network.display.NotificationPacket;
 import com.fontainerepublic.common.network.display.ParliamentInfoPacket;
 import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
@@ -38,6 +40,8 @@ public final class ClientPresentationCache {
     private TransactionHistorySyncPacket history;
     private GovernmentInfoPacket government;
     private ParliamentInfoPacket parliament;
+    private JusticeInfoPacket justice;
+    private LandInfoPacket land;
     private final List<TransactionNotifyPacket> transactions = new ArrayList<>();
     private final List<NotificationPacket.NotificationEntry> notifications = new ArrayList<>();
 
@@ -88,6 +92,22 @@ public final class ClientPresentationCache {
         }
     }
 
+    /** Replaces the court public-summary snapshot (idempotent update). */
+    public void setJustice(JusticeInfoPacket snapshot) {
+        Objects.requireNonNull(snapshot, "snapshot");
+        synchronized (lock) {
+            justice = snapshot;
+        }
+    }
+
+    /** Replaces the land public-overview snapshot (idempotent update). */
+    public void setLand(LandInfoPacket snapshot) {
+        Objects.requireNonNull(snapshot, "snapshot");
+        synchronized (lock) {
+            land = snapshot;
+        }
+    }
+
     /** Appends one transaction notice, dropping the oldest beyond the bound. */
     public void appendTransaction(TransactionNotifyPacket notice) {
         Objects.requireNonNull(notice, "notice");
@@ -116,6 +136,8 @@ public final class ClientPresentationCache {
             history = null;
             government = null;
             parliament = null;
+            justice = null;
+            land = null;
             transactions.clear();
             notifications.clear();
         }
@@ -148,6 +170,18 @@ public final class ClientPresentationCache {
     public ParliamentInfoPacket parliamentSnapshot() {
         synchronized (lock) {
             return parliament;
+        }
+    }
+
+    public JusticeInfoPacket justiceSnapshot() {
+        synchronized (lock) {
+            return justice;
+        }
+    }
+
+    public LandInfoPacket landSnapshot() {
+        synchronized (lock) {
+            return land;
         }
     }
 

@@ -4,6 +4,8 @@ import com.fontainerepublic.common.network.display.BalanceSyncPacket;
 import com.fontainerepublic.common.network.display.CitizenInfoPacket;
 import com.fontainerepublic.common.network.display.DisplayMessageHandlers;
 import com.fontainerepublic.common.network.display.GovernmentInfoPacket;
+import com.fontainerepublic.common.network.display.JusticeInfoPacket;
+import com.fontainerepublic.common.network.display.LandInfoPacket;
 import com.fontainerepublic.common.network.display.NotificationPacket;
 import com.fontainerepublic.common.network.display.ParliamentInfoPacket;
 import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
@@ -18,12 +20,13 @@ import java.util.Optional;
  * (FR-CLIENT-001-A §4.2). The ledger is append-only: message IDs start at 0
  * and are never reused or reordered; later stages append further display
  * messages (citizen card and transaction history after ID 2, institution
- * summaries after ID 4, per FR-CLIENT-001-IMPL-B2 / FR-CLIENT-001-IMPL-B3a).
+ * summaries after ID 4, court/land summaries after ID 6, per
+ * FR-CLIENT-001-IMPL-B2 / FR-CLIENT-001-IMPL-B3a / FR-CLIENT-001-IMPL-B3b).
  */
 public final class NetworkProductionMessageTable {
 
     /** Total number of messages expected by the current protocol revision. */
-    public static final int EXPECTED_MESSAGE_COUNT = 7;
+    public static final int EXPECTED_MESSAGE_COUNT = 9;
 
     private NetworkProductionMessageTable() {
     }
@@ -78,6 +81,20 @@ public final class NetworkProductionMessageTable {
                 ParliamentInfoPacket::encode,
                 ParliamentInfoPacket::decode,
                 DisplayMessageHandlers.parliamentInfo()
+        ));
+        registration.register(displaySpec(
+                7,
+                JusticeInfoPacket.class,
+                JusticeInfoPacket::encode,
+                JusticeInfoPacket::decode,
+                DisplayMessageHandlers.justiceInfo()
+        ));
+        registration.register(displaySpec(
+                8,
+                LandInfoPacket.class,
+                LandInfoPacket::encode,
+                LandInfoPacket::decode,
+                DisplayMessageHandlers.landInfo()
         ));
     }
 

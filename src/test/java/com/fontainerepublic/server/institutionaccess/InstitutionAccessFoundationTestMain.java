@@ -2024,6 +2024,12 @@ public final class InstitutionAccessFoundationTestMain {
             return Optional.ofNullable(parcels.get(parcelId));
         }
 
+        @Override
+        public com.fontainerepublic.server.land.api.LandSummary publicSummary() {
+            return new com.fontainerepublic.server.land.api.LandSummary(
+                    parcels.size(), 0L, List.of(), 0L);
+        }
+
         private void setParcel(LandParcel parcel) {
             parcels.put(parcel.parcelId(), parcel);
         }

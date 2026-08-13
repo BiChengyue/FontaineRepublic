@@ -116,6 +116,17 @@ public interface LandService {
     Optional<LandParcel> getParcel(ParcelId parcelId);
 
     /**
+     * Single bounded read-only aggregate of the republic's land parcels
+     * (FR-CLIENT-001-IMPL-B3b): one immutable {@link LandSummary} value —
+     * parcel count, total area, per-zone distribution and store revision.
+     * Deliberately <b>not</b> a parcel list: the land module exposes no bulk
+     * enumeration API, and this overview never leaks any parcel identity,
+     * holder, region, or access detail. Display-only; the client summary is
+     * assembled from it at login.
+     */
+    LandSummary publicSummary();
+
+    /**
      * Config-driven event-time decision: may the player build on the parcel?
      * Resolved at event time; a cached decision is never authoritative.
      * Unknown parcels and unavailable services fail closed ({@code false}).
