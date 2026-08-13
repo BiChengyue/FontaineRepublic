@@ -438,3 +438,10 @@
   parliamentFoundationTest（无回归）+ 完整构建全绿；审查报告 FR-PAR-002-REVIEW-01
   （验收 10/11 PASS）；并入 develop（`1769c10`）。
 - 派发 FR-EMG-001-IMPL（wave fr-emg-001-20260814）——服务端暂停任务最后一环。
+
+## 2026-08-14 | FR-EMG 首轮达上限 + 续作派发
+
+- FR-EMG 首轮子进程完成实现主体（emergency 包 48 文件：api/model/persistence/service/
+  Module + 水神 UUID 配置）但达到轮次上限退出（无测试/无接线/未提交）。
+- 派发续作 FR-EMG-001-CONT-01（补测试 EmergencyFoundationTestMain、gradle 接线、
+  完整构建、提交）。
