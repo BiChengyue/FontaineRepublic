@@ -17,11 +17,12 @@
   1. `docs/governance/continuous_development_ops.md`（运行手册）
   2. `CLAUDE.md`（项目规则与状态）
   3. `docs/architecture/fr-core-002-a-durable-commit-gate.md`（本任务设计，规范）
-  4. `docs/ai_recovery/task_cards/FR-CORE-002-IMPL-task-card.md`（任务卡）
-  5. 现有实现参考：`src/main/java/com/fontainerepublic/core/DataManager.java`、
+  4. `docs/development/FR-CORE-002-java-implementation-task.md`（实现任务文档：类型/方法/适配器/测试）
+  5. `docs/ai_recovery/task_cards/FR-CORE-002-IMPL-task-card.md`（任务卡）
+  6. 现有实现参考：`src/main/java/com/fontainerepublic/core/DataManager.java`、
      `ModSavedData.java`、`server/playerdata/persistence/PlayerDataRepository.java`
      （单写入者/注入存储测试模式）
-  6. 测试参考：`src/test/java/com/fontainerepublic/server/playerdata/PlayerDataTestMain.java`
+  7. 测试参考：`src/test/java/com/fontainerepublic/server/playerdata/PlayerDataTestMain.java`
 
 ## 3. 执行约束（违反即失败）
 

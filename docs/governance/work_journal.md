@@ -92,3 +92,12 @@
 - CLAUDE.md / current_status.md 台账更新为"实现阶段已授权，当前任务 FR-CORE-002-IMPL"。
 - 起草派发提示词 `deepseek-worktrees-v2/FR-CORE-002-IMPL-PROMPT.md`，网络恢复即可派发。
 - 网络第 3 次复查：opencode.ai 仍不可达 —— 派发继续搁置，其他工作不受阻。
+
+## 2026-08-13 | FR-CORE-002 实现就绪 + FR-AUD-001 预置
+
+- 产出 `docs/development/FR-CORE-002-java-implementation-task.md`：具体类型
+  （DurableCommitStatus/Result、DurableStore 适配器）、commitModuleData 契约、
+  世界身份、生命周期接线（beginShutdown）、边界建议值、测试计划与验收映射。
+- 更新 FR-CORE-002 派发提示词引用实现任务文档。
+- 预置下一波：FR-AUD-001-IMPL 任务卡 + 派发提示词（FR-CORE-002 完成后转正）。
+- 网络第 4 次复查：仍不可达 —— 派发保持搁置；就绪工件已齐，网络恢复即可连发两波。
