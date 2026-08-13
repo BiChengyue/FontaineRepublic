@@ -1,6 +1,9 @@
 # Task Card — FR-CLIENT-001-IMPL
 
-> Draft（Human 指示暂缓；说"开始"即转 Authorized）
+> **SUPERSEDED**：本卡已按分阶段计划取代，见
+> FR-CLIENT-001-IMPL-A（网络展示面）/ FR-CLIENT-001-IMPL-B（GUI，后续起草）。
+> 服务端开发已确认完整（2026-08-14）；Human 既定顺序"服务端完成后继续客户端
+> 模组"已满足，Stage A 进入实施。
 
 ## Agent Identity
 
