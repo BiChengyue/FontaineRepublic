@@ -48,3 +48,13 @@
   WAL/分片文件记录为被拒方案；含崩溃窗口、世界身份、停服语义、验收矩阵。
 - 该设计触及 Core 持久化接口，按 CLAUDE.md 规则需用户确认后才能实现。
 - 下一队列：FR-AUD-001 审计模块设计、FR-ECO-001-C-ACCOUNT-ALIGN 账户主键对齐。
+
+## 2026-08-13 | FR-AUD-001-A + FR-ECO-001-C-ACCOUNT-ALIGN-01 设计候选
+
+- 产出 `docs/architecture/fr-aud-001-a-audit-module-architecture.md`：
+  append-only 审计账本，段式摘要链防篡改，普通路径走原存档、权威条目走
+  FR-CORE-002 门，与 FR-EMG 紧急日志严格隔离（不重复、不替代）。
+- 产出 `docs/architecture/fr-eco-001-c-account-align-01.md`：账户主键由 UUID
+  改为 SubjectId，登记号为唯一公开路由号，UUID 仍是身份认证键；解决审查
+  F-001；紧急动作信封保留 PLAYER_UUID 但计划绑定 SubjectId。
+- 同步 CLAUDE.md / current_status.md 台账。

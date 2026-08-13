@@ -14,6 +14,13 @@ candidates (identity registry, economy, institutions, emergency authority)
 were produced on 2026-08-02 and await independent review before approval and
 implementation dispatch.
 
+Phase 2 design candidates were independently reviewed on 2026-08-13
+(FR-PHASE2-DESIGN-REVIEW-01, conditional pass; see
+`docs/ai_recovery/evidence/FR-PHASE2-DESIGN-REVIEW-01-AUDIT-REPORT.md`), and
+three follow-up design candidates were added: FR-CORE-002-A (durable commit
+gate), FR-AUD-001-A (audit module), FR-ECO-001-C-ACCOUNT-ALIGN-01 (account
+key alignment).
+
 ## Completed Tasks
 
 | # | Task | Commit | Date |
@@ -63,8 +70,9 @@ implementation dispatch.
 
 ## Current Task
 
-FR-PM-002 Continuous development infrastructure: project-local Reasonix
-dispatch environment, operations handbook, work journal, and state sync.
+Design-candidate phase: FR-CORE-002-A / FR-AUD-001-A /
+FR-ECO-001-C-ACCOUNT-ALIGN-01 produced; awaiting Human confirmation of the
+Phase 2 design batch before implementation designs.
 
 ## Next Task
 
@@ -84,6 +92,9 @@ approved. Committed on `codex/fr-inst-001-a-design`.
 | FR-EMG-001-A | Hydro Archon emergency authority architecture (actor verification, journaling, audit index) | Pending review |
 | FR-ID-001-A | Unified digital subject registry; public number `TT-NNNNNN-CC`; two fixed Hydro Archon numbers | Pending review |
 | FR-DATA-003-A | Safe player directory (exact name -> UUID -> subject -> account); NOT yet committed | Pending review |
+| FR-CORE-002-A | Durable commit gate (fsync + atomic replace) required by FR-ID/FR-DATA-003/FR-EMG/Economy emergency | Pending review (added 2026-08-13) |
+| FR-AUD-001-A | Append-only audit module (roadmap Phase 2 gap) | Pending review (added 2026-08-13) |
+| FR-ECO-001-C-ACCOUNT-ALIGN-01 | Economy account keying aligned to SubjectId per FR-ID | Pending review (added 2026-08-13) |
 
 ## Scope Boundaries
 
@@ -97,7 +108,11 @@ approved. Committed on `codex/fr-inst-001-a-design`.
 
 - ConfigManager currently has no configuration entries.
 - Data loss on hard JVM termination remains an inherent SavedData limitation.
-- The six Phase 2 design candidates have not passed independent review.
+- Phase 2 design candidates passed independent review (conditional) but await
+  Human confirmation; two blockers remain: account-key alignment (resolved by
+  FR-ECO-001-C-ACCOUNT-ALIGN-01 candidate) and the FR-CORE-002 durability gate.
+- Implementation dispatch network to opencode.ai was unreachable on
+  2026-08-13 (probe shelved until network/proxy available).
 - `develop` is two commits ahead of `origin/develop` (FR-CMD-001 not pushed).
 - Workspace contains historical uncommitted changes and stray directories
   (`.reasonix` state, deepseek-worktrees, credential-stage, etc.) not yet

@@ -89,7 +89,10 @@ Current:
 Phase 1 infrastructure (FR-CORE-001 / FR-DATA-002 / FR-NET-001 / FR-CMD-001)
 is merged into `develop`. Phase 2 design candidates were produced on
 2026-08-02 on `codex/fr-inst-001-a-design` (FR-INST-001-A/B, FR-ECO-001-A/B/C,
-FR-EMG-001-A, FR-ID-001-A) and await independent review.
+FR-EMG-001-A, FR-ID-001-A) and were independently reviewed on 2026-08-13
+(conditional pass). Follow-up design candidates FR-CORE-002-A (durable
+commit gate), FR-AUD-001-A (audit module), and
+FR-ECO-001-C-ACCOUNT-ALIGN-01 (account key alignment) were added.
 
 Next:
 
