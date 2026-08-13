@@ -20,6 +20,7 @@ import com.fontainerepublic.server.economy.api.TransferReceipt;
 import com.fontainerepublic.server.economy.model.EconomyAccount;
 import com.fontainerepublic.server.economy.model.EconomyTransaction;
 import com.fontainerepublic.server.economy.model.NotificationSummary;
+import com.fontainerepublic.server.institutionaccess.api.OnSiteContext;
 import com.fontainerepublic.server.login.LoginProvisioningHook;
 import com.fontainerepublic.server.playerdata.api.PlayerDirectoryService;
 import com.fontainerepublic.server.playerdata.model.PlayerNameResolution;
@@ -396,8 +397,9 @@ public final class CommandFoundationTestMain {
         // child adapter (FrameworkAdminCommand), which hosts the approved
         // /fr admin bootstrap subject-hydro <uuid> <reason> command
         // (FR-ID-BOOTSTRAP-001-A §3), in the approved business command
-        // surfaces MoneyCommand (UUID/amount/memo/page arguments) and
-        // CitizenCommand (read-only, argument-free by design,
+        // surfaces MoneyCommand (UUID/amount/memo/page arguments),
+        // BankCommand (official-duty target/amount/terminal/reason arguments,
+        // FR-ECO-002-A), CitizenCommand (read-only, argument-free by design,
         // FR-CIT-001-A §5), and in HelpCommand (/fr help <module>
         // module argument, FR-CMD-GUIDE-001). Every other command source
         // file must remain argument-free.
@@ -405,6 +407,7 @@ public final class CommandFoundationTestMain {
             String fileName = file.getFileName().toString();
             if (fileName.equals("FrameworkAdminCommand.java")
                     || fileName.equals("MoneyCommand.java")
+                    || fileName.equals("BankCommand.java")
                     || fileName.equals("CitizenCommand.java")
                     || fileName.equals("HelpCommand.java")) {
                 continue;
@@ -412,13 +415,13 @@ public final class CommandFoundationTestMain {
             check(
                     !read(file).contains("Commands.argument("),
                     "Command argument parsing is only permitted in "
-                            + "FrameworkAdminCommand/MoneyCommand/CitizenCommand/HelpCommand: "
+                            + "FrameworkAdminCommand/MoneyCommand/BankCommand/"
+                            + "CitizenCommand/HelpCommand: "
                             + file.getFileName()
             );
         }
         for (String forbiddenLiteral : List.of(
                 "literal(\"economy\")",
-                "literal(\"bank\")",
                 "literal(\"top\")",
                 "literal(\"land\")",
                 "literal(\"court\")",
@@ -434,6 +437,7 @@ public final class CommandFoundationTestMain {
         }
         for (String approvedLiteral : List.of(
                 "literal(\"money\")",
+                "literal(\"bank\")",
                 "literal(\"citizen\")"
         )) {
             check(
@@ -477,6 +481,7 @@ public final class CommandFoundationTestMain {
     private static void testBusinessCommandTree() throws Exception {
         CommandContributionRegistry registry = new CommandContributionRegistry();
         registry.register(new CommandContributionSpec("money", MoneyCommand::create));
+        registry.register(new CommandContributionSpec("bank", BankCommand::create));
         registry.register(new CommandContributionSpec("citizen", CitizenCommand::create));
         registry.freeze();
 
@@ -487,21 +492,29 @@ public final class CommandFoundationTestMain {
         CommandNode<CommandSourceStack> root = dispatcher.getRoot().getChild("fr");
         check(root != null, "Business contributions must attach under /fr");
         CommandNode<CommandSourceStack> money = root.getChild("money");
+        CommandNode<CommandSourceStack> bank = root.getChild("bank");
         CommandNode<CommandSourceStack> citizen = root.getChild("citizen");
         check(money != null, "Approved /fr money tree must be contributed");
+        check(bank != null, "Approved /fr bank tree must be contributed");
         check(citizen != null, "Approved /fr citizen tree must be contributed");
         check(money.getChild("balance") != null, "/fr money balance must exist");
         check(money.getChild("pay") != null, "/fr money pay must exist");
         check(money.getChild("history") != null, "/fr money history must exist");
         check(citizen.getChild("info") != null, "/fr citizen info must exist");
+        check(bank.getChild("balance") != null, "/fr bank balance must exist");
+        check(bank.getChild("deposit") != null, "/fr bank deposit must exist");
+        check(bank.getChild("withdraw") != null, "/fr bank withdraw must exist");
+        check(bank.getChild("freeze") != null, "/fr bank freeze must exist");
+        check(bank.getChild("unfreeze") != null, "/fr bank unfreeze must exist");
 
-        // 禁用命令守卫:top / bank / 他人余额 / rank 变更一律不注册。
+        // 禁用命令守卫:top / 他人余额 / rank 变更 / 现金表面一律不注册。
         check(money.getChild("top") == null, "Forbidden /fr money top must not be registered");
-        check(root.getChild("bank") == null, "Forbidden /fr bank must not be registered");
         check(money.getChild("balance").getChild("player") == null,
                 "Forbidden other-player balance path must not be registered");
         check(citizen.getChild("rank") == null, "Forbidden /fr citizen rank must not be registered");
         check(citizen.getChild("set") == null, "Forbidden /fr citizen set must not be registered");
+        check(bank.getChild("atm") == null, "Forbidden /fr bank atm must not be registered");
+        check(bank.getChild("cash") == null, "Forbidden /fr bank cash must not be registered");
 
         // 服务不可用反馈(空 runtime,无玩家实体)。
         CapturingSource unavailableCapture = new CapturingSource();
@@ -577,12 +590,12 @@ public final class CommandFoundationTestMain {
         int indexResult = dispatcher.execute("fr help", indexSource);
         check(indexResult == CommandFeedback.SUCCESS, "Index help must return 1");
         List<String> indexMessages = indexCapture.messages();
-        check(!indexMessages.isEmpty() && indexMessages.size() <= 7,
+        check(!indexMessages.isEmpty() && indexMessages.size() <= 8,
                 "Index help must stay bounded");
         check(indexMessages.get(0).contains("FontaineRepublic help"),
                 "Index must identify itself");
         for (String module : List.of(
-                "money", "citizen", "government", "parliament", "court", "institution")) {
+                "money", "bank", "citizen", "government", "parliament", "court", "institution")) {
             check(indexMessages.stream().anyMatch(message -> message.contains(module)),
                     "Index must list " + module);
         }
@@ -592,6 +605,8 @@ public final class CommandFoundationTestMain {
 
         // Per-module pages: bounded and mention their commands.
         assertModulePage(dispatcher, "money", List.of("balance", "pay", "history"));
+        assertModulePage(dispatcher, "bank",
+                List.of("balance", "deposit", "withdraw", "freeze", "unfreeze"));
         assertModulePage(dispatcher, "citizen", List.of("info"));
         assertModulePage(dispatcher, "government",
                 List.of("ministry", "position", "appoint", "dismiss", "office"));
@@ -1123,6 +1138,41 @@ public final class CommandFoundationTestMain {
         public String formatBalance(long amount) {
             return Long.toString(amount);
         }
+
+        @Override
+        public long getTreasuryBalance() {
+            return 0L;
+        }
+
+        @Override
+        public EconomyTransaction deposit(
+                SubjectId to,
+                long amount,
+                String memo,
+                OnSiteContext context
+        ) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public EconomyTransaction withdraw(
+                SubjectId from,
+                long amount,
+                String memo,
+                OnSiteContext context
+        ) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public EconomyAccount freeze(SubjectId subjectId, String memo, OnSiteContext context) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public EconomyAccount unfreeze(SubjectId subjectId, String memo, OnSiteContext context) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
     }
 
     private static final class StubDirectory implements PlayerDirectoryService {
@@ -1258,6 +1308,41 @@ public final class CommandFoundationTestMain {
         @Override
         public String formatBalance(long amount) {
             return Long.toString(amount);
+        }
+
+        @Override
+        public long getTreasuryBalance() {
+            return 0L;
+        }
+
+        @Override
+        public EconomyTransaction deposit(
+                SubjectId to,
+                long amount,
+                String memo,
+                OnSiteContext context
+        ) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public EconomyTransaction withdraw(
+                SubjectId from,
+                long amount,
+                String memo,
+                OnSiteContext context
+        ) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public EconomyAccount freeze(SubjectId subjectId, String memo, OnSiteContext context) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public EconomyAccount unfreeze(SubjectId subjectId, String memo, OnSiteContext context) {
+            throw new UnsupportedOperationException("not used in command tests");
         }
     }
 

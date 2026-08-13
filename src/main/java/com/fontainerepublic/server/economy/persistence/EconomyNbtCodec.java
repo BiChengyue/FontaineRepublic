@@ -29,7 +29,8 @@ import java.util.UUID;
  * <p>Encoding writes every index in deterministic lexical key order so the
  * same immutable snapshot always produces an equivalent ordered NBT. Decoding
  * accepts only declared fields with exact NBT types, canonical subject keys,
- * valid TRANSFER transactions, positive amounts/revisions/timestamps, and
+ * valid TRANSFER/DEPOSIT/WITHDRAWAL transactions with the type-appropriate
+ * participant cardinality, positive amounts/revisions/timestamps, and
  * constructs the validating {@link EconomyStoreSnapshot} which enforces the
  * key/record identity and total-supply invariants. Unknown newer versions are
  * rejected; nothing is ever auto-repaired.</p>
@@ -50,6 +51,7 @@ public final class EconomyNbtCodec {
     private static final String ACCOUNT_REVISION = "AccountRevision";
     private static final String CREATED_AT = "CreatedAt";
     private static final String LAST_TRANSACTION_ID = "LastTransactionId";
+    private static final String FROZEN = "Frozen";
 
     private static final String TRANSACTION_VERSION = "TransactionVersion";
     private static final String TRANSACTION_ID = "TransactionId";
@@ -83,7 +85,8 @@ public final class EconomyNbtCodec {
             BALANCE,
             ACCOUNT_REVISION,
             CREATED_AT,
-            LAST_TRANSACTION_ID
+            LAST_TRANSACTION_ID,
+            FROZEN
     );
     private static final Set<String> TRANSACTION_KEYS = Set.of(
             TRANSACTION_VERSION,
@@ -200,7 +203,8 @@ public final class EconomyNbtCodec {
                     tag.getLong(BALANCE),
                     tag.getLong(ACCOUNT_REVISION),
                     tag.getLong(CREATED_AT),
-                    tag.getLong(LAST_TRANSACTION_ID)
+                    tag.getLong(LAST_TRANSACTION_ID),
+                    optionalBoolean(tag, FROZEN, "account " + expectedSubject)
             );
         } catch (IllegalArgumentException failure) {
             throw invalid(
@@ -231,8 +235,6 @@ public final class EconomyNbtCodec {
         requireType(tag, TRANSACTION_VERSION, Tag.TAG_INT, "transaction " + expectedId);
         requireType(tag, TRANSACTION_ID, Tag.TAG_LONG, "transaction " + expectedId);
         requireType(tag, TIMESTAMP, Tag.TAG_LONG, "transaction " + expectedId);
-        requireType(tag, FROM_SUBJECT, Tag.TAG_INT_ARRAY, "transaction " + expectedId);
-        requireType(tag, TO_SUBJECT, Tag.TAG_INT_ARRAY, "transaction " + expectedId);
         requireType(tag, AMOUNT, Tag.TAG_LONG, "transaction " + expectedId);
         requireType(tag, TYPE, Tag.TAG_STRING, "transaction " + expectedId);
 
@@ -249,8 +251,12 @@ public final class EconomyNbtCodec {
                             + " does not match record id " + storedId
             );
         }
-        SubjectId from = parseSubjectId(tag, FROM_SUBJECT, "transaction " + expectedId);
-        SubjectId to = parseSubjectId(tag, TO_SUBJECT, "transaction " + expectedId);
+        SubjectId from = optionalSubjectId(
+                tag, FROM_SUBJECT, "transaction " + expectedId
+        );
+        SubjectId to = optionalSubjectId(
+                tag, TO_SUBJECT, "transaction " + expectedId
+        );
         TransactionType type = enumValue(
                 TransactionType.class,
                 tag.getString(TYPE),
@@ -397,6 +403,7 @@ public final class EconomyNbtCodec {
         tag.putLong(ACCOUNT_REVISION, account.accountRevision());
         tag.putLong(CREATED_AT, account.createdAt());
         tag.putLong(LAST_TRANSACTION_ID, account.lastTransactionId());
+        tag.putBoolean(FROZEN, account.frozen());
         return tag;
     }
 
@@ -405,8 +412,12 @@ public final class EconomyNbtCodec {
         tag.putInt(TRANSACTION_VERSION, transaction.schemaVersion());
         tag.putLong(TRANSACTION_ID, transaction.transactionId());
         tag.putLong(TIMESTAMP, transaction.timestamp());
-        tag.putUUID(FROM_SUBJECT, transaction.from().value());
-        tag.putUUID(TO_SUBJECT, transaction.to().value());
+        if (transaction.from() != null) {
+            tag.putUUID(FROM_SUBJECT, transaction.from().value());
+        }
+        if (transaction.to() != null) {
+            tag.putUUID(TO_SUBJECT, transaction.to().value());
+        }
         tag.putLong(AMOUNT, transaction.amount());
         tag.putString(TYPE, transaction.type().name());
         if (transaction.memo() != null) {
@@ -488,6 +499,30 @@ public final class EconomyNbtCodec {
         }
         requireType(tag, key, Tag.TAG_STRING, path);
         return tag.getString(key);
+    }
+
+    /**
+     * Optional boolean field (defaults to {@code false} when absent). Used
+     * for the account freeze flag so pre-freeze archives decode unchanged.
+     */
+    private boolean optionalBoolean(CompoundTag tag, String key, String path) {
+        if (!tag.contains(key)) {
+            return false;
+        }
+        requireType(tag, key, Tag.TAG_BYTE, path);
+        return tag.getBoolean(key);
+    }
+
+    /**
+     * Optional subject participant (absent for the system side of an official
+     * {@code DEPOSIT}/{@code WITHDRAWAL}). The transaction-type cardinality
+     * invariant is enforced by the {@link EconomyTransaction} constructor.
+     */
+    private SubjectId optionalSubjectId(CompoundTag tag, String key, String path) {
+        if (!tag.contains(key)) {
+            return null;
+        }
+        return parseSubjectId(tag, key, path);
     }
 
     private static <T extends Enum<T>> T enumValue(Class<T> type, String value, String field) {

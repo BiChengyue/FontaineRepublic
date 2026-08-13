@@ -16,10 +16,11 @@ import java.util.Objects;
  * {@code /fr help} with a bounded, per-module guide.
  *
  * <ul>
- *   <li>{@code /fr help} prints the fixed module index (all six guide pages).</li>
+ *   <li>{@code /fr help} prints the fixed module index (all guide pages).</li>
  *   <li>{@code /fr help <module>} prints one bounded page per known module
- *       (money / citizen / government / parliament / court); the operator-only
- *       institution page is restricted and never enumerates its commands.</li>
+ *       (money / bank / citizen / government / parliament / court); the
+ *       operator-only institution page is restricted and never enumerates its
+ *       commands.</li>
  *   <li>Unknown modules receive one bounded standard rejection.</li>
  * </ul>
  *
@@ -35,6 +36,7 @@ public final class HelpCommand {
     /** Fixed guide order: player modules first, operator-only module last. */
     private static final List<String> KNOWN_MODULES = List.of(
             "money",
+            "bank",
             "citizen",
             "government",
             "parliament",
@@ -59,6 +61,36 @@ public final class HelpCommand {
                     new Entry(
                             "money.history",
                             "  /fr money history [page] - view your transaction history"
+                    )
+            )
+    );
+
+    private static final Page BANK_PAGE = new Page(
+            "bank.title",
+            "bank: central-bank official duties "
+                    + "(on-site duty at a central-bank terminal).",
+            List.of(
+                    new Entry(
+                            "bank.balance",
+                            "  /fr bank balance - view the national treasury total"
+                    ),
+                    new Entry(
+                            "bank.deposit",
+                            "  /fr bank deposit <target> <amount> <terminalId> [reason] "
+                                    + "- official issuance"
+                    ),
+                    new Entry(
+                            "bank.withdraw",
+                            "  /fr bank withdraw <target> <amount> <terminalId> [reason] "
+                                    + "- official withdrawal"
+                    ),
+                    new Entry(
+                            "bank.freeze",
+                            "  /fr bank freeze <target> <terminalId> [reason] - freeze an account"
+                    ),
+                    new Entry(
+                            "bank.unfreeze",
+                            "  /fr bank unfreeze <target> <terminalId> [reason] - unfreeze an account"
                     )
             )
     );
@@ -179,7 +211,7 @@ public final class HelpCommand {
             keys.add(KEY_PREFIX + "index.line." + module);
         }
         keys.add(KEY_PREFIX + "module.unknown");
-        for (Page page : List.of(MONEY_PAGE, CITIZEN_PAGE, GOVERNMENT_PAGE,
+        for (Page page : List.of(MONEY_PAGE, BANK_PAGE, CITIZEN_PAGE, GOVERNMENT_PAGE,
                 PARLIAMENT_PAGE, COURT_PAGE)) {
             keys.add(KEY_PREFIX + page.titleKey());
             for (Entry entry : page.entries()) {
@@ -211,6 +243,7 @@ public final class HelpCommand {
     private static String indexLine(String module) {
         return switch (module) {
             case "money" -> "  money: personal money commands";
+            case "bank" -> "  bank: central-bank official duties (on-site)";
             case "citizen" -> "  citizen: own citizen status";
             case "government" -> "  government: ministries, positions, appointments";
             case "parliament" -> "  parliament: proposals, votes, bills";
@@ -253,6 +286,7 @@ public final class HelpCommand {
         }
         Page page = switch (module) {
             case "money" -> MONEY_PAGE;
+            case "bank" -> BANK_PAGE;
             case "citizen" -> CITIZEN_PAGE;
             case "government" -> GOVERNMENT_PAGE;
             case "parliament" -> PARLIAMENT_PAGE;

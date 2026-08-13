@@ -6,6 +6,8 @@ import com.fontainerepublic.core.module.ModuleDefinition;
 import com.fontainerepublic.core.module.ModuleId;
 import com.fontainerepublic.core.module.ModuleMetadata;
 import com.fontainerepublic.core.module.ModuleRegistry;
+import com.fontainerepublic.server.audit.AuditModule;
+import com.fontainerepublic.server.audit.api.AuditService;
 import com.fontainerepublic.server.economy.api.CurrencyPresentation;
 import com.fontainerepublic.server.economy.api.EconomyService;
 import com.fontainerepublic.server.economy.api.SubjectDirectory;
@@ -13,6 +15,8 @@ import com.fontainerepublic.server.economy.persistence.EconomyLimits;
 import com.fontainerepublic.server.economy.persistence.EconomyNbtCodec;
 import com.fontainerepublic.server.economy.persistence.EconomyRepository;
 import com.fontainerepublic.server.economy.service.DefaultEconomyService;
+import com.fontainerepublic.server.institutionaccess.InstitutionAccessModule;
+import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
@@ -30,16 +34,19 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Infrastructure module binding the economy Phase 1 player services to one
- * server runtime (FR-ECO-001-A §8, FR-ECO-001-C).
+ * Infrastructure module binding the economy Phase 1 player services plus the
+ * on-site official Central-Bank duties to one server runtime (FR-ECO-001-A
+ * §8, FR-ECO-001-C, FR-ECO-002-A).
  *
  * <p>Depends on {@code player-data} and {@code subject-registry} (the ordered
  * {@code PlayerData -> subject -> account} chain must be ready before
- * provisioning) and registers after the FR-CORE-002 durable commit gate so
- * every economy mutation is acknowledged. The module never implements
- * treasury/bank/central-bank duties, freeze, cash/ATM/interest/tax/market,
- * GUI, or authoritative client packets; the emergency {@code economy.issue} /
- * {@code economy.reclaim} catalogue remains blocked on the FR-EMG gates.</p>
+ * provisioning), {@code audit} (authoritative-mutation recording of official
+ * duties), and {@code institution-access} (the mandatory on-site boundary for
+ * the official bank surface); it registers after the FR-CORE-002 durable
+ * commit gate so every economy mutation is acknowledged. The module never
+ * implements cash/ATM/interest/tax/market, GUI, or authoritative client
+ * packets; the emergency {@code economy.issue} / {@code economy.reclaim}
+ * catalogue remains blocked on the FR-EMG gates.</p>
  */
 public final class EconomyModule implements IModule {
 
@@ -50,6 +57,8 @@ public final class EconomyModule implements IModule {
     private EconomyService service;
     private volatile PlayerDataService boundPlayerData;
     private volatile SubjectRegistryService boundSubjectRegistry;
+    private volatile InstitutionAccessService boundInstitutionAccess;
+    private volatile AuditService boundAudit;
 
     public static void register(ModuleRegistry registry) {
         Objects.requireNonNull(registry, "registry");
@@ -61,7 +70,12 @@ public final class EconomyModule implements IModule {
                         Optional.of("Phase 1 economy player services (SubjectId accounts)"),
                         Optional.of("FontaineRepublic")
                 ),
-                Set.of(PlayerDataModule.MODULE_ID, SubjectRegistryModule.MODULE_ID),
+                Set.of(
+                        PlayerDataModule.MODULE_ID,
+                        SubjectRegistryModule.MODULE_ID,
+                        AuditModule.MODULE_ID,
+                        InstitutionAccessModule.MODULE_ID
+                ),
                 Set.of(),
                 60,
                 EconomyModule::new
@@ -79,7 +93,31 @@ public final class EconomyModule implements IModule {
     @Override
     public void init() {
         repository = EconomyRepository.createProduction(new EconomyNbtCodec());
-        service = new DefaultEconomyService(
+        LOGGER.info(
+                "[Economy] Store loaded (revision={}, accounts={}, nextTransactionId={})",
+                repository.storeRevision(),
+                repository.size(),
+                repository.nextTransactionId()
+        );
+    }
+
+    /**
+     * Binds the authoritative services after the runtime start and builds the
+     * runtime service. Until bound, ensure calls fail closed with
+     * {@code PLAYER_DATA_UNAVAILABLE} / {@code SUBJECT_REGISTRY_UNAVAILABLE};
+     * official duties additionally require the institution-access boundary.
+     */
+    public void bindServices(
+            PlayerDataService playerDataService,
+            SubjectRegistryService subjectRegistryService,
+            InstitutionAccessService institutionAccessService,
+            AuditService auditService
+    ) {
+        this.boundPlayerData = playerDataService;
+        this.boundSubjectRegistry = subjectRegistryService;
+        this.boundInstitutionAccess = institutionAccessService;
+        this.boundAudit = auditService;
+        this.service = new DefaultEconomyService(
                 repository,
                 System::currentTimeMillis,
                 new ModulePlayerPresence(),
@@ -89,7 +127,9 @@ public final class EconomyModule implements IModule {
                         ConfigManager.economyCurrencyDisplayName(),
                         ConfigManager.economyCurrencySymbol(),
                         ConfigManager.economyCurrencyGrouping()
-                )
+                ),
+                requireInstitutionAccess(),
+                boundAudit
         );
         LOGGER.info(
                 "[Economy] Runtime initialized (revision={}, accounts={}, nextTransactionId={})",
@@ -99,26 +139,14 @@ public final class EconomyModule implements IModule {
         );
     }
 
-    /**
-     * Binds the authoritative PlayerData and subject-registry services after
-     * the runtime start so provisioning can enforce the §2.2 chain. Until
-     * bound, ensure calls fail closed with {@code PLAYER_DATA_UNAVAILABLE} /
-     * {@code SUBJECT_REGISTRY_UNAVAILABLE}.
-     */
-    public void bindServices(
-            PlayerDataService playerDataService,
-            SubjectRegistryService subjectRegistryService
-    ) {
-        this.boundPlayerData = playerDataService;
-        this.boundSubjectRegistry = subjectRegistryService;
-    }
-
     @Override
     public void shutdown() {
         service = null;
         repository = null;
         boundPlayerData = null;
         boundSubjectRegistry = null;
+        boundInstitutionAccess = null;
+        boundAudit = null;
         LOGGER.info("[Economy] Runtime closed");
     }
 
@@ -127,6 +155,16 @@ public final class EconomyModule implements IModule {
             throw new IllegalStateException("Economy service is not active");
         }
         return service;
+    }
+
+    private InstitutionAccessService requireInstitutionAccess() {
+        InstitutionAccessService bound = boundInstitutionAccess;
+        if (bound == null) {
+            throw new IllegalStateException(
+                    "Institution-access service is not available for economy"
+            );
+        }
+        return bound;
     }
 
     private static EconomyLimits productionLimits() {
