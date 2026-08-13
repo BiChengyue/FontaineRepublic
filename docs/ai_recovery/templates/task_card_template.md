@@ -1,15 +1,15 @@
 # Task Card Template
 
 > Standard format for task definition and handoff.
-> Part of the AI Multi-Agent Collaboration Framework.
-> Reference: `docs/ai_recovery/ai_multi_agent_collaboration_framework.md` §3.2
+> Part of the AI Governance Baseline (FR-GOV-001-BASELINE-01).
+> Reference: `docs/ai_recovery/ai_team_governance.md` — Standard Artifacts
 
 ---
 
 ## Agent Identity
 
 **Agent:** {agent name}
-**Role:** {Coordinator / Implementer / Reviewer}
+**Role:** {Designer / Implementer / Reviewer}
 **Task ID:** {task identifier}
 **Task Name:** {short descriptive name}
 **Request Summary:** {one-line summary}
@@ -46,7 +46,7 @@
 **Human Authorization Reference:** {authorization record from Human gate, confirms task passed Human review — does not constitute final approval}
 **Task Owner:** {agent or human}
 **Assigned Roles**:
-  - Coordinator: {agent}
+  - Designer: {agent}
   - Implementer: {agent, Human-confirmed}
   - Reviewer: {agent, Human-confirmed}
   - Approver: Human
@@ -146,15 +146,15 @@
 
 ## Lifecycle
 
-The Task Card progresses through the following states per the Collaboration Framework (Rev 04):
+The Task Card progresses through the following lifecycle states:
 
 | State | Description | Authority |
 |-------|-------------|-----------|
-| Draft | Created by Coordinator, not yet submitted | Coordinator |
-| Human Review Pending | Submitted to Human for authorization | Coordinator → Human |
+| Draft | Created by Designer, not yet submitted | Designer |
+| Human Review Pending | Submitted to Human for authorization | Designer → Human |
 | Authorized | Human has reviewed and authorized execution. This is the Human Authorization Gate — it confirms the task may begin, not final approval of results | Human |
-| Assigned | Authorized Task Card transmitted to Implementer via Coordinator handoff. Human confirms assignment; Coordinator performs communication handoff only | Human (assignment) / Coordinator (transmission) |
-| Accepted | Implementer has completed Intake Validation per Routing Protocol §4. Task scope confirmed and accepted. This is **not** Reviewer Approval — it is Implementer readiness confirmation | Implementer |
+| Assigned | Authorized Task Card transmitted to Implementer via Designer handoff. Human confirms assignment; Designer performs communication handoff only | Human (assignment) / Designer (transmission) |
+| Accepted | Implementer has confirmed and accepted the task scope after reviewing requirements and constraints. This is **not** Reviewer Approval — it is Implementer readiness confirmation | Implementer |
 | Completed | Task-type-specific outputs produced, ready for review | Implementer |
 | Archived | Human has made final decision (approve or reject). Terminal state | Human |
 

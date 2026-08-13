@@ -65,7 +65,8 @@ Java changes may be authorized in a future implementation task for:
 - `ModuleAvailabilityRecord`;
 - lifecycle state and failure-reason types;
 - Forge lifecycle integration for CoreManager;
-- focused automated tests for the approved Core Framework behavior.
+- focused automated tests for the approved Core Framework behavior;
+- `src/test/java` and the minimal Gradle test configuration required for the Human-approved JUnit strategy.
 
 Supporting documentation may be synchronized only when required to describe the implemented contract or validation result.
 
@@ -82,7 +83,7 @@ The implementer must not:
 - add business packets;
 - add client-side gameplay authority;
 - change the persistence data name, NBT schema, or DataManager public contract;
-- add dependencies without separate Human approval;
+- add dependencies other than the Human-approved JUnit testing dependency;
 - extend module boundaries beyond FR-CORE-001;
 - implement a second dependency resolver or legacy priority-sorting path;
 - use priority to override dependency topology;
@@ -110,6 +111,51 @@ The implementer must not:
   - `ModSavedData.java`
 
 The implementation must reference the Human Design Freeze commit/blob once that freeze exists. Until then, this task remains preparation-only.
+
+---
+
+## 5.1 Human-Approved Implementation Preparation Constraints
+
+These constraints were confirmed by the Human Developer for FR-CORE-001 implementation preparation. They refine implementation input without authorizing Java changes or altering the Revision-13 lifecycle, dependency, persistence, or module-authority contracts.
+
+### Core Service Boundary
+
+- `DataManager` remains a Core Service. It is not registered or executed as a normal Runtime Module.
+- `ConfigManager` remains a Core Service. It is not registered or executed as a normal Runtime Module.
+- No `IModule` wrapper is created for DataManager or ConfigManager.
+- DataManager initialization remains the persistence prerequisite executed before dependency resolution and module initialization.
+
+### Module ID Format
+
+- Module IDs use lowercase letters, digits, and hyphens.
+- Examples: `core-lifecycle`, `core-data`, `core-config`.
+- Colon namespace syntax such as `core:lifecycle` is forbidden.
+- Normalization and validation must produce one deterministic stored ModuleId.
+
+### ModuleMetadata Contract
+
+The approved ModuleMetadata schema is limited to:
+
+| Field | Requirement |
+|-------|-------------|
+| `name` | Required; maps to the architecture's display-name concept; non-null and non-blank |
+| `version` | Required; non-null and non-blank |
+| `description` | Optional |
+| `author` | Optional |
+
+No additional metadata field or schema extension is authorized.
+
+### Testing Strategy
+
+- JUnit is approved for DependencyResolver, runtime state-machine, failure-propagation, and other pure Java algorithm tests.
+- Forge GameTest is approved for server lifecycle, restart verification, and persistence compatibility.
+- Dedicated-server runtime execution remains subject to the runtime-test authorization and reporting boundary in Section 9.
+
+### Priority Contract
+
+- Priority accepts the complete Java `int` range.
+- Ordering remains dependency topology → priority → stable registration order.
+- Priority never overrides dependency topology.
 
 ---
 
@@ -212,8 +258,8 @@ At `ServerStoppedEvent`:
 
 Create:
 
-- Module ID/value validation;
-- ModuleMetadata;
+- Module ID/value validation for lowercase letters, digits, and hyphens; colon syntax is rejected;
+- ModuleMetadata with required `name` and `version`, optional `description` and `author`, and no additional fields;
 - ModuleDefinition;
 - factory contract;
 - lifecycle and availability enums/records.
@@ -229,6 +275,8 @@ Exit criteria:
 Implement ModuleRegistry:
 
 - unique ID enforcement;
+- deterministic Module ID normalization and rejection of colon namespace syntax;
+- ModuleMetadata required-field validation;
 - immutable definition storage;
 - stable registration order;
 - registration-window close;
@@ -319,7 +367,12 @@ Exit criteria:
 
 ### Phase 8 — Automated tests
 
-Add focused tests for all acceptance criteria without introducing an unrelated test framework.
+Add focused tests using the approved split:
+
+- JUnit for DependencyResolver, runtime state-machine, failure-propagation, and pure Java algorithms;
+- Forge GameTest for server lifecycle, restart verification, and persistence compatibility.
+
+Do not introduce an additional test framework.
 
 ---
 
@@ -345,6 +398,10 @@ Add focused tests for all acceptance criteria without introducing an unrelated t
 18. Existing persistence DATA_NAME, NBT structure, and DataManager API remain unchanged.
 19. No Network Foundation, internal Event Bus, Permission system, or Feature Module implementation is introduced.
 20. Gradle build succeeds.
+21. DataManager and ConfigManager remain Core Services and are not registered as Runtime Modules.
+22. Module IDs accept only lowercase letters, digits, and hyphens; colon namespace syntax is rejected.
+23. ModuleMetadata contains only required `name` and `version` plus optional `description` and `author`.
+24. Priority accepts the full Java `int` range while remaining subordinate to dependency topology.
 
 ---
 

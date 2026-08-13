@@ -25,6 +25,38 @@ Only Human may approve, authorize merges, and make final decisions.
 **Role:** Implementer
 **Task ID:** {task identifier}
 **Task Name:** {short descriptive name}
+**Request Summary:** {one-line summary}
+**Context Source:** {previous task ID or external reference}
+
+---
+
+## Project Context Snapshot
+
+**Repository State**
+
+- Branch: {current branch}
+- Commit: {current commit hash}
+- Working Tree: {clean / dirty — list key dirty files if any}
+
+**Current Phase**
+
+- Phase: {project phase}
+- Step: {step number}
+- Current Task: {current task description}
+
+**Recent Completed Work**
+
+- {completed work item 1}
+- {completed work item 2}
+
+**Active Risks**
+
+- {active risk 1}
+- {active risk 2}
+
+**Document Consistency**
+
+- {consistency note}
 
 ---
 
@@ -107,7 +139,7 @@ This implementation report has the following evidence profile:
 
 ### Delivery Form ≠ Evidence Weight
 
-The Delivery Form does **not** determine the Evidence Weight. These are orthogonal dimensions per the Evidence Source Classification (Rev 08). An implementation report delivered as a Repository file remains a Secondary Claim; an implementation report delivered as Inline evidence in a chat message is also a Secondary Claim. The Delivery Form only describes how it was delivered.
+The Delivery Form does **not** determine the Evidence Weight. These are orthogonal dimensions per the Evidence Source Classification. An implementation report delivered as a Repository file remains a Secondary Claim; an implementation report delivered as Inline evidence in a chat message is also a Secondary Claim. The Delivery Form only describes how it was delivered.
 
 ### Embedded Primary Evidence
 

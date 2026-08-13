@@ -1,8 +1,8 @@
 # Evidence Artifact Template
 
 > Standard format for evidence documentation.
-> Produced by the Implementer (or by an Evidence Task).
-> Reference: `docs/ai_recovery/ai_multi_agent_collaboration_framework.md` §4
+> Produced by the Implementer.
+> Reference: `docs/ai_recovery/ai_team_governance.md` — Standard Artifacts
 
 ---
 
@@ -21,10 +21,42 @@ Delivery Form (Repository) does **not** determine Evidence Weight. The Reviewer 
 ## Agent Identity
 
 **Agent:** {agent name}
-**Role:** {Implementer / Evidence Task agent}
+**Role:** {Implementer}
 **Task ID:** {task identifier}
 **Task Name:** {short descriptive name}
+**Request Summary:** {one-line summary}
+**Context Source:** {previous task ID or external reference}
 **Target:** {file path or scope of the evidence}
+
+---
+
+## Project Context Snapshot
+
+**Repository State**
+
+- Branch: {current branch}
+- Commit: {current commit hash}
+- Working Tree: {clean / dirty — list key dirty files if any}
+
+**Current Phase**
+
+- Phase: {project phase}
+- Step: {step number}
+- Current Task: {current task description}
+
+**Recent Completed Work**
+
+- {completed work item 1}
+- {completed work item 2}
+
+**Active Risks**
+
+- {active risk 1}
+- {active risk 2}
+
+**Document Consistency**
+
+- {consistency note}
 
 ---
 
@@ -89,7 +121,7 @@ The following facts are self-declared by the {agent role} and cannot be independ
 
 **Implementer Secondary Claims** include: which task caused each change, which agent performed modifications, the order and scope of edits, absence of concurrent modification, absence of intermediate modifications, and attribution of pre-existing dirty state to specific prior tasks. These depend on the implementer's record and conversational history.
 
-This distinction is fundamental to the Evidence Source Classification (Rev 08): evidence delivery form (Repository file) does not determine evidence weight — a file on disk containing self-declared claims carries Secondary Claim weight regardless of its Repository delivery form.
+This distinction is fundamental to the Evidence Source Classification: evidence delivery form (Repository file) does not determine evidence weight — a file on disk containing self-declared claims carries Secondary Claim weight regardless of its Repository delivery form.
 
 ---
 
@@ -140,6 +172,8 @@ This distinction is fundamental to the Evidence Source Classification (Rev 08): 
 | # | Claim | Why Not Repository-Observable |
 |---|-------|-------------------------------|
 | 1 | {claim} | {reason} |
+
+Output order: Agent Identity → Project Context Snapshot → Evidence Artifact.
 
 ---
 

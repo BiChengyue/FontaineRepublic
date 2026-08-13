@@ -1,24 +1,25 @@
 # AI Team Governance
 
 > Governance reference: FR-GOV-V2-UPDATE
-> Status: Active
-> Last updated: 2026-07-26
-> Supersedes: FR-GOV-AI-001
+> Status: Pending Human Approval
+> Last updated: 2026-07-27
+> Baseline commit: `1ca7716` (docs: establish AI governance baseline)
+> Baseline task: FR-GOV-001-BASELINE-01
 
 ## Migration Note
 
-This document supersedes FR-GOV-AI-001 following Human Approval (FR-GOV-V2-HUMAN-APPROVAL-01). Key changes from v1:
+This document is proposed to supersede FR-GOV-AI-001, pending Human confirmation (FR-GOV-V2-HUMAN-APPROVAL-01). Key changes from v1:
 
 - **Task-role model**: Roles are assigned per task, not fixed per AI.
 - **Review vs. Approval separated**: Review verifies correctness; human grants approval. They are not the same.
 - **Two-dimensional decision model**: Risk × Emergency, not a linear four-level scale.
 - **Codex role**: Repository Principal Engineer — may perform design pre-review or repository post-review depending on risk.
 - **No risk degradation**: Codex quota exhaustion does not reduce risk level — escalate or wait.
-- **Standard artifacts**: Task Card (before), Implementation Report (after), Audit Report (review).
+- **Standard artifacts**: Task Card (before), Implementation Report (after), Evidence Artifact (evidence), Audit Report (review).
 - **Source of Truth**: Four-layer scope — Actual State · Normative Rules · Project Progress · Historical Context.
 - **Communication Protocol**: All AI outputs must carry Agent Identity Header and Project Context Snapshot.
 
-The Two-AI model (ADR-006) is superseded by the Three-AI model (ADR-010). The original design/implementation separation principle is preserved.
+The Two-AI model (ADR-006) is proposed to be superseded by the Three-AI model (ADR-010), pending Human confirmation. The original design/implementation separation principle is preserved.
 
 ---
 
@@ -324,7 +325,21 @@ Every review yields a disposition that determines what happens next.
 
 ## Standard Artifacts
 
-Every task produces three artifacts at different stages.
+### AI Workflow Artifacts
+
+Four artifact types support the AI workflow, required per task context:
+
+| Context | Required Artifacts |
+|---------|-------------------|
+| **Every task** | Task Card |
+| **Implementer task** | Implementation Report, Evidence Artifact |
+| **Review task** | Audit Report |
+
+### Human Authority Record
+
+One record type documents the human approval decision:
+
+- **Approval Record**: Documents what was approved, review history, and authorization scope. Only Human may confirm; AI may prepare in Draft state.
 
 ### Task Card (before implementation)
 
@@ -524,6 +539,32 @@ Recommendation:
   - Reject (reasons)
 ```
 
+### Evidence Artifact (evidence documentation)
+
+Evidence Artifact is an **artifact type**, not an AI role. It is produced by the Implementer alongside the Implementation Report. Documents implementation evidence with explicit classification of what is repository-observable versus self-declared.
+
+Required fields:
+- Agent Identity Header
+- Project Context Snapshot
+- Evidence Classification (Delivery Form, Evidence Weight)
+- Repository State (current file manifest, git status)
+- Changed Files (with git status per file)
+- Git Audit Scope (repository-observable facts vs. Implementer Secondary Claims)
+- Self Review
+- Governance Compliance
+- Remaining Risks
+
+Relationship with Evidence Classification:
+
+| Concept | Description |
+|---------|-------------|
+| **Delivery Form** | How the evidence is delivered (Repository file) |
+| **Evidence Weight** | What the content proves — repository-observable (Primary Evidence) or self-declared (Secondary Claim) |
+
+The Delivery Form does not determine Evidence Weight. Each fact within the artifact is classified independently.
+
+Output order: Agent Identity → Project Context Snapshot → Evidence Artifact.
+
 ---
 
 ## Source of Truth
@@ -630,7 +671,9 @@ This header ensures that every AI output is self-documenting about who produced 
 |-------------|--------------|
 | Task Card | Agent Identity Header + Project Context Snapshot |
 | Implementation Report | Agent Identity Header + Project Context Snapshot |
+| Evidence Artifact | Agent Identity Header + Project Context Snapshot |
 | Audit Report | Agent Identity Header + Project Context Snapshot |
+| Approval Record (Draft) | Agent Identity Header + Project Context Snapshot |
 | Recovery Report | Agent Identity Header + Project Context Snapshot |
 | Ad-hoc response | Agent Identity Header (truncated: Agent/Role/Task ID) |
 
@@ -652,12 +695,17 @@ Review verifies correctness. Approval grants authority to proceed. They are diff
 
 ### 4. Artifact Completeness
 
-Every task must produce:
-- Task Card (before start)
-- Implementation Report (after implementation, before commit)
-- Audit Report (after review)
+AI Workflow Artifacts (required per task context):
 
-Skipping artifacts requires explicit human approval.
+| Context | Required Artifacts |
+|---------|-------------------|
+| **Every task** | Task Card |
+| **Implementer task** | Implementation Report, Evidence Artifact |
+| **Review task** | Audit Report |
+
+**Human Authority Record**: Approval Record (produced at the human approval gate)
+
+Skipping required artifacts requires explicit human approval.
 
 ### 5. Cost Awareness
 
