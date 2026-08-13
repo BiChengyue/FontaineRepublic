@@ -227,7 +227,8 @@ public class FontaineRepublic {
                         playerData,
                         subjectRegistry,
                         institutionAccess,
-                        audit
+                        audit,
+                        networkBootstrap.sendService()
                 ));
     }
 

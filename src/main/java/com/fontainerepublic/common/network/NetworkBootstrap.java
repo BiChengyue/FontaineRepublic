@@ -47,14 +47,19 @@ public final class NetworkBootstrap {
     }
 
     /**
-     * Freezes the compiled production ledger. FR-NET-001 intentionally has no messages.
+     * Freezes the compiled production ledger (FR-CLIENT-001-A §4.1: the
+     * FR-NET-001 empty-table placeholder is replaced by an exact-count
+     * validation against the expected ledger).
      */
     public void registerProductionMessagesAndFreeze() {
         NetworkProductionMessageTable.registerAll(registrar);
         int messageCount = registrar.freeze();
-        if (messageCount != 0) {
+        if (messageCount != NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT) {
             throw new IllegalStateException(
-                    "FR-NET-001 production message table must be empty: " + messageCount
+                    "Production message table must hold exactly "
+                            + NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT
+                            + " messages for protocol " + NetworkProtocol.VERSION
+                            + ": " + messageCount
             );
         }
         LOGGER.info(
