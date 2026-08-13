@@ -132,16 +132,22 @@ receipts + receipt provider + registration wiring) implemented
 provider/wiring/tests), independently reviewed (Level 1-2, full build green),
 merged into develop, and full-stack smoke passed (12 modules initialized,
 Ready, clean stop). Next server-side task: FR-EMG-CMD-001 (`/fr admin
-emergency` command adapter; task docs prepared). Client mod remains paused.
+emergency` command adapter) implemented, independently reviewed (Level 1-2,
+full build green), merged into develop, and full-stack smoke passed (`/fr`
+DEDICATED 6 contributions, 12 modules, Ready, clean stop). The paused
+server-side task queue is now complete: zone-based institutions, parliament
+extensions, shared emergency infrastructure, emergency action catalogue, and
+the emergency command adapter are all implemented, reviewed, merged, and
+smoke-verified. Client mod remains paused pending the Human start signal;
+Level 3 real-machine verification of the emergency path is next.
 
 ## Next Task
 
-Dispatch FR-EMG-CMD-001-IMPL (`/fr admin emergency` preview/confirm/inspect/
-status adapter under the reserved `admin` literal, runtime-resolved
-EmergencyService). After that, real-machine (Level 3) verification of the
-full emergency path with Human (console bootstrap, preview/confirm, central
-bank on-site, crash window). Client UI mod remains the final phase per Human
-directive.
+Coordinate real-machine (Level 3) verification of the full server surface
+with Human (console bootstrap, `/fr admin emergency` preview/confirm/inspect,
+central bank on-site duties, crash window) per
+docs/development/LEVEL3-RUNTIME-VERIFICATION-CHECKLIST.md §4.6. Client UI mod
+remains the final phase per Human directive (start signal pending).
 
 ## Phase 2 Design Candidates (added 2026-08-02)
 

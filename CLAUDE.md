@@ -103,14 +103,16 @@ FR-INST-002-B (zone-based institution access), FR-GOV-001, FR-PAR-001,
 FR-PAR-002, FR-JUS-001, FR-ECO-002, FR-CMD-GUIDE-001, FR-EMG-001, and
 FR-EMG-ECO-001 (economy.issue/reclaim emergency catalogue) are implemented,
 independently reviewed (Level 1-2), and merged into `develop`; full-stack
-smoke passes with 12 modules.
+smoke passes with 12 modules. FR-EMG-CMD-001 (`/fr admin emergency`
+preview/confirm/inspect/status/bootstrap/stage/recover adapter) is also
+implemented, reviewed, merged, and smoke-verified — the paused server-side
+task queue is complete.
 
 Next:
 
-Dispatch FR-EMG-CMD-001-IMPL (`/fr admin emergency` command adapter) per
-docs/ai_recovery/task_cards/FR-EMG-CMD-001-IMPL-task-card.md, then coordinate
-real-machine (Level 3) verification of the emergency path with Human, and
-finally the UI-enabled client mod (FR Client, Beta/GUI) per the approved
+Coordinate real-machine (Level 3) verification of the server surface with
+Human (emergency bootstrap/preview/confirm, central-bank on-site, crash
+window), then the UI-enabled client mod (FR Client, Beta/GUI) per the approved
 sequence. See docs/governance/continuous_development_ops.md for the operating
 handbook.
 

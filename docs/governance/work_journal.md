@@ -496,3 +496,22 @@
 - 全栈冒烟（tmp/smoke-eco-001-20260814）：**12 模块全部初始化，0 unavailable**；
   Ready=True、干净关停、ExitCode=0；已恢复 server.properties、清理冒烟世界。
 - 下一步：派发 FR-EMG-CMD-001（命令适配器）；随后 Human 真机核验紧急全链路。
+## 2026-08-14（深夜）| FR-EMG-CMD-001 交付 + 审查通过 + 并入 develop
+
+- 派发 FR-EMG-CMD-001-IMPL（wave fr-emg-cmd-001-20260814b）：子进程完成
+  EmergencyAdminCommand（preview/confirm/inspect/status/bootstrap/stage/recover
+  七子命令）、CommandRuntimeResolver.emergencyService()、FrameworkAdminCommand
+  挂接、测试（5 组用例）后达轮次上限退出；报告定位两处测试编译错误。
+- 派发前补全：提示词/任务文档加入权威配置命令（bootstrap/stage/recover），
+  并重建工作树（`dca8bad`）。
+- Reviewer 修复测试编译（变量名冲突、checked-exception lambda、
+  java.io 文件核验替代）并验证：`emergencyCommandFoundationTest` 通过；
+  完整 `gradlew build` BUILD SUCCESSFUL（28 tasks）。
+- 审查报告 FR-EMG-CMD-001-REVIEW-01（PASS → ROUTE TO HUMAN）；提交
+  `28bc3c3` 并入 develop（merge `69aea91`）。
+- 全栈冒烟（tmp/smoke-cmd-001-20260814）：`/fr` DEDICATED 注册 6 贡献无冲突；
+  **12 模块全部初始化，0 unavailable**；Ready、干净关停、ExitCode=0；
+  已恢复 server.properties、清理冒烟世界。
+- 服务端暂停任务队列至此全部收尾：区域制 ✓、议会扩展 ✓、FR-EMG 共享设施 ✓、
+  紧急动作目录 ✓、紧急命令适配 ✓。下一步：Human 真机核验（Level 3 清单 §4.6）
+  与客户端 UI 模组（保持暂停，等 Human 信号）。
