@@ -19,7 +19,11 @@ import com.fontainerepublic.server.citizen.CitizenModule;
 import com.fontainerepublic.server.citizen.api.CitizenService;
 import com.fontainerepublic.server.economy.EconomyModule;
 import com.fontainerepublic.server.economy.api.EconomyService;
+import com.fontainerepublic.server.government.GovernmentCommand;
+import com.fontainerepublic.server.government.GovernmentModule;
+import com.fontainerepublic.server.government.api.GovernmentService;
 import com.fontainerepublic.server.institutionaccess.InstitutionAccessModule;
+import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.login.LoginProvisioningHook;
 import com.fontainerepublic.server.land.LandModule;
 import com.fontainerepublic.server.land.api.LandService;
@@ -84,6 +88,7 @@ public class FontaineRepublic {
         LandModule.register(coreManager.moduleRegistry());
         EconomyModule.register(coreManager.moduleRegistry());
         InstitutionAccessModule.register(coreManager.moduleRegistry());
+        GovernmentModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
             TestModule.registerAll(coreManager.moduleRegistry());
             LOGGER.warn(
@@ -98,6 +103,10 @@ public class FontaineRepublic {
         commandContributionRegistry.register(new CommandContributionSpec(
                 "citizen",
                 CitizenCommand::create
+        ));
+        commandContributionRegistry.register(new CommandContributionSpec(
+                "government",
+                GovernmentCommand::create
         ));
         event.enqueueWork(() -> {
             commandContributionRegistry.freeze();
@@ -119,6 +128,7 @@ public class FontaineRepublic {
         bindLandServices();
         bindEconomyServices();
         bindInstitutionAccessServices();
+        bindGovernmentServices();
         if (runtimeValidationEnabled) {
             TestModule.logAvailability(coreManager);
         }
@@ -209,6 +219,30 @@ public class FontaineRepublic {
                 ));
     }
 
+    /**
+     * Binds the authoritative PlayerData, subject-registry, institution-access,
+     * and audit services to the government module after the runtime start
+     * (dependency order is guaranteed by module resolution, but the service
+     * references are only resolvable once containers exist).
+     */
+    private void bindGovernmentServices() {
+        PlayerDataService playerData = playerDataService().orElse(null);
+        SubjectRegistryService subjectRegistry = subjectRegistryService().orElse(null);
+        InstitutionAccessService institutionAccess =
+                institutionAccessService().orElse(null);
+        AuditService audit = auditService().orElse(null);
+        coreManager.getRuntimeContainer(GovernmentModule.MODULE_ID)
+                .flatMap(container -> container.instance())
+                .filter(GovernmentModule.class::isInstance)
+                .map(GovernmentModule.class::cast)
+                .ifPresent(module -> module.bindServices(
+                        playerData,
+                        subjectRegistry,
+                        institutionAccess,
+                        audit
+                ));
+    }
+
     private java.util.Optional<LandService> landService() {
         return coreManager.getRuntimeContainer(LandModule.MODULE_ID)
                 .filter(container -> container.state() == ModuleState.ACTIVE)
@@ -225,6 +259,15 @@ public class FontaineRepublic {
                 .filter(AuditModule.class::isInstance)
                 .map(AuditModule.class::cast)
                 .map(AuditModule::service);
+    }
+
+    private java.util.Optional<InstitutionAccessService> institutionAccessService() {
+        return coreManager.getRuntimeContainer(InstitutionAccessModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(InstitutionAccessModule.class::isInstance)
+                .map(InstitutionAccessModule.class::cast)
+                .map(InstitutionAccessModule::service);
     }
 
     private java.util.Optional<SubjectRegistryService> subjectRegistryService() {

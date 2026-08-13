@@ -158,6 +158,15 @@ tasks.register('institutionAccessFoundationTest', JavaExec) {
     systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
 }
 
+tasks.register('governmentFoundationTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-GOV-001 government module validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.server.government.GovernmentFoundationTestMain'
+    systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
+}
+
 tasks.named('check') {
     dependsOn tasks.named('playerDataTest')
     dependsOn tasks.named('playerDirectoryFoundationTest')
@@ -171,4 +180,5 @@ tasks.named('check') {
     dependsOn tasks.named('landFoundationTest')
     dependsOn tasks.named('economyFoundationTest')
     dependsOn tasks.named('institutionAccessFoundationTest')
+    dependsOn tasks.named('governmentFoundationTest')
 }
