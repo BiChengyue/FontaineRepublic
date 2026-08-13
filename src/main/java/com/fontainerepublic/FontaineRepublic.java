@@ -24,6 +24,8 @@ import com.fontainerepublic.server.government.GovernmentModule;
 import com.fontainerepublic.server.government.api.GovernmentService;
 import com.fontainerepublic.server.institutionaccess.InstitutionAccessModule;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
+import com.fontainerepublic.server.justice.CourtCommand;
+import com.fontainerepublic.server.justice.JusticeModule;
 import com.fontainerepublic.server.login.LoginProvisioningHook;
 import com.fontainerepublic.server.land.LandModule;
 import com.fontainerepublic.server.land.api.LandService;
@@ -71,7 +73,9 @@ public class FontaineRepublic {
 
     public FontaineRepublic() {
         LOGGER.info("[FontaineRepublic] Loading");
-        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onCommonSetup);
+        @SuppressWarnings("removal") // Forge 1.20.1 API surface (deprecated for removal on newer JDKs)
+        var modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+        modEventBus.addListener(this::onCommonSetup);
         MinecraftForge.EVENT_BUS.addListener(this::onServerAboutToStart);
         MinecraftForge.EVENT_BUS.addListener(this::onServerStarting);
         MinecraftForge.EVENT_BUS.addListener(this::onServerStopping);
@@ -93,6 +97,7 @@ public class FontaineRepublic {
         InstitutionAccessModule.register(coreManager.moduleRegistry());
         GovernmentModule.register(coreManager.moduleRegistry());
         ParliamentModule.register(coreManager.moduleRegistry());
+        JusticeModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
             TestModule.registerAll(coreManager.moduleRegistry());
             LOGGER.warn(
@@ -116,6 +121,10 @@ public class FontaineRepublic {
                 "parliament",
                 ParliamentCommand::create
         ));
+        commandContributionRegistry.register(new CommandContributionSpec(
+                "court",
+                CourtCommand::create
+        ));
         event.enqueueWork(() -> {
             commandContributionRegistry.freeze();
             networkBootstrap.registerProductionMessagesAndFreeze();
@@ -138,6 +147,7 @@ public class FontaineRepublic {
         bindInstitutionAccessServices();
         bindGovernmentServices();
         bindParliamentServices();
+        bindJusticeServices();
         if (runtimeValidationEnabled) {
             TestModule.logAvailability(coreManager);
         }
@@ -268,6 +278,30 @@ public class FontaineRepublic {
                 .flatMap(container -> container.instance())
                 .filter(ParliamentModule.class::isInstance)
                 .map(ParliamentModule.class::cast)
+                .ifPresent(module -> module.bindServices(
+                        playerData,
+                        citizen,
+                        institutionAccess,
+                        audit
+                ));
+    }
+
+    /**
+     * Binds the authoritative PlayerData, citizen, institution-access, and
+     * audit services to the justice module after the runtime start
+     * (dependency order is guaranteed by module resolution, but the service
+     * references are only resolvable once containers exist).
+     */
+    private void bindJusticeServices() {
+        PlayerDataService playerData = playerDataService().orElse(null);
+        CitizenService citizen = citizenService().orElse(null);
+        InstitutionAccessService institutionAccess =
+                institutionAccessService().orElse(null);
+        AuditService audit = auditService().orElse(null);
+        coreManager.getRuntimeContainer(JusticeModule.MODULE_ID)
+                .flatMap(container -> container.instance())
+                .filter(JusticeModule.class::isInstance)
+                .map(JusticeModule.class::cast)
                 .ifPresent(module -> module.bindServices(
                         playerData,
                         citizen,

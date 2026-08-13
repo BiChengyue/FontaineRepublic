@@ -14,6 +14,8 @@ import com.fontainerepublic.server.government.GovernmentModule;
 import com.fontainerepublic.server.government.api.GovernmentService;
 import com.fontainerepublic.server.institutionaccess.InstitutionAccessModule;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
+import com.fontainerepublic.server.justice.JusticeModule;
+import com.fontainerepublic.server.justice.api.JusticeService;
 import com.fontainerepublic.server.parliament.ParliamentModule;
 import com.fontainerepublic.server.parliament.api.ParliamentService;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
@@ -168,6 +170,19 @@ public final class CommandRuntimeResolver {
                 .filter(ParliamentModule.class::isInstance)
                 .map(ParliamentModule.class::cast)
                 .map(ParliamentModule::service);
+    }
+
+    /**
+     * Execution-time resolution of the current ACTIVE justice service
+     * (FR-JUS-001-A §4; resolved per invocation, never cached).
+     */
+    public Optional<JusticeService> justiceService() {
+        return coreManager.getRuntimeContainer(JusticeModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(JusticeModule.class::isInstance)
+                .map(JusticeModule.class::cast)
+                .map(JusticeModule::service);
     }
 
     private ModuleDiagnostic diagnostic(

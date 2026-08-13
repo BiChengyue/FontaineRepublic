@@ -269,6 +269,7 @@ public class ConfigManager {
         SPEC = builder.build();
     }
 
+    @SuppressWarnings("removal") // Forge 1.20.1 API surface (deprecated for removal on newer JDKs)
     public static void load() {
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, SPEC);
         LOGGER.info("[ConfigManager] Loaded");
