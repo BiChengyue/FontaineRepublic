@@ -178,3 +178,22 @@
   阻断项 = FR-ID bootstrap（设计候选已备）。
 - **按用户指示暂停继续派发**：Citizen/Land/Economy 不再自动推进；
   后续仅维护台账、处理反馈、必要时修订既有实现。
+
+## 2026-08-13 | 暂停期维护（集成核验 + 验证清单）
+
+- develop 三模块集成完整构建通过（BUILD SUCCESSFUL，6 个验证任务全绿；
+  `tmp/stage-integration-build-20260813.log`）。
+- 工作树/进程一致性确认：三个实现工作树干净；无遗留 reasonix-cli 进程。
+- 产出 Level 3 真机验证清单 `docs/development/LEVEL3-RUNTIME-VERIFICATION-CHECKLIST.md`
+  （启动/落盘/重启/命令/崩溃窗口五步，含回传格式），供用户方便时直接执行。
+- 保持暂停：不派发新实现，等待用户信号（继续 / 跑服务器验证）。
+
+## 2026-08-13 | Human 批准阻断项 + 恢复推进
+
+- Human："批准阻断项实施；可以继续工作"（2026-08-13）。
+- 产出 Human Confirmed 批准记录 FR-ID-BOOTSTRAP-HUMAN-APPROVAL-01
+  （console-only 一次性不可变绑定；6 项条件）。
+- 准备 FR-ID-BOOTSTRAP-001-IMPL 实现任务文档/任务卡/派发提示词并派发
+  （wave fr-id-bootstrap-001-20260813）。
+- 恢复推进准备：FR-CIT-001-IMPL 任务卡 + 派发提示词（基于 FR-CIT-001-A，
+  依据路线图 v1.1 Phase 3 范围与 Human"继续工作"指示；如用户有异议可随时叫停）。
