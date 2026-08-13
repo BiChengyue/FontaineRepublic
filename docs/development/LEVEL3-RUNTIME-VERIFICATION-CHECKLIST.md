@@ -155,6 +155,10 @@ receipt/watermark 持久化且可 inspect。
   production messages`；无客户端类加载/握手拒绝；
 - 登录后客户端应收到余额与待读通知展示包（Stage B-1 GUI 完成后直接看
   HUD/界面）；
+- 打开各界面：`/frclient money`（余额/转账/流水）、`/frclient citizen`（公民
+  卡）、`/frclient history`（历史）、`/frclient notifications`、
+  `/frclient government`（部门摘要）、`/frclient parliament`（提案摘要）、
+  `/frclient guide`；
 - 进行一笔 `/fr money pay` 后，收款/付款方收到交易通知与余额刷新；
 - 无 FR 模组的 Forge 客户端仍可连接并使用全部命令/聊天功能（no-client
   parity；服务端不向其发送 FR 包）；
