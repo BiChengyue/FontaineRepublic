@@ -147,6 +147,22 @@ Saving players / Saving worlds / All chunks are saved (主世界/DIM-1/DIM1)
 **通过条件：** 上述命令面全部可用；来源门槛与 token 生命周期生效；供给恒等成立；
 receipt/watermark 持久化且可 inspect。
 
+## 4.7 客户端展示面真机核验（FR-CLIENT-001 Stage A/B，需 FR 客户端连服）
+
+使用带 FontaineRepublic 模组的 Forge 客户端连接（协议 v2）：
+
+- 服务端日志出现 `Channel fontainerepublic:main protocol 2 frozen with 3
+  production messages`；无客户端类加载/握手拒绝；
+- 登录后客户端应收到余额与待读通知展示包（Stage B-1 GUI 完成后直接看
+  HUD/界面）；
+- 进行一笔 `/fr money pay` 后，收款/付款方收到交易通知与余额刷新；
+- 无 FR 模组的 Forge 客户端仍可连接并使用全部命令/聊天功能（no-client
+  parity；服务端不向其发送 FR 包）；
+- 旧协议客户端（v1，如存在）被握手拒绝；
+- 登出后客户端展示缓存清空（重进不显示旧数据）。
+
+**通过条件：** 握手、登录同步、交易通知、无客户端平行性、登出清理全部成立。
+
 ## 5. 崩溃窗口测试（可选，进阶）
 
 - 进服后运行数秒，直接强制结束服务器进程（任务管理器结束）；
