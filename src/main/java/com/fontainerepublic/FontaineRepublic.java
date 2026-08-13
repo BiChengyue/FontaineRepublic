@@ -10,6 +10,7 @@ import com.fontainerepublic.common.network.NetworkBootstrap;
 import com.fontainerepublic.server.command.CommandBootstrap;
 import com.fontainerepublic.server.command.CommandRuntimeResolver;
 import com.fontainerepublic.server.command.registration.CommandContributionRegistry;
+import com.fontainerepublic.server.audit.AuditModule;
 import com.fontainerepublic.server.network.NetworkRuntimeModule;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
@@ -61,6 +62,7 @@ public class FontaineRepublic {
         ConfigManager.load();
         NetworkRuntimeModule.register(coreManager.moduleRegistry());
         PlayerDataModule.register(coreManager.moduleRegistry());
+        AuditModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
             TestModule.registerAll(coreManager.moduleRegistry());
             LOGGER.warn(
