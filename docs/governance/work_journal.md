@@ -569,3 +569,13 @@
 - 审查报告 FR-CLIENT-001-IMPL-B-REVIEW-01 补充 F-001（冒烟发现缺陷并修复）。
 - 客户端阶段 B-1 完成（GUI/HUD/表单/引导）；Stage B-2（公民卡/历史页/机构
   土地视图）留待后续；Stage C（真机目视核验）待 Human。
+## 2026-08-14（深夜）| 客户端 Stage B-2 派发（公民卡 + 历史视图）
+
+- 起草 FR-CLIENT-001-IMPL-B2 三件套（任务卡/实现文档/提示词）并提交
+  `72b9769`：协议 v3 + 账本追加 CitizenInfoPacket(3)/TransactionHistorySyncPacket(4)；
+  公民模块 network 依赖 + 展示装饰器（登记号经 SubjectRegistry 解析）；
+  economy 追加 syncHistory 首屏；客户端缓存/执行器/handler/两个新界面
+  （citizen/history）+ 投影；机构/土地视图留待 Stage B-3。
+- 派发 FR-CLIENT-001-IMPL-B2（wave fr-client-001-b2-20260814，工作树
+  fr-client-001-impl-b2，分支 codex/fr-client-001-impl-b2）。
+- 待交付后：独立审查 → 完整构建 → 并入 develop → Human 早间真机核验。
