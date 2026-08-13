@@ -94,12 +94,18 @@ FR-EMG-001-A, FR-ID-001-A) and were independently reviewed on 2026-08-13
 commit gate), FR-AUD-001-A (audit module), and
 FR-ECO-001-C-ACCOUNT-ALIGN-01 (account key alignment) were added.
 
+The Phase 2 design batch received Human confirmation on 2026-08-13
+(FR-PHASE2-HUMAN-APPROVAL-01). Implementation phase is authorized per the
+reviewed sequencing: FR-CORE-002 durable commit gate first, then
+Audit -> Citizen -> Land -> Economy.
+
 Next:
 
-Review the Phase 2 design candidates, then dispatch approved implementation
-(Audit -> Citizen -> Land -> Economy per roadmap) through the Reasonix
-opencode-go/deepseek-v4-flash pipeline. See
-docs/governance/continuous_development_ops.md for the operating handbook.
+Implement FR-CORE-002 (durable commit gate) per task card
+docs/ai_recovery/task_cards/FR-CORE-002-IMPL-task-card.md, then proceed
+Audit -> Citizen -> Land -> Economy per roadmap, dispatching through the
+Reasonix opencode-go/deepseek-v4-flash pipeline once network is available.
+See docs/governance/continuous_development_ops.md for the operating handbook.
 
 Always read this section before starting work.
 

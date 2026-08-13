@@ -9,17 +9,10 @@ Phase 1 - Infrastructure Layer (implementation complete; pending review/merge)
 
 ## Current Step
 
-Phase 1 infrastructure is complete and merged to `develop`. Phase 2 design
-candidates (identity registry, economy, institutions, emergency authority)
-were produced on 2026-08-02 and await independent review before approval and
-implementation dispatch.
-
-Phase 2 design candidates were independently reviewed on 2026-08-13
-(FR-PHASE2-DESIGN-REVIEW-01, conditional pass; see
-`docs/ai_recovery/evidence/FR-PHASE2-DESIGN-REVIEW-01-AUDIT-REPORT.md`), and
-three follow-up design candidates were added: FR-CORE-002-A (durable commit
-gate), FR-AUD-001-A (audit module), FR-ECO-001-C-ACCOUNT-ALIGN-01 (account
-key alignment).
+Phase 2 design batch was Human-confirmed on 2026-08-13
+(FR-PHASE2-HUMAN-APPROVAL-01). Implementation phase is authorized per the
+reviewed sequencing. Current step: FR-CORE-002 durable commit gate
+implementation (dispatch pending network availability).
 
 ## Completed Tasks
 
@@ -70,15 +63,15 @@ key alignment).
 
 ## Current Task
 
-Design-candidate phase: FR-CORE-002-A / FR-AUD-001-A /
-FR-ECO-001-C-ACCOUNT-ALIGN-01 produced; awaiting Human confirmation of the
-Phase 2 design batch before implementation designs.
+FR-CORE-002-IMPL: implement the durable commit gate (atomic whole-root write +
+fsync + replace) per FR-CORE-002-A. Task card:
+`docs/ai_recovery/task_cards/FR-CORE-002-IMPL-task-card.md`.
 
 ## Next Task
 
-Review the six Phase 2 design candidates and issue approval recommendations;
-then dispatch implementation of approved designs (Audit -> Citizen -> Land ->
-Economy per roadmap order).
+After FR-CORE-002: Audit module (FR-AUD-001-A) implementation, then Citizen,
+Land, Economy per roadmap order — each dispatched through the Reasonix
+opencode-go/deepseek-v4-flash pipeline and independently reviewed.
 
 ## Phase 2 Design Candidates (added 2026-08-02)
 

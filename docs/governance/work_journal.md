@@ -82,3 +82,13 @@
   `tools/dispatch-PROMPT.template.md`（防漂移提示词模板）、`tools/README.md`；
   运行手册 §4.2 已更新为推荐封装运行器。
 - 网络复查：opencode.ai 仍不可达、无本地代理 —— 派发保持搁置（第 2 次确认）。
+
+## 2026-08-13 | 设计批 Human 确认 + FR-CORE-002 实现启动
+
+- Human 以"设计批确认"确认 Phase 2 设计批次；产出 Human Confirmed 批准记录
+  `docs/ai_recovery/approval_records/FR-PHASE2-HUMAN-APPROVAL-01.md`
+  （11 份设计候选 + FR-CMD-001/FR-NET-001 审查结论；5 项条件；授权
+  FR-CORE-002 → Audit → Citizen → Land → Economy 实现顺序）。
+- CLAUDE.md / current_status.md 台账更新为"实现阶段已授权，当前任务 FR-CORE-002-IMPL"。
+- 起草派发提示词 `deepseek-worktrees-v2/FR-CORE-002-IMPL-PROMPT.md`，网络恢复即可派发。
+- 网络第 3 次复查：opencode.ai 仍不可达 —— 派发继续搁置，其他工作不受阻。
