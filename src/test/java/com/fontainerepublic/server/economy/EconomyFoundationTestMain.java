@@ -43,6 +43,7 @@ import com.fontainerepublic.server.institutionaccess.model.ZoneKind;
 import com.fontainerepublic.server.institutionaccess.model.ZoneRegion;
 import com.fontainerepublic.server.land.model.ParcelId;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
+import com.fontainerepublic.server.network.NetworkRuntimeModule;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
 import com.fontainerepublic.server.registry.api.PlayerPresence;
 import com.fontainerepublic.server.registry.model.OwnerReference;
@@ -1436,7 +1437,8 @@ public final class EconomyFoundationTestMain {
                         PlayerDataModule.MODULE_ID,
                         SubjectRegistryModule.MODULE_ID,
                         AuditModule.MODULE_ID,
-                        InstitutionAccessModule.MODULE_ID
+                        InstitutionAccessModule.MODULE_ID,
+                        NetworkRuntimeModule.MODULE_ID
                 ),
                 Set.of(),
                 60,
@@ -1447,10 +1449,11 @@ public final class EconomyFoundationTestMain {
                                 PlayerDataModule.MODULE_ID,
                                 SubjectRegistryModule.MODULE_ID,
                                 AuditModule.MODULE_ID,
-                                InstitutionAccessModule.MODULE_ID
+                                InstitutionAccessModule.MODULE_ID,
+                                NetworkRuntimeModule.MODULE_ID
                         )),
                 "economy depends on player-data, subject-registry, audit, "
-                        + "and institution-access only");
+                        + "institution-access, and network only");
         for (ModuleId dependency : definition.requiredDependencies()) {
             String value = dependency.value();
             require(!value.contains("emg") && !value.contains("emergency")

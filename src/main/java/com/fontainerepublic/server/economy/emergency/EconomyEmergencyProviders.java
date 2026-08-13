@@ -16,15 +16,15 @@ import java.util.Optional;
  */
 public final class EconomyEmergencyProviders {
 
-    private static volatile EconomyEmergencyProvider issue;
-    private static volatile EconomyEmergencyProvider reclaim;
+    private static volatile EmergencyActionProvider issue;
+    private static volatile EmergencyActionProvider reclaim;
 
     private EconomyEmergencyProviders() {
     }
 
     public static void bind(
-            EconomyEmergencyProvider issueProvider,
-            EconomyEmergencyProvider reclaimProvider
+            EmergencyActionProvider issueProvider,
+            EmergencyActionProvider reclaimProvider
     ) {
         issue = Objects.requireNonNull(issueProvider, "issueProvider");
         reclaim = Objects.requireNonNull(reclaimProvider, "reclaimProvider");

@@ -220,6 +220,15 @@ tasks.register('economyEmergencyFoundationTest', JavaExec) {
     systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
 }
 
+tasks.register('clientPresentationFoundationTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-CLIENT-001-IMPL-A S2C presentation surface validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.client.ClientPresentationFoundationTestMain'
+    systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
+}
+
 tasks.named('check') {
     dependsOn tasks.named('playerDataTest')
     dependsOn tasks.named('playerDirectoryFoundationTest')
@@ -240,4 +249,5 @@ tasks.named('check') {
     dependsOn tasks.named('emergencyFoundationTest')
     dependsOn tasks.named('emergencyCommandFoundationTest')
     dependsOn tasks.named('economyEmergencyFoundationTest')
+    dependsOn tasks.named('clientPresentationFoundationTest')
 }

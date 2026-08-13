@@ -43,7 +43,7 @@ public final class NetworkFoundationTestMain {
         testRatePolicyDirectionRules();
         testRuntimeResolverLifecycle();
         testRateLimiter();
-        testZeroProductionMessages();
+        testProductionMessageLedger();
         testNoBusinessOrStaticStateContamination();
         System.out.println("[FR-NET-001] Network foundation validation passed");
     }
@@ -117,18 +117,18 @@ public final class NetworkFoundationTestMain {
     }
 
     private static void testProtocolPredicates() {
-        check(NetworkProtocol.clientAccepts("1"), "Client must accept exact protocol");
-        check(!NetworkProtocol.clientAccepts("2"), "Client must reject incompatible protocol");
+        check(NetworkProtocol.clientAccepts("2"), "Client must accept exact protocol");
+        check(!NetworkProtocol.clientAccepts("1"), "Client must reject the previous protocol");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ABSENT.version()),
                 "Client must reject an absent server channel");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Client must reject ACCEPTVANILLA");
 
-        check(NetworkProtocol.serverAccepts("1"), "Server must accept exact protocol");
+        check(NetworkProtocol.serverAccepts("2"), "Server must accept exact protocol");
         check(NetworkProtocol.serverAccepts(NetworkRegistry.ABSENT.version()),
                 "Server must accept ABSENT.version()");
-        check(!NetworkProtocol.serverAccepts("2"),
-                "Server must reject incompatible installed protocol");
+        check(!NetworkProtocol.serverAccepts("1"),
+                "Server must reject the previous protocol");
         check(!NetworkProtocol.serverAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Server must reject ACCEPTVANILLA");
     }
@@ -283,12 +283,27 @@ public final class NetworkFoundationTestMain {
         check(limiter.size() == 0, "Shutdown clear must remove every bucket");
     }
 
-    private static void testZeroProductionMessages() {
+    private static void testProductionMessageLedger() {
         NetworkMessageRegistrar registrar = registrar(new ArrayList<>());
         NetworkProductionMessageTable.registerAll(registrar);
-        check(registrar.freeze() == 0,
-                "FR-NET-001 must register zero production messages");
+        int count = registrar.freeze();
+        check(count == NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT,
+                "Production message table must register the expected ledger count");
+        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 3,
+                "Protocol v2 expects exactly three display messages");
         check(registrar.isFrozen(), "Production message table must be frozen");
+
+        List<NetworkMessageRegistrar.LedgerEntry> ledger = registrar.ledger();
+        check(ledger.stream().map(NetworkMessageRegistrar.LedgerEntry::id).toList()
+                        .equals(List.of(0, 1, 2)),
+                "Ledger IDs are exactly 0, 1, 2 in ascending order");
+        check(ledger.stream().map(NetworkMessageRegistrar.LedgerEntry::messageClassName)
+                        .distinct().count() == 3,
+                "Ledger message classes are unique");
+        for (NetworkMessageRegistrar.LedgerEntry entry : ledger) {
+            check(entry.direction() == NetworkDirection.PLAY_TO_CLIENT,
+                    "Every display message is PLAY_TO_CLIENT: ID " + entry.id());
+        }
     }
 
     private static void testNoBusinessOrStaticStateContamination() throws IOException {
@@ -315,6 +330,15 @@ public final class NetworkFoundationTestMain {
             }
             try (var files = Files.walk(directory)) {
                 for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                    // The S2C presentation ledger (common/network/display and
+                    // NetworkProductionMessageTable) is the approved
+                    // FR-CLIENT-001-A surface; its own isolation contract is
+                    // validated by the client presentation test.
+                    if (file.toString().contains("display")
+                            || file.getFileName().toString().equals(
+                            "NetworkProductionMessageTable.java")) {
+                        continue;
+                    }
                     String source = Files.readString(file).toLowerCase(Locale.ROOT);
                     for (String forbidden : forbiddenTokens) {
                         check(!source.contains(forbidden),

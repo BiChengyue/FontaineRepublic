@@ -17,13 +17,22 @@ import com.fontainerepublic.server.economy.emergency.EconomyEmergencyReceiptProv
 import com.fontainerepublic.server.economy.persistence.EconomyLimits;
 import com.fontainerepublic.server.economy.persistence.EconomyNbtCodec;
 import com.fontainerepublic.server.economy.persistence.EconomyRepository;
+import com.fontainerepublic.server.economy.presentation.EconomyPresentationNotifier;
+import com.fontainerepublic.server.economy.presentation.PresentationAwareEconomyService;
+import com.fontainerepublic.server.economy.presentation.ServerEconomyPresentationNotifier;
 import com.fontainerepublic.server.economy.service.DefaultEconomyService;
 import com.fontainerepublic.server.emergency.api.EmergencyActionDescriptor;
+import com.fontainerepublic.server.emergency.api.EmergencyActionProvider;
 import com.fontainerepublic.server.emergency.api.EmergencyActionRegistry;
+import com.fontainerepublic.server.emergency.api.EmergencyMutationEnvelope;
+import com.fontainerepublic.server.emergency.api.EmergencyMutationResult;
+import com.fontainerepublic.server.emergency.api.EmergencyPlan;
 import com.fontainerepublic.server.emergency.model.EmergencyCategory;
 import com.fontainerepublic.server.emergency.model.EmergencyTargetType;
 import com.fontainerepublic.server.institutionaccess.InstitutionAccessModule;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
+import com.fontainerepublic.server.network.NetworkRuntimeModule;
+import com.fontainerepublic.server.network.NetworkSendService;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
@@ -33,6 +42,9 @@ import com.fontainerepublic.server.registry.model.SubjectId;
 import com.fontainerepublic.server.registry.model.SubjectRecord;
 import com.fontainerepublic.server.registry.model.SubjectStatus;
 import com.mojang.logging.LogUtils;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.server.ServerLifecycleHooks;
 import org.slf4j.Logger;
 
 import java.util.Objects;
@@ -68,6 +80,8 @@ public final class EconomyModule implements IModule {
     private volatile SubjectRegistryService boundSubjectRegistry;
     private volatile InstitutionAccessService boundInstitutionAccess;
     private volatile AuditService boundAudit;
+    private volatile NetworkSendService boundSendService;
+    private volatile EconomyPresentationNotifier presentationNotifier;
 
     public static void register(ModuleRegistry registry) {
         Objects.requireNonNull(registry, "registry");
@@ -83,7 +97,8 @@ public final class EconomyModule implements IModule {
                         PlayerDataModule.MODULE_ID,
                         SubjectRegistryModule.MODULE_ID,
                         AuditModule.MODULE_ID,
-                        InstitutionAccessModule.MODULE_ID
+                        InstitutionAccessModule.MODULE_ID,
+                        NetworkRuntimeModule.MODULE_ID
                 ),
                 Set.of(),
                 60,
@@ -120,25 +135,38 @@ public final class EconomyModule implements IModule {
             PlayerDataService playerDataService,
             SubjectRegistryService subjectRegistryService,
             InstitutionAccessService institutionAccessService,
-            AuditService auditService
+            AuditService auditService,
+            NetworkSendService sendService
     ) {
         this.boundPlayerData = playerDataService;
         this.boundSubjectRegistry = subjectRegistryService;
         this.boundInstitutionAccess = institutionAccessService;
         this.boundAudit = auditService;
+        this.boundSendService = sendService;
+        this.presentationNotifier = new ServerEconomyPresentationNotifier(
+                sendService,
+                subjectRegistryService,
+                System::currentTimeMillis,
+                new CurrencyPresentation(
+                        ConfigManager.economyCurrencyDisplayName(),
+                        ConfigManager.economyCurrencySymbol(),
+                        ConfigManager.economyCurrencyGrouping()
+                ),
+                EconomyModule::onlineServerPlayer
+        );
         this.emergencyProvider = new EconomyEmergencyProvider(
                 repository,
                 EconomyEmergencyProvider.PROVIDER_IDENTITY_ISSUE
         );
         this.receiptProvider = new EconomyEmergencyReceiptProvider(repository);
         EconomyEmergencyProviders.bind(
-                emergencyProvider,
-                new EconomyEmergencyProvider(
+                wrapEmergency(emergencyProvider),
+                wrapEmergency(new EconomyEmergencyProvider(
                         repository,
                         EconomyEmergencyProvider.PROVIDER_IDENTITY_RECLAIM
-                )
+                ))
         );
-        this.service = new DefaultEconomyService(
+        EconomyService baseService = new DefaultEconomyService(
                 repository,
                 System::currentTimeMillis,
                 new ModulePlayerPresence(),
@@ -151,6 +179,10 @@ public final class EconomyModule implements IModule {
                 ),
                 requireInstitutionAccess(),
                 boundAudit
+        );
+        this.service = new PresentationAwareEconomyService(
+                baseService,
+                presentationNotifier
         );
         LOGGER.info(
                 "[Economy] Runtime initialized (revision={}, accounts={}, nextTransactionId={})",
@@ -166,11 +198,13 @@ public final class EconomyModule implements IModule {
         EconomyEmergencyProviders.unbind();
         emergencyProvider = null;
         receiptProvider = null;
+        presentationNotifier = null;
         repository = null;
         boundPlayerData = null;
         boundSubjectRegistry = null;
         boundInstitutionAccess = null;
         boundAudit = null;
+        boundSendService = null;
         LOGGER.info("[Economy] Runtime closed");
     }
 
@@ -247,6 +281,73 @@ public final class EconomyModule implements IModule {
             );
         }
         return bound;
+    }
+
+    /**
+     * Wraps an emergency provider so a successful applied mutation refreshes
+     * the target player's balance presentation (FR-CLIENT-001-A §3.3). The
+     * wrapper never alters the provider's own result; presentation failures
+     * are swallowed for no-client parity.
+     */
+    private EmergencyActionProvider wrapEmergency(EconomyEmergencyProvider delegate) {
+        Objects.requireNonNull(delegate, "delegate");
+        return new EmergencyActionProvider() {
+            @Override
+            public String providerIdentity() {
+                return delegate.providerIdentity();
+            }
+
+            @Override
+            public String providerVersion() {
+                return delegate.providerVersion();
+            }
+
+            @Override
+            public EmergencyPlan preview(EmergencyMutationEnvelope envelope) {
+                return delegate.preview(envelope);
+            }
+
+            @Override
+            public EmergencyMutationResult apply(
+                    EmergencyPlan plan,
+                    EmergencyMutationEnvelope envelope
+            ) {
+                EmergencyMutationResult result = delegate.apply(plan, envelope);
+                if (result.applied()) {
+                    notifyEmergencyBalance(envelope);
+                }
+                return result;
+            }
+        };
+    }
+
+    private void notifyEmergencyBalance(EmergencyMutationEnvelope envelope) {
+        try {
+            SubjectId target = SubjectId.of(UUID.fromString(envelope.targetId()));
+            EconomyPresentationNotifier notifier = presentationNotifier;
+            if (notifier == null) {
+                return;
+            }
+            repository.findAccount(target).ifPresent(
+                    account -> notifier.balanceChanged(target, account)
+            );
+        } catch (RuntimeException failure) {
+            LOGGER.debug(
+                    "[Economy] Emergency presentation sync failed: {}",
+                    failure.getMessage()
+            );
+        }
+    }
+
+    /** Production online-player resolution via the current server. */
+    private static java.util.Optional<ServerPlayer> onlineServerPlayer(UUID playerId) {
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.ofNullable(
+                server.getPlayerList().getPlayer(playerId)
+        );
     }
 
     private static EconomyLimits productionLimits() {
