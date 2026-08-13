@@ -10,6 +10,8 @@ import com.fontainerepublic.server.citizen.CitizenModule;
 import com.fontainerepublic.server.citizen.api.CitizenService;
 import com.fontainerepublic.server.economy.EconomyModule;
 import com.fontainerepublic.server.economy.api.EconomyService;
+import com.fontainerepublic.server.emergency.EmergencyModule;
+import com.fontainerepublic.server.emergency.api.EmergencyService;
 import com.fontainerepublic.server.government.GovernmentModule;
 import com.fontainerepublic.server.government.api.GovernmentService;
 import com.fontainerepublic.server.institutionaccess.InstitutionAccessModule;
@@ -144,6 +146,21 @@ public final class CommandRuntimeResolver {
                 .filter(InstitutionAccessModule.class::isInstance)
                 .map(InstitutionAccessModule.class::cast)
                 .map(InstitutionAccessModule::service);
+    }
+
+    /**
+     * Execution-time resolution of the shared emergency authority service
+     * (FR-EMG-001-A §13; resolved per invocation, never cached). Only the
+     * current ACTIVE emergency module is resolved; a missing or non-ACTIVE
+     * module fails closed at the command boundary.
+     */
+    public Optional<EmergencyService> emergencyService() {
+        return coreManager.getRuntimeContainer(EmergencyModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(EmergencyModule.class::isInstance)
+                .map(EmergencyModule.class::cast)
+                .map(EmergencyModule::service);
     }
 
     /**
