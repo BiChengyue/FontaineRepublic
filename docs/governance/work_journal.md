@@ -390,3 +390,12 @@
   保留项完好（credential-stage 按建议未动）。
 - 央行默认值已确认（纯账目/国库总额公开+明细受限/单次上下文/余额仅本人），
   派发 FR-ECO-002-IMPL（wave fr-eco-002-20260813）。
+
+## 2026-08-13（夜）| 央行实现交付 + 缺陷发现与修复派发
+
+- 央行子进程完成实现（BankCommand、deposit/withdraw/freeze、供给守恒、现场门控、
+  FR-AUD、双语 help、测试）但达到工具上限未确认最终测试，报告落盘。
+- Reviewer 独立复跑 economyFoundationTest **失败**：测试末尾"裸开户"场景
+  `withdraw(alpha, 10)` 未包 expectThrows（本意验证余额不足拒绝）。
+- 记录 Finding 并派发修复 FR-ECO-002-FIX-01（补 CODE_INSUFFICIENT_FUNDS 断言）。
+- 夜间自主推进中；明早 Human 配合客户端/命令/崩溃窗口测试。
