@@ -28,6 +28,18 @@ public class ConfigManager {
     /** Default: PRIVATE parcels require a live usage right. */
     public static final boolean DEFAULT_LAND_PRIVATE_REQUIRES_USAGE_RIGHT = true;
 
+    /** Default economy currency display name (FR-ECO-001-C §7). */
+    public static final String DEFAULT_ECONOMY_CURRENCY_DISPLAY_NAME = "Mora";
+
+    /** Default economy currency symbol (empty = none). */
+    public static final String DEFAULT_ECONOMY_CURRENCY_SYMBOL = "";
+
+    /** Default thousands grouping for currency presentation. */
+    public static final boolean DEFAULT_ECONOMY_CURRENCY_GROUPING = true;
+
+    /** Default server-owned transfer cooldown in milliseconds. */
+    public static final int DEFAULT_ECONOMY_TRANSFER_COOLDOWN_MILLIS = 1000;
+
     private static final ForgeConfigSpec.IntValue COMMIT_MIN_INTERVAL_MILLIS;
     private static final ForgeConfigSpec.IntValue COMMIT_MAX_BYTES_PER_NAMESPACE;
 
@@ -35,6 +47,11 @@ public class ConfigManager {
     private static final ForgeConfigSpec.BooleanValue LAND_PUBLIC_ACCESS_ALLOWED;
     private static final ForgeConfigSpec.BooleanValue LAND_RESTRICTED_REQUIRES_USAGE_RIGHT;
     private static final ForgeConfigSpec.BooleanValue LAND_PRIVATE_REQUIRES_USAGE_RIGHT;
+
+    private static final ForgeConfigSpec.ConfigValue<String> ECONOMY_CURRENCY_DISPLAY_NAME;
+    private static final ForgeConfigSpec.ConfigValue<String> ECONOMY_CURRENCY_SYMBOL;
+    private static final ForgeConfigSpec.BooleanValue ECONOMY_CURRENCY_GROUPING;
+    private static final ForgeConfigSpec.IntValue ECONOMY_TRANSFER_COOLDOWN_MILLIS;
 
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -97,6 +114,43 @@ public class ConfigManager {
                 .define(
                         "privateRequiresUsageRight",
                         DEFAULT_LAND_PRIVATE_REQUIRES_USAGE_RIGHT
+                );
+        builder.pop();
+
+        builder.comment("FR-ECO-001 economy player services.").push("economy");
+        // Presentation is projection only: it never changes stored numeric
+        // values, transaction semantics, supply, or authority (FR-ECO-001-C
+        // §7). The transfer cooldown is a server-owned abuse-control gate,
+        // never monetary authority; 0 disables it.
+        ECONOMY_CURRENCY_DISPLAY_NAME = builder
+                .comment("Currency display name used in presentation only.")
+                .define(
+                        "currencyDisplayName",
+                        DEFAULT_ECONOMY_CURRENCY_DISPLAY_NAME
+                );
+        ECONOMY_CURRENCY_SYMBOL = builder
+                .comment("Currency symbol appended in presentation (may be empty).")
+                .define(
+                        "currencySymbol",
+                        DEFAULT_ECONOMY_CURRENCY_SYMBOL
+                );
+        ECONOMY_CURRENCY_GROUPING = builder
+                .comment("Group thousands with commas in presentation only.")
+                .define(
+                        "currencyGrouping",
+                        DEFAULT_ECONOMY_CURRENCY_GROUPING
+                );
+        ECONOMY_TRANSFER_COOLDOWN_MILLIS = builder
+                .comment(
+                        "Server-owned minimum interval between transfers from "
+                                + "the same actor in milliseconds. Range [0, 60000]; "
+                                + "0 disables the cooldown."
+                )
+                .defineInRange(
+                        "transferCooldownMillis",
+                        DEFAULT_ECONOMY_TRANSFER_COOLDOWN_MILLIS,
+                        0,
+                        60_000
                 );
         builder.pop();
         SPEC = builder.build();
@@ -167,6 +221,49 @@ public class ConfigManager {
             return LAND_PRIVATE_REQUIRES_USAGE_RIGHT.get();
         } catch (IllegalStateException notLoaded) {
             return DEFAULT_LAND_PRIVATE_REQUIRES_USAGE_RIGHT;
+        }
+    }
+
+    /** Configured economy currency display name; falls back to the default. */
+    public static String economyCurrencyDisplayName() {
+        try {
+            String value = ECONOMY_CURRENCY_DISPLAY_NAME.get();
+            return value == null || value.isEmpty()
+                    ? DEFAULT_ECONOMY_CURRENCY_DISPLAY_NAME
+                    : value;
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_ECONOMY_CURRENCY_DISPLAY_NAME;
+        }
+    }
+
+    /** Configured economy currency symbol; falls back to the default. */
+    public static String economyCurrencySymbol() {
+        try {
+            String value = ECONOMY_CURRENCY_SYMBOL.get();
+            return value == null ? DEFAULT_ECONOMY_CURRENCY_SYMBOL : value;
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_ECONOMY_CURRENCY_SYMBOL;
+        }
+    }
+
+    /** Configured economy thousands grouping; falls back to the default. */
+    public static boolean economyCurrencyGrouping() {
+        try {
+            return ECONOMY_CURRENCY_GROUPING.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_ECONOMY_CURRENCY_GROUPING;
+        }
+    }
+
+    /**
+     * Configured server-owned transfer cooldown; falls back to the default
+     * when the config is not loaded yet.
+     */
+    public static int economyTransferCooldownMillis() {
+        try {
+            return ECONOMY_TRANSFER_COOLDOWN_MILLIS.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_ECONOMY_TRANSFER_COOLDOWN_MILLIS;
         }
     }
 }
