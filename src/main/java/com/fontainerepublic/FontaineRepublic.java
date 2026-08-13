@@ -207,7 +207,11 @@ public class FontaineRepublic {
                 .flatMap(container -> container.instance())
                 .filter(CitizenModule.class::isInstance)
                 .map(CitizenModule.class::cast)
-                .ifPresent(module -> module.bindServices(playerData, subjectRegistry));
+                .ifPresent(module -> module.bindServices(
+                        playerData,
+                        subjectRegistry,
+                        networkBootstrap.sendService()
+                ));
     }
 
     /**

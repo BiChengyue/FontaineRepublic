@@ -76,17 +76,17 @@ public final class ClientPresentationFoundationTestMain {
     // ------------------------------------------------------------------
 
     private static void testProtocolPredicates() {
-        check(NetworkProtocol.VERSION.equals("2"), "Protocol version is 2");
-        check(NetworkProtocol.clientAccepts("2"), "Client accepts exact v2");
-        check(!NetworkProtocol.clientAccepts("1"), "Client rejects v1");
+        check(NetworkProtocol.VERSION.equals("3"), "Protocol version is 3");
+        check(NetworkProtocol.clientAccepts("3"), "Client accepts exact v3");
+        check(!NetworkProtocol.clientAccepts("2"), "Client rejects v2");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ABSENT.version()),
                 "Client rejects an absent server channel");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Client rejects ACCEPTVANILLA");
-        check(NetworkProtocol.serverAccepts("2"), "Server accepts exact v2");
+        check(NetworkProtocol.serverAccepts("3"), "Server accepts exact v3");
         check(NetworkProtocol.serverAccepts(NetworkRegistry.ABSENT.version()),
                 "Server accepts ABSENT.version()");
-        check(!NetworkProtocol.serverAccepts("1"), "Server rejects v1");
+        check(!NetworkProtocol.serverAccepts("2"), "Server rejects v2");
         check(!NetworkProtocol.serverAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Server rejects ACCEPTVANILLA");
     }
@@ -219,8 +219,8 @@ public final class ClientPresentationFoundationTestMain {
                 if (file.getFileName().toString().equals("DisplayMessageHandlers.java")) {
                     int references = count(source, "com.fontainerepublic.client.net");
                     int safeCalls = count(source, "DistExecutor.safeRunWhenOn");
-                    check(references == 3 && safeCalls == 3,
-                            "client executor referenced exactly three times, "
+                    check(references == 5 && safeCalls == 5,
+                            "client executor referenced exactly five times, "
                                     + "each inside a DistExecutor.safeRunWhenOn supplier");
                     int lastSafeCall = -1;
                     String[] lines = source.split("\\R");
@@ -338,6 +338,14 @@ public final class ClientPresentationFoundationTestMain {
             @Override
             public void transferCompleted(TransferReceipt receipt,
                                           EconomyAccount from, EconomyAccount to) {
+                throw new IllegalStateException("injected presentation failure");
+            }
+
+            @Override
+            public void syncHistory(UUID playerId,
+                                    com.fontainerepublic.server.economy.api.EconomyPage
+                                            <com.fontainerepublic.server.economy.model
+                                                    .EconomyTransaction> page) {
                 throw new IllegalStateException("injected presentation failure");
             }
         };

@@ -1,7 +1,9 @@
 package com.fontainerepublic.client;
 
 import com.fontainerepublic.client.gui.FrMainScreen;
+import com.fontainerepublic.client.gui.citizen.CitizenScreen;
 import com.fontainerepublic.client.gui.guide.GuideScreen;
+import com.fontainerepublic.client.gui.money.HistoryScreen;
 import com.fontainerepublic.client.gui.money.MoneyScreen;
 import com.fontainerepublic.client.gui.notifications.NotificationScreen;
 import com.fontainerepublic.client.hud.FrHudRenderer;
@@ -55,6 +57,10 @@ public final class ClientManager {
                 .executes(context -> openMain())
                 .then(Commands.literal("money")
                         .executes(context -> openMoney()))
+                .then(Commands.literal("citizen")
+                        .executes(context -> openCitizen()))
+                .then(Commands.literal("history")
+                        .executes(context -> openHistory()))
                 .then(Commands.literal("notifications")
                         .executes(context -> openNotifications()))
                 .then(Commands.literal("guide")
@@ -69,6 +75,16 @@ public final class ClientManager {
 
     private static int openMoney() {
         Minecraft.getInstance().setScreen(new MoneyScreen());
+        return 1;
+    }
+
+    private static int openCitizen() {
+        Minecraft.getInstance().setScreen(new CitizenScreen());
+        return 1;
+    }
+
+    private static int openHistory() {
+        Minecraft.getInstance().setScreen(new HistoryScreen());
         return 1;
     }
 

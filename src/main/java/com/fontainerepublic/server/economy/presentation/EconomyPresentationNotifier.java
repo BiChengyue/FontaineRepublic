@@ -1,7 +1,9 @@
 package com.fontainerepublic.server.economy.presentation;
 
+import com.fontainerepublic.server.economy.api.EconomyPage;
 import com.fontainerepublic.server.economy.api.TransferReceipt;
 import com.fontainerepublic.server.economy.model.EconomyAccount;
+import com.fontainerepublic.server.economy.model.EconomyTransaction;
 import com.fontainerepublic.server.economy.model.NotificationSummary;
 import com.fontainerepublic.server.registry.model.SubjectId;
 
@@ -38,4 +40,13 @@ public interface EconomyPresentationNotifier {
      * counterparty digest are receiver-relative).
      */
     void transferCompleted(TransferReceipt receipt, EconomyAccount from, EconomyAccount to);
+
+    /**
+     * Transaction-history page sync (FR-CLIENT-001-IMPL-B2): replaces the
+     * receiver's history presentation with one bounded page. Sent after
+     * {@link #syncAccount} on login/account-ready (first page only in the
+     * first release); direction and counterparty digest are resolved
+     * receiver-relative by the implementation.
+     */
+    void syncHistory(UUID playerId, EconomyPage<EconomyTransaction> page);
 }
