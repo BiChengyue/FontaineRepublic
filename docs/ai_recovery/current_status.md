@@ -147,7 +147,10 @@ Coordinate real-machine (Level 3) verification of the full server surface
 with Human (console bootstrap, `/fr admin emergency` preview/confirm/inspect,
 central bank on-site duties, crash window) per
 docs/development/LEVEL3-RUNTIME-VERIFICATION-CHECKLIST.md §4.6. Client UI mod
-remains the final phase per Human directive (start signal pending).
+enters the staged implementation phase per Human's established sequence:
+Stage A (S2C presentation network surface, FR-CLIENT-001-IMPL-A) dispatched
+2026-08-14; Stage B (GUI/HUD) follows; Stage C is real-machine verification
+with Human. The Level 3 server verification still awaits Human.
 
 ## Phase 2 Design Candidates (added 2026-08-02)
 
