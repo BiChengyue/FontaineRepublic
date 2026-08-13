@@ -54,7 +54,7 @@
   崩溃后不会"转账成功但丢了记录"。
 - **更多帮助**：游戏内 `/fr help <模块>`；或咨询服务器管理员。
 
-## 五.5 客户端模组（可选 FR Client，协议 v3）
+## 五.5 客户端模组（可选 FR Client，协议 v5）
 
 带 FontaineRepublic 模组的 Forge 客户端连服即可获得可视化界面；没装模组
 （或装的是无 FR 模组的 Forge 客户端）完全不影响游戏，所有功能仍走命令 +
@@ -67,6 +67,10 @@
 - `/frclient citizen` —— 公民卡（登记号/状态/政治等级/入籍时间）；
 - `/frclient history` —— 交易历史（登录后同步第一页）；
 - `/frclient notifications` —— 待读通知；
+- `/frclient government` —— 政府公开摘要（部门/职位数）；
+- `/frclient parliament` —— 议会公开摘要（提案）；
+- `/frclient court` —— 法院公开摘要（案件）；
+- `/frclient land` —— 共和国土地概况（地块数/面积/分区分布）；
 - `/frclient guide` —— 引导页（链接 `/fr help` 与本文档）。
 
 要点：

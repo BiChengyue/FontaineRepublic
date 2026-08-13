@@ -643,6 +643,13 @@
 - 客户端接入方案：账本追加 `MyLandRightsPacket(9)`、协议 v6、LandScreen
   "我的地块"页签。
 - 不实施；待早间真机反馈 + 独立审查 + Human 批准后评估。
+## 2026-08-14（深夜）| 客户端 v1 里程碑审查 + 指南补全
+
+- 更新玩家指南 §五.5：协议 v5、完整 10 个 /frclient 视图清单。
+- 出具 FR-CLIENT-V1-RELEASE-AUDIT-01 里程碑审查：账本 9 条（ID 0-8）、
+  10 个视图、逐阶段构建（28→33 tasks）与冒烟（协议 2→5、消息 3→9、
+  12 模块、无 client 类加载）证据齐全；develop 与 origin 同步。
+- 客户端首版功能集完成；待 Human 早间真机核验 + 两项决策。
 ## 2026-08-14（深夜）| 客户端 Stage B-3a 交付 + 审查通过 + 并入 develop
 
 - 派发 FR-CLIENT-001-IMPL-B3a（wave fr-client-001-b3a-20260814）：子进程完成
