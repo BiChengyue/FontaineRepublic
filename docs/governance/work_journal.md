@@ -135,3 +135,13 @@
   验收 10/11 PASS，唯一 NOT TESTED = 真机运行时验证；结论 ROUTE TO HUMAN。
 - 派发链路端到端验证成功（提示词 -> 子进程 -> 隔离提交 -> 独立审查）。
 - 子进程最终报告未落盘（out.log 空）已记录为 F-001（Minor）；工作树 .reasonix 已清理。
+
+## 2026-08-13 | FR-CORE-002 并入 develop + FR-AUD-001 派发 + FR-LAND-001-A 设计
+
+- FR-CORE-002 实现经审查后并入 develop（合并提交 27db6b0）；develop 现含全部
+  批准设计 + 持久化确认门代码。
+- 创建 fr-aud-001 工作树（基于新 develop）并后台派发 FR-AUD-001-IMPL
+  （wave fr-aud-001-20260813）。
+- 产出 FR-LAND-001-A 土地模块设计候选：REPUBLIC 永久所有权、使用权
+  （grant/renew/revoke）、分区/权限/违规举报入口；无硬编码坐标、无自动合规判定、
+  无经济交易；为 FR-INST 机构设施提供空间基础。
