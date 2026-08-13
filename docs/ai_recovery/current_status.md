@@ -106,40 +106,16 @@ final phase per Human directive.
 
 ## Awaiting Human Decisions
 
-1. Legacy v0 save handling (migration design candidate FR-DATA-MIGRATION-001-A
-   ready; fresh-world path recommended);
-2. Push develop to origin (local is 103 commits ahead);
-3. Central Bank official duties (open policy questions);
-4. Parliament extensions (guardian review/referendum/amendment);
-5. Client UI mod start signal;
-6. Workspace stray-directory cleanup confirmation.
+1. **早间真机核验**（Level 3 清单 §4.6 服务器面 + §4.7 客户端面）：紧急权限
+   链路、央行现场、崩溃窗口；十个 /frclient 视图、转账实时刷新、无 FR 模组
+   平行。
+2. **政策确认**：紧急发钞/回收是否允许作用于冻结账户（当前按设计允许，
+   break-glass）。
+3. **"我的地块"权益视图**：FR-LAND-002-A 设计候选已备，是否进入实现。
 
-Resolved 2026-08-13 ("都按建议"): legacy save = fresh world; push = done;
-Central Bank defaults = all four proposals confirmed (pure ledger / public
-treasury total with restricted details / single-use on-site context / own
-balance only); Parliament extensions = deferred; client mod = final phase;
-cleanup = approved set removed (credential-stage kept).
-
-2026-08-14 Human directives: resume paused server-side tasks (Parliament
-extensions, FR-EMG); institutions switch from terminals to registered zones
-(FR-INST-002-B, implemented/reviewed/merged). FR-PAR-002 (legislative
-extensions: guardian review / referendum / amendment pipeline) dispatched.
-implemented/reviewed/merged. FR-EMG-001 (shared emergency infrastructure)
-implemented/reviewed/merged. FR-EMG-ECO-001 (economy emergency action
-catalogue: economy.issue / economy.reclaim provider + permanent success
-receipts + receipt provider + registration wiring) implemented
-(subprocess delivered persistence layer; Reviewer completed write surface/
-provider/wiring/tests), independently reviewed (Level 1-2, full build green),
-merged into develop, and full-stack smoke passed (12 modules initialized,
-Ready, clean stop). Next server-side task: FR-EMG-CMD-001 (`/fr admin
-emergency` command adapter) implemented, independently reviewed (Level 1-2,
-full build green), merged into develop, and full-stack smoke passed (`/fr`
-DEDICATED 6 contributions, 12 modules, Ready, clean stop). The paused
-server-side task queue is now complete: zone-based institutions, parliament
-extensions, shared emergency infrastructure, emergency action catalogue, and
-the emergency command adapter are all implemented, reviewed, merged, and
-smoke-verified. Client mod remains paused pending the Human start signal;
-Level 3 real-machine verification of the emergency path is next.
+已解决（2026-08-13/14）：旧档=新世界；推送完成；央行默认值四项确认；
+议会扩展、FR-EMG 系列、紧急目录、紧急命令、区域制、客户端 A/B-1/B-2/B-3a/
+B-3b 全部实现、审查、合并、冒烟通过。
 
 ## Next Task
 

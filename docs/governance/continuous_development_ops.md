@@ -22,8 +22,11 @@
 - 项目：FontaineRepublic（枫丹共和国）Minecraft Forge 服务端核心 Mod
 - 技术栈：MC 1.20.1 / Forge 47.4.18 / Java 17 / Gradle / Mod ID `fontainerepublic`
 - 基线：架构 v2.7（冻结）、路线图 v1.1、Phase 0 技术设计 v1.1
-- 当前阶段：Phase 1 基础设施实现完成；Phase 2（公民/经济）设计候选已产出、待审阅
-- 代码状态：FR-CORE-001 / FR-DATA-002 / FR-NET-001 / FR-CMD-001 已完成；develop 领先 origin 两个提交未推送
+- 当前阶段：服务端全模块实现完成（Core/审计/主体/公民/土地/经济/命令/机构边界/
+  政府/议会/司法/央行/紧急权限/紧急命令）；客户端首版完成（FR Client v1：
+  协议 v5、9 条展示消息、10 个 /frclient 视图）
+- 代码状态：全部实现经独立审查并合并 develop，全栈冒烟通过（12 模块）；
+  develop 与 origin/develop 同步
 
 ---
 
@@ -117,14 +120,16 @@ powershell -File tools\dispatch-task.ps1 -TaskName <task> -PromptFile <TASK>-PRO
 
 ## 5. 任务队列（Next Steps）
 
-1. ✅ FR-PM-001/002 状态同步与持续开发基础设施（reasonix.toml、运行手册、工作日志）
-2. ✅ 审阅 Phase 2 设计候选并获 Human 批准（FR-PHASE2-HUMAN-APPROVAL-01）
-3. ✅ 实现：Core/ID/Bootstrap/Citizen/Land/Economy/PlayerDirectory/命令/机构边界/政府/议会
-   （司法进行中）
-4. ⏳ 功能完成后的玩家引导（/fr help 体系 + 文档；可视化引导随客户端）
-5. ⏳ 最后：带 UI 的客户端模组（FR Client，可视化操作，Beta/GUI 阶段）
-6. ⏳ 每模块完成：审查 → 用户测试（必须时）→ 合并 develop → 推送 origin
-7. ⏳ 待办：develop 领先 origin（推送待用户确认）
+1. ✅ 服务端全模块实现（Core/审计/主体/公民/土地/经济/命令/机构边界/政府/议会/
+   司法/央行/紧急权限/紧急命令），审查/合并/冒烟全绿
+2. ✅ 玩家引导（/fr help 体系 + 玩家指南，含 FR Client §五.5）
+3. ✅ 客户端首版（FR Client v1）：A 网络面 / B-1 GUI / B-2 公民卡+历史 /
+   B-3a 政府+议会 / B-3b 法院+土地，审查/合并/冒烟全绿
+4. ⏳ Human 真机核验（Level 3 清单 §4.6/§4.7）+ 两项决策（紧急冻结门政策、
+   "我的地块"权益视图）
+5. ⏳ 后续：个人用地权益视图（FR-LAND-002-A 设计已备）、机构实时推送、
+   客户端打磨（B-3b 后）
+6. ⏳ 每轮完成：审查 → 用户测试（必须时）→ 合并 develop → 推送 origin
 
 ---
 
