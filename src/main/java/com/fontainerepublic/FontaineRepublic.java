@@ -24,6 +24,7 @@ import com.fontainerepublic.server.emergency.EmergencyModule;
 import com.fontainerepublic.server.government.GovernmentCommand;
 import com.fontainerepublic.server.government.GovernmentModule;
 import com.fontainerepublic.server.government.api.GovernmentService;
+import com.fontainerepublic.server.institution.presentation.InstitutionPresentationSync;
 import com.fontainerepublic.server.institutionaccess.InstitutionAccessModule;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.justice.CourtCommand;
@@ -40,6 +41,7 @@ import com.fontainerepublic.server.playerdata.api.PlayerDataService;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
 import com.fontainerepublic.server.registry.api.SubjectRegistryService;
 import com.mojang.logging.LogUtils;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -51,7 +53,11 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.server.ServerLifecycleHooks;
 import org.slf4j.Logger;
+
+import java.util.Optional;
+import java.util.UUID;
 
 @Mod(FontaineRepublic.MOD_ID)
 public class FontaineRepublic {
@@ -73,6 +79,7 @@ public class FontaineRepublic {
             Boolean.getBoolean(RUNTIME_VALIDATION_PROPERTY);
     private final LoginProvisioningHook loginProvisioningHook =
             new LoginProvisioningHook(this::citizenService, this::economyService);
+    private volatile InstitutionPresentationSync institutionPresentationSync;
 
     public FontaineRepublic() {
         LOGGER.info("[FontaineRepublic] Loading");
@@ -428,6 +435,7 @@ public class FontaineRepublic {
 
     private void onServerStopped(ServerStoppedEvent event) {
         coreManager.closeRuntime();
+        institutionPresentationSync = null;
     }
 
     private void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
@@ -445,6 +453,7 @@ public class FontaineRepublic {
                                 player.getUUID(),
                                 player.getGameProfile().getName()
                         );
+                        institutionPresentationSync().sync(player.getUUID());
                     } catch (RuntimeException failed) {
                         LOGGER.error(
                                 "[FontaineRepublic] PlayerData login failed for {} ({}): {}",
@@ -514,5 +523,61 @@ public class FontaineRepublic {
                 .filter(EconomyModule.class::isInstance)
                 .map(EconomyModule.class::cast)
                 .map(EconomyModule::service);
+    }
+
+    private java.util.Optional<GovernmentService> governmentService() {
+        return coreManager.getRuntimeContainer(GovernmentModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(GovernmentModule.class::isInstance)
+                .map(GovernmentModule.class::cast)
+                .map(GovernmentModule::service);
+    }
+
+    private java.util.Optional<ParliamentService> parliamentService() {
+        return coreManager.getRuntimeContainer(ParliamentModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(ParliamentModule.class::isInstance)
+                .map(ParliamentModule.class::cast)
+                .map(ParliamentModule::service);
+    }
+
+    /**
+     * Lazily builds the login snapshot sender of the government/parliament
+     * public summaries (FR-CLIENT-001-IMPL-B3a). Built on first login: the
+     * send service is only available after the message-table freeze, and the
+     * government/parliament service suppliers are resolved per invocation so
+     * the sync always observes the current ACTIVE runtime.
+     */
+    private InstitutionPresentationSync institutionPresentationSync() {
+        InstitutionPresentationSync sync = institutionPresentationSync;
+        if (sync == null) {
+            synchronized (this) {
+                sync = institutionPresentationSync;
+                if (sync == null) {
+                    sync = new InstitutionPresentationSync(
+                            networkBootstrap.sendService(),
+                            this::governmentService,
+                            this::parliamentService,
+                            System::currentTimeMillis,
+                            FontaineRepublic::onlineServerPlayer
+                    );
+                    institutionPresentationSync = sync;
+                }
+            }
+        }
+        return sync;
+    }
+
+    /** Production online-player resolution via the current server. */
+    private static java.util.Optional<ServerPlayer> onlineServerPlayer(UUID playerId) {
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.ofNullable(
+                server.getPlayerList().getPlayer(playerId)
+        );
     }
 }

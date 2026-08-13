@@ -76,17 +76,17 @@ public final class ClientPresentationFoundationTestMain {
     // ------------------------------------------------------------------
 
     private static void testProtocolPredicates() {
-        check(NetworkProtocol.VERSION.equals("3"), "Protocol version is 3");
-        check(NetworkProtocol.clientAccepts("3"), "Client accepts exact v3");
-        check(!NetworkProtocol.clientAccepts("2"), "Client rejects v2");
+        check(NetworkProtocol.VERSION.equals("4"), "Protocol version is 4");
+        check(NetworkProtocol.clientAccepts("4"), "Client accepts exact v4");
+        check(!NetworkProtocol.clientAccepts("3"), "Client rejects v3");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ABSENT.version()),
                 "Client rejects an absent server channel");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Client rejects ACCEPTVANILLA");
-        check(NetworkProtocol.serverAccepts("3"), "Server accepts exact v3");
+        check(NetworkProtocol.serverAccepts("4"), "Server accepts exact v4");
         check(NetworkProtocol.serverAccepts(NetworkRegistry.ABSENT.version()),
                 "Server accepts ABSENT.version()");
-        check(!NetworkProtocol.serverAccepts("2"), "Server rejects v2");
+        check(!NetworkProtocol.serverAccepts("3"), "Server rejects v3");
         check(!NetworkProtocol.serverAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Server rejects ACCEPTVANILLA");
     }
@@ -219,8 +219,8 @@ public final class ClientPresentationFoundationTestMain {
                 if (file.getFileName().toString().equals("DisplayMessageHandlers.java")) {
                     int references = count(source, "com.fontainerepublic.client.net");
                     int safeCalls = count(source, "DistExecutor.safeRunWhenOn");
-                    check(references == 5 && safeCalls == 5,
-                            "client executor referenced exactly five times, "
+                    check(references == 7 && safeCalls == 7,
+                            "client executor referenced exactly seven times, "
                                     + "each inside a DistExecutor.safeRunWhenOn supplier");
                     int lastSafeCall = -1;
                     String[] lines = source.split("\\R");

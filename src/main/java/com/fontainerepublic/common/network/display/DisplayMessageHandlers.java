@@ -60,4 +60,20 @@ public final class DisplayMessageHandlers {
                         .acceptTransactionHistorySync(message)
         );
     }
+
+    public static NetworkMessageHandler<GovernmentInfoPacket> governmentInfo() {
+        return (message, context) -> DistExecutor.safeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> com.fontainerepublic.client.net.ClientNetworkExecutor
+                        .acceptGovernmentInfo(message)
+        );
+    }
+
+    public static NetworkMessageHandler<ParliamentInfoPacket> parliamentInfo() {
+        return (message, context) -> DistExecutor.safeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> com.fontainerepublic.client.net.ClientNetworkExecutor
+                        .acceptParliamentInfo(message)
+        );
+    }
 }

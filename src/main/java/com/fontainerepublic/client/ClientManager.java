@@ -2,10 +2,12 @@ package com.fontainerepublic.client;
 
 import com.fontainerepublic.client.gui.FrMainScreen;
 import com.fontainerepublic.client.gui.citizen.CitizenScreen;
+import com.fontainerepublic.client.gui.government.GovernmentScreen;
 import com.fontainerepublic.client.gui.guide.GuideScreen;
 import com.fontainerepublic.client.gui.money.HistoryScreen;
 import com.fontainerepublic.client.gui.money.MoneyScreen;
 import com.fontainerepublic.client.gui.notifications.NotificationScreen;
+import com.fontainerepublic.client.gui.parliament.ParliamentScreen;
 import com.fontainerepublic.client.hud.FrHudRenderer;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.client.Minecraft;
@@ -63,6 +65,10 @@ public final class ClientManager {
                         .executes(context -> openHistory()))
                 .then(Commands.literal("notifications")
                         .executes(context -> openNotifications()))
+                .then(Commands.literal("government")
+                        .executes(context -> openGovernment()))
+                .then(Commands.literal("parliament")
+                        .executes(context -> openParliament()))
                 .then(Commands.literal("guide")
                         .executes(context -> openGuide())));
         LOGGER.debug("[FR Client] /frclient client command registered");
@@ -90,6 +96,16 @@ public final class ClientManager {
 
     private static int openNotifications() {
         Minecraft.getInstance().setScreen(new NotificationScreen());
+        return 1;
+    }
+
+    private static int openGovernment() {
+        Minecraft.getInstance().setScreen(new GovernmentScreen());
+        return 1;
+    }
+
+    private static int openParliament() {
+        Minecraft.getInstance().setScreen(new ParliamentScreen());
         return 1;
     }
 

@@ -3,7 +3,9 @@ package com.fontainerepublic.common.network;
 import com.fontainerepublic.common.network.display.BalanceSyncPacket;
 import com.fontainerepublic.common.network.display.CitizenInfoPacket;
 import com.fontainerepublic.common.network.display.DisplayMessageHandlers;
+import com.fontainerepublic.common.network.display.GovernmentInfoPacket;
 import com.fontainerepublic.common.network.display.NotificationPacket;
+import com.fontainerepublic.common.network.display.ParliamentInfoPacket;
 import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
 import com.fontainerepublic.common.network.display.TransactionNotifyPacket;
 import net.minecraftforge.network.NetworkDirection;
@@ -15,13 +17,13 @@ import java.util.Optional;
  * Complete compiled production ledger for the current protocol
  * (FR-CLIENT-001-A §4.2). The ledger is append-only: message IDs start at 0
  * and are never reused or reordered; later stages append further display
- * messages (citizen card and transaction history after ID 2, per
- * FR-CLIENT-001-IMPL-B2).
+ * messages (citizen card and transaction history after ID 2, institution
+ * summaries after ID 4, per FR-CLIENT-001-IMPL-B2 / FR-CLIENT-001-IMPL-B3a).
  */
 public final class NetworkProductionMessageTable {
 
     /** Total number of messages expected by the current protocol revision. */
-    public static final int EXPECTED_MESSAGE_COUNT = 5;
+    public static final int EXPECTED_MESSAGE_COUNT = 7;
 
     private NetworkProductionMessageTable() {
     }
@@ -62,6 +64,20 @@ public final class NetworkProductionMessageTable {
                 TransactionHistorySyncPacket::encode,
                 TransactionHistorySyncPacket::decode,
                 DisplayMessageHandlers.transactionHistorySync()
+        ));
+        registration.register(displaySpec(
+                5,
+                GovernmentInfoPacket.class,
+                GovernmentInfoPacket::encode,
+                GovernmentInfoPacket::decode,
+                DisplayMessageHandlers.governmentInfo()
+        ));
+        registration.register(displaySpec(
+                6,
+                ParliamentInfoPacket.class,
+                ParliamentInfoPacket::encode,
+                ParliamentInfoPacket::decode,
+                DisplayMessageHandlers.parliamentInfo()
         ));
     }
 
