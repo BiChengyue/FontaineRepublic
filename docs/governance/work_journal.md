@@ -197,3 +197,12 @@
   （wave fr-id-bootstrap-001-20260813）。
 - 恢复推进准备：FR-CIT-001-IMPL 任务卡 + 派发提示词（基于 FR-CIT-001-A，
   依据路线图 v1.1 Phase 3 范围与 Human"继续工作"指示；如用户有异议可随时叫停）。
+
+## 2026-08-13 | bootstrap 派发交付 + 审查通过 + 恢复 Citizen 派发
+
+- deepseek 子进程完成 bootstrap 实现（20 文件 +2926 行：控制台分类器、
+  尝试链模型、绑定服务、admin 命令接线、971 行测试），提交 `0896a1a`。
+- Reviewer 独立复跑 bootstrapFoundationTest + 完整构建全绿；审查报告
+  FR-ID-BOOTSTRAP-001-REVIEW-01（验收 11/12 PASS，唯一 NOT TESTED = 真机控制台路径）；
+  并入 develop（`f0cfe69`）。阻断项 F-004 关闭。
+- 恢复推进：派发 FR-CIT-001-IMPL（公民模块）。
