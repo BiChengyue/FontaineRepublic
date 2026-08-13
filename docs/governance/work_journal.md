@@ -27,3 +27,16 @@
   （7890/7897/10809 等均无）。判定为环境网络问题，已停止探针进程并搁置；网络可用后重验。
 - 遗留：6 份设计候选待审阅（下一轮）；develop 待推送 origin；工作区历史未提交改动与杂物目录
   未清理（待用户确认）。
+
+## 2026-08-13 | FR-PHASE2-DESIGN-REVIEW-01 Phase 2 设计候选审阅
+
+- 精读 8 份 Phase 2 设计候选全文（FR-ID-001-A / FR-DATA-003-A / FR-ECO-001-A/B/C /
+  FR-INST-001-A/B / FR-EMG-001-A），并与架构 v2.7、路线图 v1.1、宪法 v3.0 交叉核验。
+- 源码核验：确认 `DataManager.putModuleData`/`saveAll` 仅 setDirty、无落盘确认 ——
+  FR-ID/FR-DATA-003/FR-EMG 共同的"持久化确认门"阻断属实。
+- FR-EMG 文档 SHA-256 与 FR-ECO-001-C 引用一致（59B74C...E4CB）。
+- 产出审查报告 `docs/ai_recovery/evidence/FR-PHASE2-DESIGN-REVIEW-01-AUDIT-REPORT.md`：
+  8 份设计全部 CONDITIONAL PASS（方向一致），结论 ROUTE TO HUMAN。
+- 关键发现：F-001 账户主键冲突（UUID vs SubjectId，需 FR-ECO-001-C-ACCOUNT-ALIGN）；
+  F-002 持久化确认门缺失（需 FR-CORE-002）；F-003 审计模块设计缺失（需 FR-AUD-001）。
+- 将未提交的 FR-DATA-003-A 与审查报告一并提交至设计分支。
