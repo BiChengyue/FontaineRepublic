@@ -57,3 +57,10 @@ Level 1-2（源码 + 依赖无关验证 + 完整构建）全绿；Level 3 真机
 
 - 服务端批准范围内**开发完成**；客户端模组可在此确认后启动（Human 另行指示）。
 - 建议：Human 明早完成第 3 节剩余核验后，即可发布/上线。
+
+## 6. 复核记录（2026-08-13 夜）
+
+- 16 个实现提交逐一 `git merge-base --is-ancestor` 验证：全部 IN develop。
+- 审查覆盖复核：15 份独立 `*-REVIEW-01-AUDIT-REPORT.md` + FR-INFRA-STAGE-REVIEW-01
+  （覆盖 FR-ID-001）+ FR-CMD-GUIDE-001-REVIEW-01 = 17 项全覆盖。
+- 客户端模组：暂停（Human"先确定服务端完全开发再考虑客户端"），工作树待命无改动。
