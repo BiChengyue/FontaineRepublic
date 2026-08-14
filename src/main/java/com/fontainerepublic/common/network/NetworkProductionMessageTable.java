@@ -32,6 +32,7 @@ import com.fontainerepublic.common.trade.TradeCancelPacket;
 import com.fontainerepublic.common.trade.TradeMessageHandlers;
 import com.fontainerepublic.common.trade.TradeOfferItemPacket;
 import com.fontainerepublic.common.trade.TradeOfferMoneyPacket;
+import com.fontainerepublic.common.trade.TradeOfferXpPacket;
 import com.fontainerepublic.common.trade.TradeRequestPacket;
 import com.fontainerepublic.common.trade.TradeRespondPacket;
 import net.minecraftforge.network.NetworkDirection;
@@ -52,7 +53,7 @@ import java.util.Optional;
 public final class NetworkProductionMessageTable {
 
     /** Total number of messages expected by the current protocol revision. */
-    public static final int EXPECTED_MESSAGE_COUNT = 29;
+    public static final int EXPECTED_MESSAGE_COUNT = 30;
 
     // Per-message C2S rate policies (FR-NET-001 rate limiting; bounded
     // interactive abuse control, not business authority).
@@ -321,6 +322,18 @@ public final class NetworkProductionMessageTable {
                 MyLandRightsPagePacket::encode,
                 MyLandRightsPagePacket::decode,
                 DisplayMessageHandlers.myLandRightsPage()
+        ));
+        // FR-TRADE-003-A: XP offer C2S (ID 29). The per-viewer snapshot
+        // (ID 15) gained own/other XP fields, so this and the snapshot
+        // change together bumped the protocol to v10. Registered last so the
+        // frozen ledger remains ascending 0..29.
+        registration.register(c2sSpec(
+                29,
+                TradeOfferXpPacket.class,
+                TradeOfferXpPacket::encode,
+                TradeOfferXpPacket::decode,
+                TradeMessageHandlers.offerXp(),
+                TRADE_OFFER_POLICY
         ));
     }
 

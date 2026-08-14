@@ -113,7 +113,9 @@ Completed:
 
 Current:
 
-Current protocol is v9 with 29 production messages and 15 runtime modules.
+Current protocol is v10 with 30 production messages and 15 runtime
+modules (FR-TRADE-003-A added the trade XP offer message ID 29 and experience
+fields to the trade snapshot ID 15).
 The full client feature set (all ten `/frclient` views plus the communicator
 water mirror, trade, mail, land claim, and personal land-rights view) is
 implemented, reviewed, merged into `develop`, and smoke-verified.

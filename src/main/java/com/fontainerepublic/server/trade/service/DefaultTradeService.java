@@ -3,11 +3,18 @@ package com.fontainerepublic.server.trade.service;
 import com.fontainerepublic.common.network.display.TradeStateSyncPacket;
 import com.fontainerepublic.common.trade.TradeOfferItemPacket;
 import com.fontainerepublic.common.trade.TradeOfferMoneyPacket;
+import com.fontainerepublic.server.audit.api.AuditDraft;
+import com.fontainerepublic.server.audit.api.AuditService;
+import com.fontainerepublic.server.audit.model.AuditActorType;
+import com.fontainerepublic.server.audit.model.AuditCategory;
+import com.fontainerepublic.server.audit.model.AuditClassification;
 import com.fontainerepublic.server.economy.api.EconomyService;
 import com.fontainerepublic.server.economy.api.TradeSettlementReceipt;
 import com.fontainerepublic.server.economy.persistence.EconomyUnavailableException;
 import com.fontainerepublic.server.network.NetworkSendService;
+import com.fontainerepublic.server.registry.api.SubjectRegistryService;
 import com.fontainerepublic.server.registry.model.SubjectId;
+import com.fontainerepublic.server.registry.model.SubjectRecord;
 import com.fontainerepublic.server.trade.api.ServerTradePlayerAccess;
 import com.fontainerepublic.server.trade.api.TradeService;
 import com.fontainerepublic.server.trade.model.TradeOfferSlot;
@@ -57,6 +64,9 @@ public final class DefaultTradeService implements TradeService {
     private final int taxRatePercent;
     private final long requestTimeoutTicks;
     private final long requestCooldownTicks;
+    private final SubjectRegistryService subjectRegistry;
+    private final AuditService audit;
+    private final long maxOfferXp;
 
     private final Map<Long, TradeSession> sessions = new LinkedHashMap<>();
     /** Key -> earliest tick a repeated request between the two players is
@@ -66,6 +76,8 @@ public final class DefaultTradeService implements TradeService {
 
     public DefaultTradeService(
             EconomyService economy,
+            SubjectRegistryService subjectRegistry,
+            AuditService audit,
             ServerTradePlayerAccess playerAccess,
             NetworkSendService sendService,
             LongSupplier tickSource,
@@ -73,24 +85,36 @@ public final class DefaultTradeService implements TradeService {
             int taxRatePercent
     ) {
         this(
-                economy, playerAccess, sendService, tickSource, clock,
+                economy, subjectRegistry, audit, playerAccess, sendService,
+                tickSource, clock,
                 taxRatePercent,
                 com.fontainerepublic.core.ConfigManager.tradeRequestTimeoutSeconds() * 20L,
-                com.fontainerepublic.core.ConfigManager.tradeRequestCooldownSeconds() * 20L
+                com.fontainerepublic.core.ConfigManager.tradeRequestCooldownSeconds() * 20L,
+                com.fontainerepublic.core.ConfigManager.tradeMaxOfferXp()
         );
     }
 
+    /**
+     * Package-visible test constructor: subject registry and audit may be
+     * {@code null} for a dependency-free headless harness (money/items/XP
+     * settlement still works); in production both are always bound.
+     */
     DefaultTradeService(
             EconomyService economy,
+            SubjectRegistryService subjectRegistry,
+            AuditService audit,
             ServerTradePlayerAccess playerAccess,
             NetworkSendService sendService,
             LongSupplier tickSource,
             LongSupplier clock,
             int taxRatePercent,
             long requestTimeoutTicks,
-            long requestCooldownTicks
+            long requestCooldownTicks,
+            long maxOfferXp
     ) {
         this.economy = Objects.requireNonNull(economy, "economy");
+        this.subjectRegistry = subjectRegistry;
+        this.audit = audit;
         this.playerAccess = Objects.requireNonNull(playerAccess, "playerAccess");
         this.sendService = Objects.requireNonNull(sendService, "sendService");
         this.tickSource = Objects.requireNonNull(tickSource, "tickSource");
@@ -105,6 +129,8 @@ public final class DefaultTradeService implements TradeService {
                 Objects.requireNonNull(requestTimeoutTicks, "requestTimeoutTicks"));
         this.requestCooldownTicks = Math.max(0L,
                 Objects.requireNonNull(requestCooldownTicks, "requestCooldownTicks"));
+        this.maxOfferXp = Math.max(0L,
+                Objects.requireNonNull(maxOfferXp, "maxOfferXp"));
     }
 
     // ------------------------------------------------------------------
@@ -249,6 +275,25 @@ public final class DefaultTradeService implements TradeService {
         }
         TradeSession updated = session
                 .withItem(actor, slot, next)
+                .withAgree(session.initiator(), false)
+                .withAgree(session.partner(), false);
+        updated = revertLocked(updated);
+        sessions.put(sessionId, updated);
+        pushToBoth(updated);
+    }
+
+    @Override
+    public void offerXp(UUID actor, long sessionId, long xpPoints) {
+        Objects.requireNonNull(actor, "actor");
+        TradeSession session = sessions.get(sessionId);
+        if (!openOrLocked(session, actor)) {
+            return;
+        }
+        long bounded = Math.max(0L, Math.min(maxOfferXp, xpPoints));
+        long available = playerAccess.totalExperience(actor);
+        long offered = Math.min(bounded, available);
+        TradeSession updated = session
+                .withXp(actor, offered)
                 .withAgree(session.initiator(), false)
                 .withAgree(session.partner(), false);
         updated = revertLocked(updated);
@@ -424,6 +469,8 @@ public final class DefaultTradeService implements TradeService {
             );
         }
         moveItems(session);
+        moveXp(session);
+        recordAudit(session, receiptOfMoneyLegs(session));
         sessions.remove(sessionId);
         pushToBoth(session.withPhase(
                 TradePhase.COMPLETED,
@@ -431,6 +478,90 @@ public final class DefaultTradeService implements TradeService {
                 session.openTick(),
                 session.lockTick()
         ));
+    }
+
+    /**
+     * Exchanges offered experience points server-side (FR-TRADE-003-A). The
+     * offered totals were re-validated before any mutation and this runs on
+     * the main thread, so {@code total - offered + received} is exact; the
+     * result is clamped non-negative as a defensive bound.
+     */
+    private void moveXp(TradeSession session) {
+        long initiatorXp = session.xpOf(session.initiator());
+        long partnerXp = session.xpOf(session.partner());
+        if (initiatorXp == 0L && partnerXp == 0L) {
+            return;
+        }
+        long initiatorNow = playerAccess.totalExperience(session.initiator());
+        long partnerNow = playerAccess.totalExperience(session.partner());
+        playerAccess.setTotalExperience(
+                session.initiator(),
+                Math.max(0L, initiatorNow - initiatorXp + partnerXp)
+        );
+        playerAccess.setTotalExperience(
+                session.partner(),
+                Math.max(0L, partnerNow - partnerXp + initiatorXp)
+        );
+    }
+
+    /** Whether the session carries any paying money leg (audit helper). */
+    private static boolean receiptOfMoneyLegs(TradeSession session) {
+        return session.initiatorMoney() != 0L || session.partnerMoney() != 0L;
+    }
+
+    /**
+     * Append-only authoritative audit of the completed settlement
+     * (FR-TRADE-003-A §3). Identity is resolved through
+     * {@code SubjectRegistryService}; a missing/optional service in the
+     * headless test harness records nothing and never throws (the authorities
+     * are bound in production). The actor is the initiator, the target the
+     * partner, both addressed by their resolved subject ids.
+     */
+    private void recordAudit(TradeSession session, boolean hadMoneyLegs) {
+        AuditService auditService = audit;
+        if (auditService == null) {
+            return;
+        }
+        try {
+            String actorId = subjectKeyOf(session.initiator());
+            String targetId = subjectKeyOf(session.partner());
+            AuditDraft draft = new AuditDraft(
+                    AuditActorType.PLAYER,
+                    session.initiator().toString(),
+                    AuditCategory.FINANCE,
+                    "trade",
+                    "trade-settled",
+                    java.util.Optional.of("player"),
+                    java.util.Optional.of(targetId.isEmpty()
+                            ? session.partner().toString() : targetId),
+                    AuditClassification.AUTHORIZED_SUMMARY,
+                    "Trade settlement (money=" + hadMoneyLegs + ", items+xp exchanged)",
+                    java.util.Optional.empty()
+            );
+            auditService.recordAuthoritative(draft);
+        } catch (RuntimeException failure) {
+            // Audit must never roll back an already-committed trade; log and
+            // move on (append-only diagnostics are best-effort here).
+            LOGGER.warn(
+                    "[Trade] Session {} audit record failed: {}",
+                    session.sessionId(),
+                    failure.getMessage()
+            );
+        }
+    }
+
+    /** Resolves the subject registry key for a player, or the UUID form. */
+    private String subjectKeyOf(UUID playerId) {
+        SubjectRegistryService registry = subjectRegistry;
+        if (registry == null) {
+            return "";
+        }
+        try {
+            java.util.Optional<SubjectRecord> record = registry.findSubjectForPlayer(playerId);
+            return record.map(r -> r.subjectId().canonicalKey()).orElse("");
+        } catch (RuntimeException failure) {
+            return "";
+        }
     }
 
     /**
@@ -472,6 +603,15 @@ public final class DefaultTradeService implements TradeService {
                         && !playerAccess.hasRoomFor(other, slot.stack())) {
                     return "The receiving inventory is full; the trade was cancelled.";
                 }
+            }
+        }
+        // XP offers are re-validated against the server's current totals so a
+        // level change (death, other source) since the offer invalidates it.
+        for (UUID party : List.of(session.initiator(), session.partner())) {
+            if (session.xpOf(party) > 0L
+                    && playerAccess.totalExperience(party) < session.xpOf(party)) {
+                return "A player no longer has the offered experience; "
+                        + "the trade was cancelled.";
             }
         }
         return null;
@@ -617,16 +757,19 @@ public final class DefaultTradeService implements TradeService {
     private void pushSnapshot(TradeSession session, UUID viewer) {
         boolean ownIsInitiator = session.isInitiator(viewer);
         int countdown = countdownSeconds(session);
+        UUID other = session.otherOf(viewer);
         TradeStateSyncPacket packet = new TradeStateSyncPacket(
                 session.sessionId(),
                 session.phase().ordinal(),
                 countdown,
-                ownIsInitiator ? session.initiatorMoney() : session.partnerMoney(),
+                session.moneyOf(viewer),
                 session.itemStacksOf(viewer),
                 session.agreeOf(viewer),
-                ownIsInitiator ? session.partnerMoney() : session.initiatorMoney(),
-                session.itemStacksOf(session.otherOf(viewer)),
-                session.agreeOf(session.otherOf(viewer)),
+                session.moneyOf(other),
+                session.itemStacksOf(other),
+                session.agreeOf(other),
+                session.xpOf(viewer),
+                session.xpOf(other),
                 clock.getAsLong()
         );
         playerAccess.onlinePlayer(viewer).ifPresent(

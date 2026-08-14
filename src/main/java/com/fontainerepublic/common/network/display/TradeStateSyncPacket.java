@@ -10,7 +10,8 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * S2C trade-session snapshot (FR-TRADE-001-A §3, message ledger ID 15).
+ * S2C trade-session snapshot (FR-TRADE-001-A §3, message ledger ID 15),
+ * extended by FR-TRADE-003-A with per-viewer experience offers.
  *
  * <p>Carries display data only — never an authority decision. The payload is
  * already per-viewer: {@code own*} describes the receiving player's side and
@@ -18,8 +19,10 @@ import java.util.Objects;
  * perspective. {@code phase} is the server-side state ordinal
  * ({@code 0=REQUESTED, 1=OPEN, 2=LOCKED, 3=EXECUTING, 4=COMPLETED,
  * 5=CANCELLED}), {@code countdownSeconds} the remaining LOCKED confirmation
- * seconds (0 outside LOCKED). Every bound is enforced at construction and at
- * decode so the wire never carries an out-of-range value.</p>
+ * seconds (0 outside LOCKED). {@code ownXp}/{@code otherXp} carry the offered
+ * experience totals ({@code 0} when none). Every bound is enforced at
+ * construction and at decode so the wire never carries an out-of-range
+ * value.</p>
  */
 public record TradeStateSyncPacket(
         long sessionId,
@@ -31,6 +34,8 @@ public record TradeStateSyncPacket(
         long otherMoney,
         List<ItemStack> otherItems,
         boolean otherAgree,
+        long ownXp,
+        long otherXp,
         long at
 ) {
 
@@ -60,6 +65,9 @@ public record TradeStateSyncPacket(
         }
         if (ownMoney < 0 || otherMoney < 0) {
             throw new NetworkPayloadException("Offered amounts must not be negative");
+        }
+        if (ownXp < 0 || otherXp < 0) {
+            throw new NetworkPayloadException("Offered XP must not be negative");
         }
         ownItems = fixedSlotList(ownItems, "ownItems");
         otherItems = fixedSlotList(otherItems, "otherItems");
@@ -94,6 +102,8 @@ public record TradeStateSyncPacket(
         buffer.writeLong(message.otherMoney());
         writeSlots(buffer, message.otherItems());
         buffer.writeBoolean(message.otherAgree());
+        buffer.writeLong(message.ownXp());
+        buffer.writeLong(message.otherXp());
         buffer.writeLong(message.at());
     }
 
@@ -109,6 +119,8 @@ public record TradeStateSyncPacket(
                 buffer.readLong(),
                 readSlots(buffer),
                 buffer.readBoolean(),
+                buffer.readLong(),
+                buffer.readLong(),
                 buffer.readLong()
         );
     }

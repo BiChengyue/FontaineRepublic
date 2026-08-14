@@ -6,10 +6,14 @@ import com.fontainerepublic.core.module.ModuleDefinition;
 import com.fontainerepublic.core.module.ModuleId;
 import com.fontainerepublic.core.module.ModuleMetadata;
 import com.fontainerepublic.core.module.ModuleRegistry;
+import com.fontainerepublic.server.audit.AuditModule;
+import com.fontainerepublic.server.audit.api.AuditService;
 import com.fontainerepublic.server.economy.EconomyModule;
 import com.fontainerepublic.server.economy.api.EconomyService;
 import com.fontainerepublic.server.network.NetworkRuntimeModule;
 import com.fontainerepublic.server.network.NetworkSendService;
+import com.fontainerepublic.server.registry.SubjectRegistryModule;
+import com.fontainerepublic.server.registry.api.SubjectRegistryService;
 import com.fontainerepublic.server.trade.api.TradeService;
 import com.fontainerepublic.server.trade.service.DefaultTradeService;
 import com.fontainerepublic.server.trade.service.ServerPlayerAccess;
@@ -79,7 +83,9 @@ public final class TradeModule implements IModule {
                 ),
                 Set.of(
                         EconomyModule.MODULE_ID,
-                        NetworkRuntimeModule.MODULE_ID
+                        NetworkRuntimeModule.MODULE_ID,
+                        SubjectRegistryModule.MODULE_ID,
+                        AuditModule.MODULE_ID
                 ),
                 Set.of(),
                 70,
@@ -111,12 +117,16 @@ public final class TradeModule implements IModule {
      */
     public void bindServices(
             EconomyService economyService,
+            SubjectRegistryService subjectRegistry,
+            AuditService audit,
             NetworkSendService sendService
     ) {
         this.boundEconomy = Objects.requireNonNull(economyService, "economyService");
         this.boundSendService = Objects.requireNonNull(sendService, "sendService");
         this.service = new DefaultTradeService(
                 boundEconomy,
+                subjectRegistry,
+                audit,
                 new ServerPlayerAccess(),
                 boundSendService,
                 tickSource,

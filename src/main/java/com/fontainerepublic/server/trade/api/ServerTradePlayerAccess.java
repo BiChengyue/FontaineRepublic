@@ -41,6 +41,14 @@ public interface ServerTradePlayerAccess {
      *  when the whole stack was absorbed (nothing dropped, nothing lost). */
     boolean addToInventory(UUID playerId, ItemStack stack);
 
+    /** The player's total experience points (server-authoritative counter,
+     *  reconstructed from level + progress via {@code ExperiencePointMath}). */
+    long totalExperience(UUID playerId);
+
+    /** Rewrites the player's experience to the exact total (level, progress
+     *  and total counter); used by the atomic XP-offer exchange. */
+    void setTotalExperience(UUID playerId, long totalXp);
+
     /** Server chat feedback to the player. */
     void message(UUID playerId, String message);
 }

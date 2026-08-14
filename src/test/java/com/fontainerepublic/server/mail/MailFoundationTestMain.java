@@ -244,9 +244,9 @@ public final class MailFoundationTestMain {
     // ------------------------------------------------------------------
 
     private static void testProtocolLedgerRegistration() {
-        check(NetworkProtocol.VERSION.equals("9"), "the protocol version is v9");
-        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 29,
-                "the production ledger expects 29 messages (IDs 0-28)");
+        check(NetworkProtocol.VERSION.equals("10"), "the protocol version is v10");
+        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 30,
+                "the production ledger expects 30 messages (IDs 0-29)");
 
         Map<Integer, NetworkMessageSpec<?>> byId = collectLedger();
         check(byId.size() == NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT,

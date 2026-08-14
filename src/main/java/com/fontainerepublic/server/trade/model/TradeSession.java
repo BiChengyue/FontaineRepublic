@@ -10,18 +10,20 @@ import java.util.UUID;
 
 /**
  * Immutable state snapshot of one trade session (FR-TRADE-001-A §4, intent
- * model — Human-confirmed 2026-08-14, replacing the earlier escrow model).
+ * model — Human-confirmed 2026-08-14, replacing the earlier escrow model),
+ * extended by FR-TRADE-003-A with per-side experience-point offers.
  *
  * <p>Every server transition builds a fresh session instance; the session
  * map is the single in-memory authority (sessions are deliberately not
  * persisted — the executed outcome is committed through the economy accounts
  * and the inventories). The session holds only <em>intentions</em>: each
- * side's offered money amount ({@code long}) and four offer slots (source
- * inventory index + item snapshot). No money is pre-escrowed and no item
- * ever leaves a player's inventory before the atomic execution; cancel /
- * disconnect / shutdown simply drops the session because nothing was ever
- * moved. Items are always copied on the way in and on the way out so no
- * stack reference is ever shared with an inventory.</p>
+ * side's offered money amount ({@code long}), offered XP points
+ * ({@code long}), and four offer slots (source inventory index + item
+ * snapshot). No money or XP is pre-escrowed and no item ever leaves a
+ * player's inventory before the atomic execution; cancel / disconnect /
+ * shutdown simply drops the session because nothing was ever moved. Items
+ * are always copied on the way in and on the way out so no stack reference
+ * is ever shared with an inventory.</p>
  */
 public record TradeSession(
         long sessionId,
@@ -30,6 +32,8 @@ public record TradeSession(
         TradePhase phase,
         long initiatorMoney,
         long partnerMoney,
+        long initiatorXp,
+        long partnerXp,
         List<TradeOfferSlot> initiatorItems,
         List<TradeOfferSlot> partnerItems,
         boolean initiatorAgree,
@@ -42,6 +46,35 @@ public record TradeSession(
     /** LOCKED confirmation window in server ticks (5 seconds at 20 TPS). */
     public static final long LOCKED_TICKS = 100L;
 
+    /**
+     * Constructor used by call sites that do not offer XP (compat): both XP
+     * offers default to 0.
+     */
+    public TradeSession(
+            long sessionId,
+            UUID initiator,
+            UUID partner,
+            TradePhase phase,
+            long initiatorMoney,
+            long partnerMoney,
+            List<TradeOfferSlot> initiatorItems,
+            List<TradeOfferSlot> partnerItems,
+            boolean initiatorAgree,
+            boolean partnerAgree,
+            long lockTick,
+            long requestTick,
+            long openTick
+    ) {
+        this(
+                sessionId, initiator, partner, phase,
+                initiatorMoney, partnerMoney,
+                0L, 0L,
+                initiatorItems, partnerItems,
+                initiatorAgree, partnerAgree,
+                lockTick, requestTick, openTick
+        );
+    }
+
     public TradeSession {
         Objects.requireNonNull(initiator, "initiator");
         Objects.requireNonNull(partner, "partner");
@@ -51,6 +84,9 @@ public record TradeSession(
         }
         if (initiatorMoney < 0 || partnerMoney < 0) {
             throw new IllegalArgumentException("Offered amounts must not be negative");
+        }
+        if (initiatorXp < 0 || partnerXp < 0) {
+            throw new IllegalArgumentException("Offered XP must not be negative");
         }
         initiatorItems = fixedSlots(initiatorItems, "initiatorItems");
         partnerItems = fixedSlots(partnerItems, "partnerItems");
@@ -93,6 +129,11 @@ public record TradeSession(
         return isInitiator(playerId) ? initiatorMoney : partnerMoney;
     }
 
+    /** Offered XP points of the given member (0 for the other side). */
+    public long xpOf(UUID playerId) {
+        return isInitiator(playerId) ? initiatorXp : partnerXp;
+    }
+
     /** Four offer slots of the given member (immutable). */
     public List<TradeOfferSlot> itemsOf(UUID playerId) {
         return isInitiator(playerId) ? initiatorItems : partnerItems;
@@ -127,6 +168,7 @@ public record TradeSession(
                 sessionId, initiator, partner,
                 nextPhase,
                 initiatorMoney, partnerMoney,
+                initiatorXp, partnerXp,
                 initiatorItems, partnerItems,
                 initiatorAgree, partnerAgree,
                 lockTick, requestTick, openTick
@@ -140,6 +182,21 @@ public record TradeSession(
                 phase,
                 initiatorSide ? newMoney : initiatorMoney,
                 initiatorSide ? partnerMoney : newMoney,
+                initiatorXp, partnerXp,
+                initiatorItems, partnerItems,
+                initiatorAgree, partnerAgree,
+                lockTick, requestTick, openTick
+        );
+    }
+
+    public TradeSession withXp(UUID member, long newXp) {
+        boolean initiatorSide = isInitiator(member);
+        return new TradeSession(
+                sessionId, initiator, partner,
+                phase,
+                initiatorMoney, partnerMoney,
+                initiatorSide ? newXp : initiatorXp,
+                initiatorSide ? partnerXp : newXp,
                 initiatorItems, partnerItems,
                 initiatorAgree, partnerAgree,
                 lockTick, requestTick, openTick
@@ -159,6 +216,7 @@ public record TradeSession(
                 sessionId, initiator, partner,
                 phase,
                 initiatorMoney, partnerMoney,
+                initiatorXp, partnerXp,
                 initiatorSide ? nextOwn : other,
                 initiatorSide ? other : nextOwn,
                 initiatorAgree, partnerAgree,
@@ -172,6 +230,7 @@ public record TradeSession(
                 sessionId, initiator, partner,
                 phase,
                 initiatorMoney, partnerMoney,
+                initiatorXp, partnerXp,
                 initiatorItems, partnerItems,
                 initiatorSide ? agree : initiatorAgree,
                 initiatorSide ? partnerAgree : agree,
