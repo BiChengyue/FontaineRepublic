@@ -119,31 +119,31 @@ water mirror, trade, mail, land claim, and personal land-rights view) is
 implemented, reviewed, merged into `develop`, and smoke-verified.
 
 Real-machine Level 3 verification was executed on 2026-08-14
-(docs/ai_recovery/evidence/FR-LEVEL3-FULL-RUNTIME-20260814-REPORT.md). Server
-foundation, player identity, economy persistence, emergency mutation, land
-persistence, command registration, the current-client handshake, and most trade
-failure gates passed. The test found two release-blocking defects: (1) mail
-stored during a session disappears after a clean save/stop/restart; (2) a Forge
-client without FontaineRepublic cannot join because the server registry contains
-the custom `fontainerepublic:communicator` item. Additional FAIL/PARTIAL
-findings include the mail UI not supporting its own delivery contract, trade
-session/settlement defects, land interaction not fully consumed, offhand
-priority suppressing the communicator, and emergency inspect/status diagnostics.
-Final test gate: REVISE BEFORE NEXT RELEASE CANDIDATE.
+(docs/ai_recovery/evidence/FR-LEVEL3-FULL-RUNTIME-20260814-REPORT.md). It found
+two release-blocking defects plus several FAIL/PARTIAL items. Both release
+blockers are now fixed, reviewed, built, smoke-verified, merged into `develop`,
+and pushed to origin:
+1. mail data loss on clean stop/restart — root cause was the FR-CORE-002 100 ms
+   shared durable-commit rate guard silently dropping the mail commit that
+   immediately follows an economy commit; fixed with a bounded retry in the mail
+   store (merge `c845898`).
+2. no-FR-client join — the custom `fontainerepublic:communicator` item broke
+   registry equality; fixed by FR-ITEM-002-A (vanilla clock carrier + bounded NBT
+   + HMAC-SHA-256 signature + owner binding, persisted HMAC key, legacy id
+   migration via MissingMappingsEvent; merge `dc211d0`).
+A dedicated-server smoke (tmp/smoke-registry-20260814) reached Ready with
+ExitCode=0, protocol v9/29 frozen, and the legacy id remapped cleanly.
 
 Next:
 
-Address the two Level 3 release blockers before any release candidate:
-1. stop mail data loss (add a clean-stop/restart regression test);
-2. resolve the no-client/custom-registry conflict (FR-ITEM-002-A optional-client
-   communicator carrier — vanilla item carrier with server-authenticated data).
-
-Both FR-ITEM-002-A and FR-TRADE-002-A (Secure Trade controlled adaptation to
-replace the current trade session/UI path) are drafted as design candidates but
-are NOT authorized. Human decisions pending: whether to approve
-FR-ITEM-002-A for merge, and the trade direction (FR-TRADE-002-A rewrite vs
-patching the current trade bugs first). See
-docs/governance/continuous_development_ops.md for the operating handbook.
+Remaining before the next release candidate:
+1. fix the communicator right-click-air offhand conflict (dispatched,
+   fix/offhand-conflict) and the two deprecation warnings;
+2. replace the current trade session/UI path per FR-TRADE-002-A Secure Trade
+   controlled adaptation (dispatched, feat/trade-002-a);
+3. re-run real-machine Level 3 regression with Human (mail restart persistence,
+   no-FR client join, /fr communicator issue + restart persistence, offhand
+   right-click, crash-window/RCON/old-protocol rejection).
 
 Always read this section before starting work.
 

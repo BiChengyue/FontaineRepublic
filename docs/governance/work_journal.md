@@ -840,3 +840,35 @@
   未授权设计候选 FR-ITEM-002-A / FR-TRADE-002-A；保守处理，未添加其他无关
   未跟踪 docs 文件。
 - 未合并、未 push；回报待 Human 审。
+## 2026-08-14（深夜）| 中枢推进：两个发布阻断修复完成 + 派发第二批
+
+- 权限变更：用户授予 danger-full-access（构建/推送/git/网络全部可用）；approval
+  提示禁用。运作模式：用户要求实现全部交给子代理，本中枢只派单/审查/合入/维持
+  推进，靠「子代理完成通知」唤醒，靠本日志 + CLAUDE.md/current_status.md 维持上下文。
+- 完成（本中枢经手）：
+  1. 邮件持久化丢失（发布阻断）修复：根因=DataManager 的 100ms 全局写盘速率门
+     （单一 lastCommitMillis）使 mail 提交紧跟 economy 提交时被 RATE_GUARD 静默
+     丢弃；修复=MailRepository.DataManagerMailStore.commit 有界重试(5×120ms)。
+     构建+测试通过，合入 develop（merge c845898，分支 fix/mail-defects commit e1adabd）。
+  2. 无 FR 客户端注册表不兼容（发布阻断）修复 FR-ITEM-002-A：移除自定义物品
+     DeferredRegister<Item>，改原版时钟载体 + 有界 NBT + HMAC-SHA-256 签名 + owner
+     绑定；新增 /fr communicator issue；MissingMappingsEvent 把旧 id 迁移到 clock；
+     4 个 ServerPlayerAccess + 客户端门禁迁到认证器。本中枢补了 HMAC 密钥持久化
+     （DataManager "communicator" 命名空间，重启复用同一密钥）。修复子代理 B 遗留
+     的 4 个问题（ComponentJson 的 JSON 字符串引号转义、isCarrierItem 用
+     ForgeRegistries.ITEMS 查找被测试误判、javadoc 残留 DeferredRegister 字样、
+     命令边界白名单缺 CommunicatorCommand）。构建+测试通过，合入 develop
+     （merge dc211d0，分支 fix/registry-optional-client commits 17aa6a9/09b1d10/715b3f7）。
+  3. 推送 develop 到 origin（0958d7b..dc211d0，rev-list 0/0 已同步）。
+  4. 专用服务器冒烟通过（tmp/smoke-registry-20260814：Ready=True、ExitCode=0、
+     协议 v9/29 冻结、旧 id 成功重映射到 minecraft:clock、/fr 注册 8 贡献）。
+- 第二批已派发（后台，隔离 worktree，不自行合并）：
+  1. fix/offhand-conflict（子代理 741f479c）：通讯器右键空气副手冲突 + 2 个
+     deprecation 警告清理（FRItemIds ResourceLocation 构造、LandClaimServerPlayerAccess）。
+  2. feat/trade-002-a（子代理 6a438e26）：FR-TRADE-002-A Secure Trade 受控适配，
+     重做交易（含上游 MIT 抓取/核验/归档、服务端权威核心、5% 税、身份/审计/恢复）。
+- 待子代理完成后：审查 → 返修 → 合入 develop → 推送 → 更新文档。
+- 剩余：交易重做、deprecation 清理、Level 3 真机回归（邮件重启持久化、无 FR 客户端
+  加入、水镜发放+重启持久化、崩溃窗口/RCON/旧协议拒绝）。
+- 明日交付给用户：真机测试清单（含无 FR 客户端加入、/fr communicator issue、
+  邮件重启持久化、副手右键空气）。
