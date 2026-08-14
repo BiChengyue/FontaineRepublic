@@ -74,7 +74,7 @@ public final class LandClaimServerPlayerAccess implements ServerLandClaimPlayerA
         if (!(player.get().level() instanceof ServerLevel serverLevel)) {
             return false;
         }
-        return serverLevel.hasChunkAt(net.minecraft.core.BlockPos.containing(x, y, z));
+        return serverLevel.isLoaded(net.minecraft.core.BlockPos.containing(x, y, z));
     }
 
     @Override
