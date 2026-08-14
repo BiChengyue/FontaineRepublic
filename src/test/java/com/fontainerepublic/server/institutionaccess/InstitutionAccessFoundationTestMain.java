@@ -2065,6 +2065,21 @@ public final class InstitutionAccessFoundationTestMain {
                     parcels.size(), 0L, List.of(), 0L);
         }
 
+        @Override
+        public com.fontainerepublic.server.land.api.MyUsageRightsPage myUsageRights(
+                UUID authenticatedPlayerId,
+                Optional<ParcelId> afterParcelId,
+                long expectedStoreRevision,
+                int limit
+        ) {
+            // Not used by the institution-access boundary: fail closed OK empty.
+            return com.fontainerepublic.server.land.api.MyUsageRightsPage.closed(
+                    com.fontainerepublic.server.land.api.MyUsageRightsStatus.OK,
+                    0L,
+                    1_000L
+            );
+        }
+
         private void setParcel(LandParcel parcel) {
             parcels.put(parcel.parcelId(), parcel);
         }

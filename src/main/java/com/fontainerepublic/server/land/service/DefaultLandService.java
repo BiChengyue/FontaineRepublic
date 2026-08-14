@@ -6,6 +6,8 @@ import com.fontainerepublic.server.land.api.LandChangeKind;
 import com.fontainerepublic.server.land.api.LandReceipt;
 import com.fontainerepublic.server.land.api.LandService;
 import com.fontainerepublic.server.land.api.LandSummary;
+import com.fontainerepublic.server.land.api.MyUsageRightsPage;
+import com.fontainerepublic.server.land.api.MyUsageRightsQueryLimits;
 import com.fontainerepublic.server.land.api.PermissionResolver;
 import com.fontainerepublic.server.land.api.UsageChangeKind;
 import com.fontainerepublic.server.land.api.UsageReceipt;
@@ -255,6 +257,47 @@ public final class DefaultLandService implements LandService {
                 totalArea,
                 zones,
                 snapshot.storeRevision()
+        );
+    }
+
+    @Override
+    public MyUsageRightsPage myUsageRights(
+            UUID authenticatedPlayerId,
+            Optional<ParcelId> afterParcelId,
+            long expectedStoreRevision,
+            int limit
+    ) {
+        Objects.requireNonNull(authenticatedPlayerId, "authenticatedPlayerId");
+        Objects.requireNonNull(afterParcelId, "afterParcelId");
+        // Self-only: the caller is always the authenticated player; there is no
+        // target-holder parameter, so no other player can be queried.
+        requireResolvableHolder(authenticatedPlayerId);
+        if (!MyUsageRightsQueryLimits.isValid(limit)) {
+            throw new LandUnavailableException(
+                    LandUnavailableException.CODE_INVALID_REQUEST,
+                    "limit must be within [1, " + MyUsageRightsQueryLimits.MAX_LIMIT
+                            + "]: " + limit
+            );
+        }
+        // Cursor/revision pairing (FR-LAND-002-A §4.2): a first page has no
+        // cursor and expectedStoreRevision == 0; a continuation has a cursor
+        // and a positive store revision. Enforced here at the authoritative API
+        // boundary so no non-network caller can bypass it.
+        if (!MyUsageRightsQueryLimits.isValidCursorRevision(
+                afterParcelId.isPresent(), expectedStoreRevision)) {
+            throw new LandUnavailableException(
+                    LandUnavailableException.CODE_INVALID_REQUEST,
+                    "a cursor requires its returned positive store revision, and "
+                            + "a first page must carry no cursor and revision 0"
+            );
+        }
+        OwnerReference holder = OwnerReference.forPlayer(authenticatedPlayerId);
+        return repository.myUsageRightsPage(
+                holder,
+                afterParcelId,
+                expectedStoreRevision,
+                limit,
+                now()
         );
     }
 

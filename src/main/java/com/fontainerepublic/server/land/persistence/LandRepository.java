@@ -3,6 +3,9 @@ package com.fontainerepublic.server.land.persistence;
 import com.fontainerepublic.core.DataManager;
 import com.fontainerepublic.core.DurableCommitResult;
 import com.fontainerepublic.core.DurableCommitStatus;
+import com.fontainerepublic.server.land.api.MyUsageRightProjection;
+import com.fontainerepublic.server.land.api.MyUsageRightsPage;
+import com.fontainerepublic.server.land.api.MyUsageRightsStatus;
 import com.fontainerepublic.server.land.model.LandAccess;
 import com.fontainerepublic.server.land.model.LandParcel;
 import com.fontainerepublic.server.land.model.ParcelId;
@@ -15,10 +18,16 @@ import com.fontainerepublic.server.land.model.ZoneType;
 import com.fontainerepublic.server.registry.model.OwnerReference;
 import net.minecraft.nbt.CompoundTag;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeSet;
 import java.util.UUID;
 
 /**
@@ -56,6 +65,19 @@ public final class LandRepository {
     private final LinkedHashMap<ParcelId, LandParcel> parcels = new LinkedHashMap<>();
     private final LinkedHashMap<Long, ViolationReport> reports = new LinkedHashMap<>();
     private long storeRevision;
+
+    /**
+     * Derived, bounded in-memory holder index (FR-LAND-002-A §2.2):
+     * {@code OwnerReference -> sorted canonical ParcelId keys}. Rebuilt on
+     * every {@link #publish} (load and each successful durable commit) purely
+     * from the authoritative {@code parcels}; it is <em>not</em> a second
+     * authority source and never changes the on-disk NBT shape. It is never
+     * exposed as a full collection/map and never offers an arbitrary-holder
+     * enumeration — a query may only read the authenticated holder's bounded
+     * indexed parcel set.
+     */
+    private final Map<OwnerReference, NavigableSet<ParcelId>> holderIndex =
+            new HashMap<>();
 
     /**
      * Creates a repository backed by the production {@link DataManager} store.
@@ -157,6 +179,105 @@ public final class LandRepository {
                 storeRevision,
                 parcels,
                 reports
+        );
+    }
+
+    /**
+     * Bounded, self-only page of the current usage rights of one holder
+     * (FR-LAND-002-A §3.2/§4.1). The query inspects only the holder's indexed
+     * parcel set — it never scans all server parcels and never offers an
+     * arbitrary-holder parameter. Parcels are examined in
+     * {@code ParcelId.canonicalKey()} ascending order; {@code afterParcelId}
+     * is an exclusive cursor. Only {@code UsageRight.validAt(serverNow)} rights
+     * are projected, but {@code nextAfterParcelId} is the <b>last indexed
+     * parcel examined</b> (not merely the last active entry returned), so
+     * expired entries in the index never shift the cursor and cannot cause a
+     * later valid entry to be skipped.
+     *
+     * <p>A mismatch of {@code expectedStoreRevision} against the current store
+     * revision returns a {@link MyUsageRightsStatus#RESET_REQUIRED} page with
+     * no entries ({@code expectedStoreRevision == 0} always means a fresh first
+     * page). Read-only: no persistence, no revision increment, no audit.</p>
+     *
+     * <p>{@code limit} must already be validated by the caller
+     * ({@code 1..MyUsageRightsQueryLimits.MAX_LIMIT}); invalid limits are
+     * rejected upstream, never silently clamped.</p>
+     */
+    public MyUsageRightsPage myUsageRightsPage(
+            OwnerReference holder,
+            Optional<ParcelId> afterParcelId,
+            long expectedStoreRevision,
+            int limit,
+            long serverNow
+    ) {
+        requireOwnerThread();
+        Objects.requireNonNull(holder, "holder");
+        Objects.requireNonNull(afterParcelId, "afterParcelId");
+        if (serverNow <= 0) {
+            throw new IllegalStateException(
+                    "serverNow must be a positive epoch millisecond"
+            );
+        }
+        long generatedAt = serverNow;
+        if (expectedStoreRevision != 0 && expectedStoreRevision != storeRevision) {
+            return MyUsageRightsPage.closed(
+                    MyUsageRightsStatus.RESET_REQUIRED,
+                    storeRevision,
+                    generatedAt
+            );
+        }
+
+        NavigableSet<ParcelId> indexed =
+                Objects.requireNonNullElseGet(holderIndex.get(holder), TreeSet::new);
+        NavigableSet<ParcelId> candidates = afterParcelId
+                .map(cursor -> indexed.tailSet(cursor, false))
+                .orElse(indexed);
+
+        List<MyUsageRightProjection> projections = new ArrayList<>(limit);
+        ParcelId lastExamined = null;
+        boolean hasMore = false;
+        for (ParcelId parcelId : candidates) {
+            if (projections.size() >= limit) {
+                hasMore = true;
+                break;
+            }
+            lastExamined = parcelId;
+            LandParcel parcel = parcels.get(parcelId);
+            if (parcel == null) {
+                continue;
+            }
+            Optional<UsageRight> right = parcel.usageRightOf(holder);
+            if (right.isEmpty() || !right.get().validAt(serverNow)) {
+                continue;
+            }
+            projections.add(project(parcel, right.get()));
+            if (projections.size() >= limit) {
+                hasMore = !candidates.tailSet(parcelId, false).isEmpty();
+                break;
+            }
+        }
+        return MyUsageRightsPage.ok(
+                storeRevision,
+                generatedAt,
+                projections,
+                Optional.ofNullable(lastExamined),
+                hasMore
+        );
+    }
+
+    private MyUsageRightProjection project(LandParcel parcel, UsageRight right) {
+        ParcelRegion region = parcel.region();
+        return new MyUsageRightProjection(
+                parcel.parcelId(),
+                parcel.dimension(),
+                region.minX(), region.minY(), region.minZ(),
+                region.maxX(), region.maxY(), region.maxZ(),
+                parcel.zoneType(),
+                right.usageType(),
+                right.grantedAt(),
+                right.expiresAt(),
+                right.rightRevision(),
+                parcel.parcelRevision()
         );
     }
 
@@ -580,6 +701,25 @@ public final class LandRepository {
         reports.clear();
         reports.putAll(snapshot.reports());
         storeRevision = snapshot.storeRevision();
+        rebuildHolderIndex(snapshot.parcels());
+    }
+
+    /**
+     * Derives the bounded holder index from the authoritative parcels on load
+     * and after every successful durable commit (FR-LAND-002-A §2.2). A failed
+     * commit never reaches here, so the index always reflects exactly the
+     * published snapshot. Parcel ids are kept sorted by canonical key.
+     */
+    private void rebuildHolderIndex(Map<ParcelId, LandParcel> authoritative) {
+        holderIndex.clear();
+        Comparator<ParcelId> byKey =
+                Comparator.comparing(ParcelId::canonicalKey);
+        for (LandParcel parcel : authoritative.values()) {
+            for (OwnerReference holder : parcel.usageRights().keySet()) {
+                holderIndex.computeIfAbsent(holder, ignored -> new TreeSet<>(byKey))
+                        .add(parcel.parcelId());
+            }
+        }
     }
 
     private void enforceLoadedCapacity(LandStoreSnapshot snapshot) {

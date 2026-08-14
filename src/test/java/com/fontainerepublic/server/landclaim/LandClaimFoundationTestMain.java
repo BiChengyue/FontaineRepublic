@@ -674,9 +674,9 @@ public final class LandClaimFoundationTestMain {
         require(claimResult.rateLimitPolicy().isEmpty(),
                 "S2C ID 26 carries no C2S rate policy");
 
-        require(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 27,
-                "the protocol expects twenty-seven ledger messages");
-        require(NetworkProtocol.VERSION.equals("8"), "the protocol version is v8");
+        require(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 29,
+                "the protocol expects twenty-nine ledger messages");
+        require(NetworkProtocol.VERSION.equals("9"), "the protocol version is v9");
     }
 
     private static void assertC2s(

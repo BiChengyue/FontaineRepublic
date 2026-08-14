@@ -16,6 +16,10 @@ import com.fontainerepublic.server.land.persistence.LandRepository;
 import com.fontainerepublic.server.land.service.ConfigDrivenPermissionResolver;
 import com.fontainerepublic.server.land.service.DefaultLandService;
 import com.fontainerepublic.server.land.service.LandPermissionConfig;
+import com.fontainerepublic.server.landrights.MyLandRightsRuntime;
+import com.fontainerepublic.server.landrights.api.MyLandRightsService;
+import com.fontainerepublic.server.landrights.service.DefaultMyLandRightsService;
+import com.fontainerepublic.server.landrights.service.ServerMyLandRightsPlayerAccess;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
@@ -43,6 +47,14 @@ import java.util.UUID;
  * economy, justice, institutions, client projections, or technical
  * permissions beyond its own config-driven access policy (rank/OP never
  * bypasses it).</p>
+ *
+ * <p>The Land module is the single owning lifecycle of the FR-LAND-002-A
+ * communicator my-usage-rights projection: it owns the read-only
+ * {@link MyLandRightsService} (built from its own authoritative
+ * {@link LandService}, the {@link ServerMyLandRightsPlayerAccess}, and the
+ * server clock) and binds/unbinds it on {@link MyLandRightsRuntime}. No
+ * separate top-level module is registered for this presentation-only surface.
+ * </p>
  */
 public final class LandModule implements IModule {
 
@@ -55,6 +67,7 @@ public final class LandModule implements IModule {
     private InteractionEventHandler interactionHandler;
     private volatile PlayerDataService boundPlayerData;
     private volatile SubjectRegistryService boundSubjectRegistry;
+    private MyLandRightsService rightsService;
 
     public static void register(ModuleRegistry registry) {
         Objects.requireNonNull(registry, "registry");
@@ -117,6 +130,12 @@ public final class LandModule implements IModule {
      * the runtime start so holder/actor resolution can enforce the §4 chain.
      * Until bound, every holder resolution fails closed with
      * {@code HOLDER_DIRECTORY_UNAVAILABLE}.
+     *
+     * <p>Immediately after wiring these authoritative services the module also
+     * builds and binds the FR-LAND-002-A communicator my-usage-rights
+     * projection onto {@link MyLandRightsRuntime} (see
+     * {@link #boundRightsService()} for the fail-closed, idempotent
+     * rule). Repeated calls do not duplicate the projection binding.</p>
      */
     public void bindServices(
             PlayerDataService playerDataService,
@@ -124,10 +143,52 @@ public final class LandModule implements IModule {
     ) {
         this.boundPlayerData = playerDataService;
         this.boundSubjectRegistry = subjectRegistryService;
+        boundRightsService();
+    }
+
+    /**
+     * Creates and binds the FR-LAND-002-A my-usage-rights projection service —
+     * the existing authoritative land service plus the authoritative PlayerData
+     * and subject-registry services plus the server clock. Bound exactly once,
+     * and fail-closed: it stays unbound with one clear warning unless the land
+     * service <em>and</em> both authoritative holder-resolution services are
+     * available at bind time. Idempotent: a second invocation while already
+     * bound is a no-op, so it can never produce duplicate bind state.
+     *
+     * <p>Guarding the two authoritative holder services here is important: the
+     * projection ultimately delegates to {@code LandService.myUsageRights},
+     * whose holder-resolution chain needs the bound PlayerData and
+     * subject-registry services, so binding against a partial authority would
+     * serve a projection that can resolve no holder (fail closed anyway).</p>
+     */
+    private void boundRightsService() {
+        if (rightsService != null) {
+            return;
+        }
+        if (service == null || boundPlayerData == null || boundSubjectRegistry == null) {
+            LOGGER.warn(
+                    "[Land] My-usage-rights projection left unbound: land service, "
+                            + "PlayerData service, or subject-registry service is "
+                            + "not available (fail closed)"
+            );
+            return;
+        }
+        rightsService = new DefaultMyLandRightsService(
+                service,
+                new ServerMyLandRightsPlayerAccess(),
+                System::currentTimeMillis
+        );
+        MyLandRightsRuntime.bind(rightsService);
+        LOGGER.info("[Land] My-usage-rights projection bound (self-only, read-only)");
     }
 
     @Override
     public void shutdown() {
+        // Unbind the read-only projection and clear it before the authoritative
+        // land service/repository are cleared, so the C2S runtime never
+        // resolves a projection backed by a torn-down land authority.
+        MyLandRightsRuntime.unbind();
+        rightsService = null;
         if (buildHandler != null) {
             MinecraftForge.EVENT_BUS.unregister(buildHandler);
         }

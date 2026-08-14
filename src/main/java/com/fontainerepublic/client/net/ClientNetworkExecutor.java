@@ -137,6 +137,20 @@ public final class ClientNetworkExecutor {
         }
     }
 
+    /**
+     * FR-LAND-002-A §5: server-pushed self-only my-usage-rights page. The
+     * cache accepts it only when it is the correlated response for the current
+     * request (stale/lower responses are discarded); presentation-only, the
+     * server stays authoritative.
+     */
+    public static void acceptMyLandRightsPage(
+            com.fontainerepublic.common.landrights.MyLandRightsPagePacket message
+    ) {
+        ensureLogoutCleanup();
+        com.fontainerepublic.client.landrights.ClientMyLandRightsCache.instance()
+                .accept(message);
+    }
+
     private static void openTradeScreen(TradeStateSyncPacket message) {
         net.minecraft.client.Minecraft minecraft =
                 net.minecraft.client.Minecraft.getInstance();
@@ -165,6 +179,8 @@ public final class ClientNetworkExecutor {
                         com.fontainerepublic.client.mail.ClientMailCache.instance().clear();
                         com.fontainerepublic.client.landclaim.ClientLandClaimCache.instance()
                                 .clear();
+                        com.fontainerepublic.client.landrights.ClientMyLandRightsCache
+                                .instance().clear();
                     }
             );
             logoutListenerRegistered = true;
