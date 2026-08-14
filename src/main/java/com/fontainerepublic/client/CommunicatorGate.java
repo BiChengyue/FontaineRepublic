@@ -25,7 +25,7 @@ public final class CommunicatorGate {
 
     /** Chat feedback shown when the gate rejects an open request. */
     public static final String GATE_MESSAGE =
-            "Hold the Portable Communicator to use the FR client interface.";
+            "Hold the Message Water Mirror (传讯水镜) to use the FR client interface.";
 
     private CommunicatorGate() {
     }
