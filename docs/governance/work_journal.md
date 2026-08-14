@@ -903,3 +903,15 @@
 - 已派发：feat/trade-003-a（子代理 aedcddd9，隔离 worktree hub-worktrees/trade-integration），
   阶段：复制代码+注册表适配+网络接线 → 接 FR 货币/税/身份/审计 → XP 腿+界面+命令 → 构建+测试。
 - 待子代理完成后：审查 → 返修 → 合入 develop → 推送 → 更新文档。
+## 2026-08-15（早）| FR-TRADE-003-A 集成完成 + 合入
+
+- 交易集成子代理（aedcddd9）交付 commit 7ee4915：XP 腿（服务端权威）、身份
+  （SubjectRegistry）+ 审计（AuditService）接线、SecureTrade MIT 助手
+  （TradeItemValidator/Rules/Messages）、协议 v9→v10（30 消息）、客户端 XP 输入、
+  测试全绿。审查通过，合入 develop（merge 808e1b9）。
+- 未做（明确）：54 格容器式图形界面（需自定义 MenuType 会破坏无 FR 客户端进服，
+  故保留 registry-safe 的普通 TradeScreen + XP）、持久化交易账本（history 占位）。
+- 合并后 develop 全量构建通过（40 tasks）+ 专用服务器冒烟通过
+  （tmp/smoke-trade-003-20260815：协议 v10/30、Ready、ExitCode=0）。
+- 真机测试清单已更新：docs/guide/next-morning-test-sheet.md（新增 XP 交易第 8 条）。
+- develop=origin，HEAD b7e7027。剩余：Level 3 真机回归（待 Human）。
