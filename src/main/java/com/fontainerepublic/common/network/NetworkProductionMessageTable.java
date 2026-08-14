@@ -10,6 +10,14 @@ import com.fontainerepublic.common.network.display.NotificationPacket;
 import com.fontainerepublic.common.network.display.ParliamentInfoPacket;
 import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
 import com.fontainerepublic.common.network.display.TransactionNotifyPacket;
+import com.fontainerepublic.common.network.display.TradeStateSyncPacket;
+import com.fontainerepublic.common.trade.TradeAgreePacket;
+import com.fontainerepublic.common.trade.TradeCancelPacket;
+import com.fontainerepublic.common.trade.TradeMessageHandlers;
+import com.fontainerepublic.common.trade.TradeOfferItemPacket;
+import com.fontainerepublic.common.trade.TradeOfferMoneyPacket;
+import com.fontainerepublic.common.trade.TradeRequestPacket;
+import com.fontainerepublic.common.trade.TradeRespondPacket;
 import net.minecraftforge.network.NetworkDirection;
 
 import java.util.Objects;
@@ -22,11 +30,26 @@ import java.util.Optional;
  * messages (citizen card and transaction history after ID 2, institution
  * summaries after ID 4, court/land summaries after ID 6, per
  * FR-CLIENT-001-IMPL-B2 / FR-CLIENT-001-IMPL-B3a / FR-CLIENT-001-IMPL-B3b).
+ * FR-TRADE-001-A appends the first C2S entries (IDs 9-14) and the trade
+ * snapshot (ID 15); every C2S entry carries an explicit rate policy.
  */
 public final class NetworkProductionMessageTable {
 
     /** Total number of messages expected by the current protocol revision. */
-    public static final int EXPECTED_MESSAGE_COUNT = 9;
+    public static final int EXPECTED_MESSAGE_COUNT = 16;
+
+    // Per-message C2S rate policies (FR-NET-001 rate limiting; bounded
+    // interactive abuse control, not business authority).
+    private static final RateLimitPolicy TRADE_REQUEST_POLICY =
+            new RateLimitPolicy(5, 1, 2_000_000_000L, 500_000_000L);
+    private static final RateLimitPolicy TRADE_RESPOND_POLICY =
+            new RateLimitPolicy(5, 1, 2_000_000_000L, 500_000_000L);
+    private static final RateLimitPolicy TRADE_OFFER_POLICY =
+            new RateLimitPolicy(10, 2, 1_000_000_000L, 200_000_000L);
+    private static final RateLimitPolicy TRADE_AGREE_POLICY =
+            new RateLimitPolicy(10, 2, 1_000_000_000L, 200_000_000L);
+    private static final RateLimitPolicy TRADE_CANCEL_POLICY =
+            new RateLimitPolicy(10, 2, 1_000_000_000L, 200_000_000L);
 
     private NetworkProductionMessageTable() {
     }
@@ -96,6 +119,82 @@ public final class NetworkProductionMessageTable {
                 LandInfoPacket::decode,
                 DisplayMessageHandlers.landInfo()
         ));
+        // FR-TRADE-001-A: C2S trade ledger (IDs 9-14, each with a rate
+        // policy) and the per-viewer S2C snapshot (ID 15).
+        registration.register(c2sSpec(
+                9,
+                TradeRequestPacket.class,
+                TradeRequestPacket::encode,
+                TradeRequestPacket::decode,
+                TradeMessageHandlers.request(),
+                TRADE_REQUEST_POLICY
+        ));
+        registration.register(c2sSpec(
+                10,
+                TradeRespondPacket.class,
+                TradeRespondPacket::encode,
+                TradeRespondPacket::decode,
+                TradeMessageHandlers.respond(),
+                TRADE_RESPOND_POLICY
+        ));
+        registration.register(c2sSpec(
+                11,
+                TradeOfferMoneyPacket.class,
+                TradeOfferMoneyPacket::encode,
+                TradeOfferMoneyPacket::decode,
+                TradeMessageHandlers.offerMoney(),
+                TRADE_OFFER_POLICY
+        ));
+        registration.register(c2sSpec(
+                12,
+                TradeOfferItemPacket.class,
+                TradeOfferItemPacket::encode,
+                TradeOfferItemPacket::decode,
+                TradeMessageHandlers.offerItem(),
+                TRADE_OFFER_POLICY
+        ));
+        registration.register(c2sSpec(
+                13,
+                TradeAgreePacket.class,
+                TradeAgreePacket::encode,
+                TradeAgreePacket::decode,
+                TradeMessageHandlers.agree(),
+                TRADE_AGREE_POLICY
+        ));
+        registration.register(c2sSpec(
+                14,
+                TradeCancelPacket.class,
+                TradeCancelPacket::encode,
+                TradeCancelPacket::decode,
+                TradeMessageHandlers.cancel(),
+                TRADE_CANCEL_POLICY
+        ));
+        registration.register(displaySpec(
+                15,
+                TradeStateSyncPacket.class,
+                TradeStateSyncPacket::encode,
+                TradeStateSyncPacket::decode,
+                DisplayMessageHandlers.tradeStateSync()
+        ));
+    }
+
+    private static <MSG> NetworkMessageSpec<MSG> c2sSpec(
+            int id,
+            Class<MSG> messageClass,
+            java.util.function.BiConsumer<MSG, net.minecraft.network.FriendlyByteBuf> encoder,
+            java.util.function.Function<net.minecraft.network.FriendlyByteBuf, MSG> decoder,
+            NetworkMessageHandler<MSG> handler,
+            RateLimitPolicy rateLimitPolicy
+    ) {
+        return new NetworkMessageSpec<>(
+                id,
+                messageClass,
+                NetworkDirection.PLAY_TO_SERVER,
+                encoder,
+                decoder,
+                handler,
+                Optional.of(rateLimitPolicy)
+        );
     }
 
     private static <MSG> NetworkMessageSpec<MSG> displaySpec(

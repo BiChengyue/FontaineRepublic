@@ -9,6 +9,8 @@ import com.fontainerepublic.common.network.display.NotificationPacket;
 import com.fontainerepublic.common.network.display.ParliamentInfoPacket;
 import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
 import com.fontainerepublic.common.network.display.TransactionNotifyPacket;
+import com.fontainerepublic.common.network.display.TradeStateSyncPacket;
+import com.fontainerepublic.client.trade.ClientTradeCache;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
 import org.slf4j.Logger;
@@ -77,6 +79,33 @@ public final class ClientNetworkExecutor {
         ClientPresentationCache.instance().setLand(message);
     }
 
+    /**
+     * FR-TRADE-001-A §5: server-pushed per-viewer trade snapshot. The cache
+     * is display-only; a REQUESTED snapshot opens the trade screen so the
+     * invited player can accept or refuse (the server stays authoritative).
+     */
+    public static void acceptTradeStateSync(TradeStateSyncPacket message) {
+        ensureLogoutCleanup();
+        ClientTradeCache.instance().setSnapshot(message);
+        ClientTradeCache.instance().clearOwnRequestInFlight();
+        if (message.phase() == TradeStateSyncPacket.PHASE_REQUESTED) {
+            openTradeScreen(message);
+        }
+    }
+
+    private static void openTradeScreen(TradeStateSyncPacket message) {
+        net.minecraft.client.Minecraft minecraft =
+                net.minecraft.client.Minecraft.getInstance();
+        if (minecraft.player == null) {
+            return;
+        }
+        minecraft.execute(() -> {
+            if (minecraft.screen == null) {
+                minecraft.setScreen(new com.fontainerepublic.client.gui.trade.TradeScreen());
+            }
+        });
+    }
+
     private static void ensureLogoutCleanup() {
         if (logoutListenerRegistered) {
             return;
@@ -86,8 +115,10 @@ public final class ClientNetworkExecutor {
                 return;
             }
             MinecraftForge.EVENT_BUS.addListener(
-                    (ClientPlayerNetworkEvent.LoggingOut event) ->
-                            ClientPresentationCache.instance().clear()
+                    (ClientPlayerNetworkEvent.LoggingOut event) -> {
+                        ClientPresentationCache.instance().clear();
+                        ClientTradeCache.instance().clear();
+                    }
             );
             logoutListenerRegistered = true;
             LOGGER.debug(

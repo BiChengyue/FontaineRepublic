@@ -21,6 +21,8 @@ import java.util.function.Supplier;
 public final class NetworkBootstrap {
     private static final Logger LOGGER = LogUtils.getLogger();
 
+    private static volatile NetworkBootstrap instance;
+
     private final SimpleChannel channel;
     private final NetworkMessageRegistrar registrar;
     private final ServerNetworkDispatcher dispatcher;
@@ -40,6 +42,16 @@ public final class NetworkBootstrap {
                                 NetworkDirection.PLAY_TO_CLIENT
                         )
         );
+        instance = this;
+    }
+
+    /** The mod-lifetime bootstrap, available after the mod constructor. */
+    public static NetworkBootstrap instance() {
+        NetworkBootstrap current = instance;
+        if (current == null) {
+            throw new IllegalStateException("NetworkBootstrap is not constructed yet");
+        }
+        return current;
     }
 
     public NetworkMessageRegistration registrationSurface() {
@@ -85,6 +97,22 @@ public final class NetworkBootstrap {
             );
         }
         return sendService;
+    }
+
+    /**
+     * Client-side C2S send surface (FR-TRADE-001-A §3: the C2S ledger entries
+     * are the first client-to-server messages of the mod). Available only
+     * after the message-table freeze; sending on a dedicated server is a
+     * no-op (no local player, Forge drops it).
+     */
+    public void sendToServer(Object message) {
+        Objects.requireNonNull(message, "message");
+        if (!registrar.isFrozen()) {
+            throw new IllegalStateException(
+                    "C2S send is unavailable before message-table freeze"
+            );
+        }
+        channel.sendToServer(message);
     }
 
     @SuppressWarnings("unchecked")

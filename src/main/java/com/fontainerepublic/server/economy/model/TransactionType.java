@@ -37,5 +37,15 @@ public enum TransactionType {
      * the reclaimed amount. Only reachable through a confirmed FR-EMG
      * emergency envelope; never a normal official withdrawal.
      */
-    RECLAIM
+    RECLAIM,
+
+    /**
+     * Trade settlement tax (FR-TRADE-001-A §6.1): personal account to the
+     * treasury, {@code to == null}. Created only by the communicator trade
+     * settlement, which moves the tax from each paying player to the
+     * treasury in the same atomic snapshot as the exchange; total supply
+     * {@code = sum(accounts) + treasury} is conserved exactly (the tax is a
+     * position change, never money creation or destruction).
+     */
+    TAX
 }

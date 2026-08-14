@@ -16,6 +16,7 @@ import com.fontainerepublic.server.command.registration.CommandContributionSpec;
 import com.fontainerepublic.server.command.registration.CommandRegistrationException;
 import com.fontainerepublic.server.economy.api.EconomyPage;
 import com.fontainerepublic.server.economy.api.EconomyService;
+import com.fontainerepublic.server.economy.api.TradeSettlementReceipt;
 import com.fontainerepublic.server.economy.api.TransferReceipt;
 import com.fontainerepublic.server.economy.model.EconomyAccount;
 import com.fontainerepublic.server.economy.model.EconomyTransaction;
@@ -1125,6 +1126,18 @@ public final class CommandFoundationTestMain {
         }
 
         @Override
+        public TradeSettlementReceipt executeTradeSettlement(
+                SubjectId a,
+                SubjectId b,
+                long aOffered,
+                long bOffered,
+                int taxRatePercent,
+                String memo
+        ) {
+            throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
         public List<NotificationSummary> pendingNotifications(SubjectId subjectId) {
             return List.of();
         }
@@ -1293,6 +1306,18 @@ public final class CommandFoundationTestMain {
             throw new UnsupportedOperationException(
                     "command layer must transfer by resolved SubjectId"
             );
+        }
+
+        @Override
+        public TradeSettlementReceipt executeTradeSettlement(
+                SubjectId a,
+                SubjectId b,
+                long aOffered,
+                long bOffered,
+                int taxRatePercent,
+                String memo
+        ) {
+            throw new UnsupportedOperationException("not used in command tests");
         }
 
         @Override

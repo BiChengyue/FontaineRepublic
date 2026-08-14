@@ -117,17 +117,18 @@ public final class NetworkFoundationTestMain {
     }
 
     private static void testProtocolPredicates() {
-        check(NetworkProtocol.clientAccepts("5"), "Client must accept exact protocol");
-        check(!NetworkProtocol.clientAccepts("4"), "Client must reject the previous protocol");
+        check(NetworkProtocol.clientAccepts("6"), "Client must accept exact protocol");
+        check(!NetworkProtocol.clientAccepts("5"), "Client must reject the previous protocol");
+        check(!NetworkProtocol.clientAccepts("4"), "Client must reject the old protocol");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ABSENT.version()),
                 "Client must reject an absent server channel");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Client must reject ACCEPTVANILLA");
 
-        check(NetworkProtocol.serverAccepts("5"), "Server must accept exact protocol");
+        check(NetworkProtocol.serverAccepts("6"), "Server must accept exact protocol");
         check(NetworkProtocol.serverAccepts(NetworkRegistry.ABSENT.version()),
                 "Server must accept ABSENT.version()");
-        check(!NetworkProtocol.serverAccepts("4"),
+        check(!NetworkProtocol.serverAccepts("5"),
                 "Server must reject the previous protocol");
         check(!NetworkProtocol.serverAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Server must reject ACCEPTVANILLA");
@@ -289,20 +290,30 @@ public final class NetworkFoundationTestMain {
         int count = registrar.freeze();
         check(count == NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT,
                 "Production message table must register the expected ledger count");
-        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 9,
-                "Protocol v5 expects exactly nine display messages");
+        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 16,
+                "Protocol v6 expects exactly sixteen ledger messages");
         check(registrar.isFrozen(), "Production message table must be frozen");
 
         List<NetworkMessageRegistrar.LedgerEntry> ledger = registrar.ledger();
         check(ledger.stream().map(NetworkMessageRegistrar.LedgerEntry::id).toList()
-                        .equals(List.of(0, 1, 2, 3, 4, 5, 6, 7, 8)),
-                "Ledger IDs are exactly 0..8 in ascending order");
+                        .equals(List.of(
+                                0, 1, 2, 3, 4, 5, 6, 7, 8,
+                                9, 10, 11, 12, 13, 14, 15
+                        )),
+                "Ledger IDs are exactly 0..15 in ascending order");
         check(ledger.stream().map(NetworkMessageRegistrar.LedgerEntry::messageClassName)
-                        .distinct().count() == 9,
+                        .distinct().count() == 16,
                 "Ledger message classes are unique");
         for (NetworkMessageRegistrar.LedgerEntry entry : ledger) {
-            check(entry.direction() == NetworkDirection.PLAY_TO_CLIENT,
-                    "Every display message is PLAY_TO_CLIENT: ID " + entry.id());
+            if (entry.id() >= 9 && entry.id() <= 14) {
+                // FR-TRADE-001-A: the first C2S entries, each registered with
+                // an explicit rate policy (enforced by the registrar).
+                check(entry.direction() == NetworkDirection.PLAY_TO_SERVER,
+                        "Trade C2S messages are PLAY_TO_SERVER: ID " + entry.id());
+            } else {
+                check(entry.direction() == NetworkDirection.PLAY_TO_CLIENT,
+                        "Display messages are PLAY_TO_CLIENT: ID " + entry.id());
+            }
         }
     }
 

@@ -5,6 +5,7 @@ import com.fontainerepublic.core.DurableCommitResult;
 import com.fontainerepublic.core.DurableCommitStatus;
 import com.fontainerepublic.server.economy.model.EconomyEmergencyReceipt;
 import com.fontainerepublic.server.economy.api.TransferReceipt;
+import com.fontainerepublic.server.economy.api.TradeSettlementReceipt;
 import com.fontainerepublic.server.economy.model.EconomyAccount;
 import com.fontainerepublic.server.economy.model.EconomyTransaction;
 import com.fontainerepublic.server.economy.model.NotificationSummary;
@@ -462,6 +463,252 @@ public final class EconomyRepository {
                 memo,
                 true
         );
+    }
+
+    /**
+     * Atomic multi-leg trade settlement of the communicator trade module
+     * (FR-TRADE-001-A §6.1): one replacement snapshot completes
+     * {@code a -> b} (a's offer), {@code b -> a} (b's offer, when positive)
+     * and each paying player's tax to the treasury in the same unit. The tax
+     * is {@code floor(offer * taxRatePercent / 100)}, charged only on paying
+     * sides; a payer whose balance is below {@code offer + tax} rejects the
+     * whole settlement (fail closed). No pending notification and no
+     * registry/cooldown coupling (the trade service enforces the
+     * player-facing authority rules at its own boundary); total supply
+     * {@code = sum(accounts) + treasury} is conserved exactly. The
+     * implementation enforces only amount/rate bounds, source existence,
+     * balance, capacity and revision staleness; nothing is published on
+     * failure.
+     */
+    public TradeSettlementReceipt executeTradeSettlement(
+            SubjectId a,
+            SubjectId b,
+            long aOffered,
+            long bOffered,
+            int taxRatePercent,
+            String memo,
+            long expectedStoreRevision,
+            long timestamp
+    ) {
+        requireOwnerThread();
+        Objects.requireNonNull(a, "a");
+        Objects.requireNonNull(b, "b");
+        if (a.equals(b)) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_SELF_TRANSFER,
+                    "A trade settlement cannot be a self settlement"
+            );
+        }
+        if (aOffered < 0 || bOffered < 0) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "Trade offers must not be negative"
+            );
+        }
+        if (taxRatePercent < 0 || taxRatePercent > 100) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "Trade tax rate must be within [0, 100]"
+            );
+        }
+        if (expectedStoreRevision != storeRevision) {
+            throw stale("store");
+        }
+        if (aOffered == 0 && bOffered == 0 && taxRatePercent == 0) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "A trade settlement must move at least one offer or tax"
+            );
+        }
+
+        long aTax = taxOf(aOffered, taxRatePercent);
+        long bTax = taxOf(bOffered, taxRatePercent);
+        EconomyAccount accountA = requireSettlementAccount(a, aOffered + aTax);
+        EconomyAccount accountB = requireSettlementAccount(b, bOffered + bTax);
+
+        long newBalanceA;
+        try {
+            newBalanceA = Math.subtractExact(
+                    Math.subtractExact(
+                            Math.addExact(accountA.balance(), bOffered),
+                            aOffered
+                    ),
+                    aTax
+            );
+        } catch (ArithmeticException overflow) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Settlement balance of " + a + " would overflow"
+            );
+        }
+        long newBalanceB;
+        try {
+            newBalanceB = Math.subtractExact(
+                    Math.subtractExact(
+                            Math.addExact(accountB.balance(), aOffered),
+                            bOffered
+                    ),
+                    bTax
+            );
+        } catch (ArithmeticException overflow) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Settlement balance of " + b + " would overflow"
+            );
+        }
+        if (newBalanceA < 0 || newBalanceB < 0) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_INSUFFICIENT_FUNDS,
+                    "Settlement balances must not become negative"
+            );
+        }
+        if (newBalanceA > limits.maxBalance() || newBalanceB > limits.maxBalance()) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Settlement balance would exceed the maximum of "
+                            + limits.maxBalance()
+            );
+        }
+        long newTreasury;
+        try {
+            newTreasury = Math.addExact(treasuryBalance, aTax + bTax);
+        } catch (ArithmeticException overflow) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Treasury balance would overflow"
+            );
+        }
+        if (newTreasury > limits.maxBalance()) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Treasury balance would exceed the maximum of "
+                            + limits.maxBalance()
+            );
+        }
+
+        int legs = legCount(aOffered) + legCount(bOffered)
+                + legCount(aTax) + legCount(bTax);
+        if (nextTransactionId == Long.MAX_VALUE || nextTransactionId + legs - 1 < nextTransactionId) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_CAPACITY_EXCEEDED,
+                    "Economy transaction id space exhausted"
+            );
+        }
+        requireStoreRevisionSpace();
+
+        long newId = nextTransactionId;
+        List<Long> createdIds = new ArrayList<>(legs);
+        EconomyAccount newAccountA = accountA.withBalance(newBalanceA, newId);
+        EconomyAccount newAccountB = accountB.withBalance(newBalanceB, newId);
+        LinkedHashMap<SubjectId, EconomyAccount> nextAccounts =
+                new LinkedHashMap<>(accounts);
+        nextAccounts.put(a, newAccountA);
+        nextAccounts.put(b, newAccountB);
+
+        LinkedHashMap<Long, EconomyTransaction> nextTransactions =
+                new LinkedHashMap<>(transactions);
+        appendSettlementLeg(
+                nextTransactions, createdIds, newId++, a, b, aOffered,
+                TransactionType.TRANSFER, timestamp, memo
+        );
+        appendSettlementLeg(
+                nextTransactions, createdIds, newId++, b, a, bOffered,
+                TransactionType.TRANSFER, timestamp, memo
+        );
+        appendSettlementLeg(
+                nextTransactions, createdIds, newId++, a, null, aTax,
+                TransactionType.TAX, timestamp, memo
+        );
+        appendSettlementLeg(
+                nextTransactions, createdIds, newId++, b, null, bTax,
+                TransactionType.TAX, timestamp, memo
+        );
+        while (nextTransactions.size() > limits.maxTransactions()) {
+            Long oldest = nextTransactions.keySet().iterator().next();
+            nextTransactions.remove(oldest);
+        }
+
+        commitAndPublish(buildSnapshot(
+                storeRevision + 1,
+                newId,
+                newTreasury,
+                nextAccounts,
+                nextTransactions,
+                pendingNotifications,
+                receiptsCopy()
+        ));
+        return new TradeSettlementReceipt(
+                timestamp,
+                a,
+                b,
+                aOffered,
+                bOffered,
+                aTax,
+                bTax,
+                createdIds,
+                true
+        );
+    }
+
+    private EconomyAccount requireSettlementAccount(SubjectId subjectId, long required) {
+        EconomyAccount account = accounts.get(subjectId);
+        if (account == null) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_NO_ACCOUNT,
+                    "No economy account for settlement subject " + subjectId
+            );
+        }
+        if (account.balance() < required) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_INSUFFICIENT_FUNDS,
+                    "Insufficient settlement balance for subject " + subjectId
+                            + " (offer + tax = " + required + ")"
+            );
+        }
+        return account;
+    }
+
+    /** {@code floor(offer * taxRatePercent / 100)} without long overflow. */
+    private static long taxOf(long offer, int taxRatePercent) {
+        if (offer <= 0 || taxRatePercent <= 0) {
+            return 0L;
+        }
+        return (offer / 100L) * taxRatePercent
+                + (offer % 100L) * taxRatePercent / 100L;
+    }
+
+    private static int legCount(long amount) {
+        return amount > 0 ? 1 : 0;
+    }
+
+    private void appendSettlementLeg(
+            LinkedHashMap<Long, EconomyTransaction> nextTransactions,
+            List<Long> createdIds,
+            long id,
+            SubjectId from,
+            SubjectId to,
+            long amount,
+            TransactionType type,
+            long timestamp,
+            String memo
+    ) {
+        if (amount <= 0) {
+            return;
+        }
+        nextTransactions.put(
+                id,
+                new EconomyTransaction(
+                        EconomyTransaction.CURRENT_SCHEMA_VERSION,
+                        id,
+                        timestamp,
+                        from,
+                        to,
+                        amount,
+                        type,
+                        memo
+                )
+        );
+        createdIds.add(id);
     }
 
     /**

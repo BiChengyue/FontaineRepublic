@@ -5,6 +5,7 @@ import com.fontainerepublic.server.economy.api.EconomyPage;
 import com.fontainerepublic.server.economy.api.EconomyService;
 import com.fontainerepublic.server.economy.api.SubjectDirectory;
 import com.fontainerepublic.server.economy.api.TransferReceipt;
+import com.fontainerepublic.server.economy.api.TradeSettlementReceipt;
 import com.fontainerepublic.server.economy.model.EconomyAccount;
 import com.fontainerepublic.server.economy.model.EconomyTransaction;
 import com.fontainerepublic.server.economy.model.NotificationSummary;
@@ -235,6 +236,61 @@ public final class DefaultEconomyService implements EconomyService {
             );
         }
         return transfer(from, to, amount, memo);
+    }
+
+    @Override
+    public TradeSettlementReceipt executeTradeSettlement(
+            SubjectId a,
+            SubjectId b,
+            long aOffered,
+            long bOffered,
+            int taxRatePercent,
+            String memo
+    ) {
+        Objects.requireNonNull(a, "a");
+        Objects.requireNonNull(b, "b");
+        if (a.equals(b)) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_SELF_TRANSFER,
+                    "A trade settlement cannot be a self settlement"
+            );
+        }
+        if (aOffered < 0 || bOffered < 0) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "Trade offers must not be negative"
+            );
+        }
+        if (aOffered > limits.maxBalance() || bOffered > limits.maxBalance()) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "Trade offers must be at most " + limits.maxBalance()
+            );
+        }
+        if (taxRatePercent < 0 || taxRatePercent > 100) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "Trade tax rate must be within [0, 100]"
+            );
+        }
+        String normalized = normalizeMemo(memo);
+        long timestamp = now();
+        // Deliberately no registry/active/frozen/cooldown gate here: this is
+        // the system settlement channel of the trade module. The trade
+        // service enforces the player-facing authority rules (online
+        // parties, communicator gate, active subjects, frozen accounts) at
+        // its own boundary; the repository enforces the offer + tax balance
+        // rule and fail-closes the whole settlement on any violation.
+        return repository.executeTradeSettlement(
+                a,
+                b,
+                aOffered,
+                bOffered,
+                taxRatePercent,
+                normalized,
+                repository.storeRevision(),
+                timestamp
+        );
     }
 
     @Override

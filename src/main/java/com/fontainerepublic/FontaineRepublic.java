@@ -41,6 +41,8 @@ import com.fontainerepublic.server.parliament.api.ParliamentService;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
+import com.fontainerepublic.server.trade.TradeModule;
+import com.fontainerepublic.server.trade.api.TradeService;
 import com.fontainerepublic.server.registry.api.SubjectRegistryService;
 import com.mojang.logging.LogUtils;
 import net.minecraft.server.MinecraftServer;
@@ -133,6 +135,7 @@ public class FontaineRepublic {
         ParliamentModule.register(coreManager.moduleRegistry());
         JusticeModule.register(coreManager.moduleRegistry());
         EmergencyModule.register(coreManager.moduleRegistry());
+        TradeModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
             TestModule.registerAll(coreManager.moduleRegistry());
             LOGGER.warn(
@@ -188,6 +191,7 @@ public class FontaineRepublic {
         bindGovernmentServices();
         bindParliamentServices();
         bindJusticeServices();
+        bindTradeServices();
         if (runtimeValidationEnabled) {
             TestModule.logAvailability(coreManager);
         }
@@ -434,6 +438,10 @@ public class FontaineRepublic {
     }
 
     private void onServerStopping(ServerStoppingEvent event) {
+        // FR-TRADE-001: drop every live trade session before the durable
+        // data manager shuts down — the intent model escrows nothing, so
+        // cancelling is a pure in-memory discard (no refunds needed).
+        tradeService().ifPresent(TradeService::shutdown);
         DataManager.beginShutdown();
         DataManager.saveAll();
         coreManager.stopRuntime();
@@ -502,6 +510,19 @@ public class FontaineRepublic {
                         player.getUUID()
                 )
         );
+        // FR-TRADE-001: cancel every trade session of the departing player.
+        tradeService().ifPresent(service -> {
+            try {
+                service.playerDisconnected(player.getUUID());
+            } catch (RuntimeException failed) {
+                LOGGER.warn(
+                        "[FontaineRepublic] Trade logout cancellation failed for {} ({}): {}",
+                        player.getGameProfile().getName(),
+                        player.getUUID(),
+                        failed.getMessage()
+                );
+            }
+        });
     }
 
     private java.util.Optional<PlayerDataService> playerDataService() {
@@ -556,6 +577,33 @@ public class FontaineRepublic {
                 .filter(JusticeModule.class::isInstance)
                 .map(JusticeModule.class::cast)
                 .map(JusticeModule::service);
+    }
+
+    /**
+     * Binds the authoritative economy and network send services to the trade
+     * module after the runtime start (dependency order is guaranteed by
+     * module resolution, but the service references are only resolvable once
+     * containers exist).
+     */
+    private void bindTradeServices() {
+        EconomyService economy = economyService().orElse(null);
+        coreManager.getRuntimeContainer(TradeModule.MODULE_ID)
+                .flatMap(container -> container.instance())
+                .filter(TradeModule.class::isInstance)
+                .map(TradeModule.class::cast)
+                .ifPresent(module -> module.bindServices(
+                        economy,
+                        networkBootstrap.sendService()
+                ));
+    }
+
+    private java.util.Optional<TradeService> tradeService() {
+        return coreManager.getRuntimeContainer(TradeModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(TradeModule.class::isInstance)
+                .map(TradeModule.class::cast)
+                .map(TradeModule::service);
     }
 
     /**

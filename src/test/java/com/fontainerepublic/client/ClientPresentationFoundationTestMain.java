@@ -8,6 +8,7 @@ import com.fontainerepublic.common.network.display.TransactionNotifyPacket;
 import com.fontainerepublic.server.economy.api.EconomyPage;
 import com.fontainerepublic.server.economy.api.EconomyService;
 import com.fontainerepublic.server.economy.api.TransferReceipt;
+import com.fontainerepublic.server.economy.api.TradeSettlementReceipt;
 import com.fontainerepublic.server.economy.model.EconomyAccount;
 import com.fontainerepublic.server.economy.model.EconomyTransaction;
 import com.fontainerepublic.server.economy.model.NotificationSummary;
@@ -76,17 +77,17 @@ public final class ClientPresentationFoundationTestMain {
     // ------------------------------------------------------------------
 
     private static void testProtocolPredicates() {
-        check(NetworkProtocol.VERSION.equals("5"), "Protocol version is 5");
-        check(NetworkProtocol.clientAccepts("5"), "Client accepts exact v5");
-        check(!NetworkProtocol.clientAccepts("4"), "Client rejects v4");
+        check(NetworkProtocol.VERSION.equals("6"), "Protocol version is 6");
+        check(NetworkProtocol.clientAccepts("6"), "Client accepts exact v6");
+        check(!NetworkProtocol.clientAccepts("5"), "Client rejects v5");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ABSENT.version()),
                 "Client rejects an absent server channel");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Client rejects ACCEPTVANILLA");
-        check(NetworkProtocol.serverAccepts("5"), "Server accepts exact v5");
+        check(NetworkProtocol.serverAccepts("6"), "Server accepts exact v6");
         check(NetworkProtocol.serverAccepts(NetworkRegistry.ABSENT.version()),
                 "Server accepts ABSENT.version()");
-        check(!NetworkProtocol.serverAccepts("4"), "Server rejects v4");
+        check(!NetworkProtocol.serverAccepts("5"), "Server rejects v5");
         check(!NetworkProtocol.serverAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Server rejects ACCEPTVANILLA");
     }
@@ -219,8 +220,8 @@ public final class ClientPresentationFoundationTestMain {
                 if (file.getFileName().toString().equals("DisplayMessageHandlers.java")) {
                     int references = count(source, "com.fontainerepublic.client.net");
                     int unsafeCalls = count(source, "DistExecutor.unsafeRunWhenOn");
-                    check(references == 9 && unsafeCalls == 9,
-                            "client executor referenced exactly nine times, "
+                    check(references == 10 && unsafeCalls == 10,
+                            "client executor referenced exactly ten times, "
                                     + "each inside a DistExecutor.unsafeRunWhenOn supplier");
                     check(!source.contains("DistExecutor.safeRunWhenOn"),
                             "handlers use unsafeRunWhenOn (Forge safe-referent "
@@ -477,6 +478,28 @@ public final class ClientPresentationFoundationTestMain {
         public TransferReceipt transferByPlayer(UUID fromPlayerId, UUID toPlayerId,
                                                 long amount, String memo) {
             return transfer(TARGET, TARGET, amount, memo);
+        }
+
+        @Override
+        public TradeSettlementReceipt executeTradeSettlement(
+                SubjectId a,
+                SubjectId b,
+                long aOffered,
+                long bOffered,
+                int taxRatePercent,
+                String memo
+        ) {
+            return new TradeSettlementReceipt(
+                    2_000L,
+                    a,
+                    b,
+                    aOffered,
+                    bOffered,
+                    0L,
+                    0L,
+                    List.of(),
+                    true
+            );
         }
 
         @Override

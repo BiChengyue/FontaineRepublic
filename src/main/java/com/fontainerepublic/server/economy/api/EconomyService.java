@@ -98,6 +98,34 @@ public interface EconomyService {
             String memo
     );
 
+    /**
+     * Atomic multi-leg trade settlement for the communicator trade module
+     * (FR-TRADE-001-A §6.1): one replacement snapshot completes
+     * {@code a -> b} (a's offer), {@code b -> a} (b's offer, when positive)
+     * and each paying player's tax to the treasury in the same unit. The tax
+     * is {@code floor(offer * taxRatePercent / 100)} and is charged only on
+     * paying sides; a payer whose balance is below {@code offer + tax}
+     * rejects the whole settlement (fail closed). Total supply is conserved
+     * exactly and no pending notification / cooldown is created.
+     *
+     * <p>This is a dedicated authoritative channel of the trade module: the
+     * trade service enforces the player-facing authority rules (online
+     * parties, communicator gate, active subjects, frozen accounts) at its
+     * own boundary; the implementation enforces only amount/rate bounds,
+     * source existence, balance {@code >= offer + tax}, capacity and revision
+     * staleness. {@code taxRatePercent} must be within {@code [0, 100]}
+     * ({@code 0} disables the tax); offers may be {@code 0} for a pure item
+     * exchange.</p>
+     */
+    TradeSettlementReceipt executeTradeSettlement(
+            SubjectId a,
+            SubjectId b,
+            long aOffered,
+            long bOffered,
+            int taxRatePercent,
+            String memo
+    );
+
     /** Bounded pending incoming-transfer summaries for the subject. */
     List<NotificationSummary> pendingNotifications(SubjectId subjectId);
 

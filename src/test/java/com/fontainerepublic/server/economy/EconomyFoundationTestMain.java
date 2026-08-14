@@ -816,15 +816,16 @@ public final class EconomyFoundationTestMain {
                         TransactionType.DEPOSIT,
                         TransactionType.WITHDRAWAL,
                         TransactionType.ISSUE,
-                        TransactionType.RECLAIM)),
+                        TransactionType.RECLAIM,
+                        TransactionType.TAX)),
                 "TransactionType exposes exactly the approved player, official, "
-                        + "and emergency (ISSUE/RECLAIM) types");
+                        + "emergency (ISSUE/RECLAIM) and trade-settlement tax (TAX) types");
 
         for (Class<?> type : List.of(EconomyService.class, EconomyModule.class)) {
             for (Method method : type.getDeclaredMethods()) {
                 String name = method.getName().toLowerCase(java.util.Locale.ROOT);
                 for (String forbidden : List.of(
-                        "top", "leaderboard", "atm", "interest", "tax",
+                        "top", "leaderboard", "atm", "interest",
                         "cash", "gui", "screen", "hud", "packet", "c2s",
                         "setbalance"
                 )) {
@@ -856,7 +857,7 @@ public final class EconomyFoundationTestMain {
         }
         String codeOnly = stripComments(source.toString());
         for (String forbidden : List.of(
-                "top", "leaderboard", "atm", "interest", "tax", "cash",
+                "top", "leaderboard", "atm", "interest", "cash",
                 "gui", "screen", "hud", "packet", "NetworkMessage",
                 "SimpleChannel", "c2s", "setBalance",
                 "setOp", "isOp", "getPermission"
