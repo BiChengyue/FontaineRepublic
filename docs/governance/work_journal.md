@@ -891,3 +891,15 @@
 - develop 与 origin 已同步（HEAD 6d841cc）。
 - 剩余（后续）：Stage B 菜单/XP 腿/tax 报价/TradeJournal、Level 3 真机回归。
 - 明日交付给用户：docs/guide/next-morning-test-sheet.md（真机测试清单）。
+## 2026-08-15（早）| 交易改走 Secure Trade 直接集成 + 派发
+
+- Human 新方向：交易功能**直接复用 Secure Trade 模组的 UI/逻辑**，在其上加 FR
+  货币/税/身份/审计，XP 直接接入——不再从零重做 UI/逻辑（取代 FR-TRADE-002-A 的
+  受控适配路线）。
+- 关键发现：Secure Trade 注册了自定义 MenuType(trade_menu) + SoundEvent，二者是
+  同步注册表，原样集成会重演「无 FR 客户端进不了服」的发布阻断。因此集成约束：
+  容器改用原版 MenuType.GENERIC_9x6（54 格）+ 共享 SimpleContainer，去掉自定义音效。
+- 设计说明：docs/architecture/fr-trade-003-a-secure-trade-integration.md。
+- 已派发：feat/trade-003-a（子代理 aedcddd9，隔离 worktree hub-worktrees/trade-integration），
+  阶段：复制代码+注册表适配+网络接线 → 接 FR 货币/税/身份/审计 → XP 腿+界面+命令 → 构建+测试。
+- 待子代理完成后：审查 → 返修 → 合入 develop → 推送 → 更新文档。

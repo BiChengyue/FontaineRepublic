@@ -139,13 +139,16 @@ ExitCode=0, protocol v9/29 frozen, and the legacy id remapped cleanly.
 Next:
 
 Remaining before the next release candidate:
-1. fix the communicator right-click-air offhand conflict (dispatched,
-   fix/offhand-conflict) and the two deprecation warnings;
-2. replace the current trade session/UI path per FR-TRADE-002-A Secure Trade
-   controlled adaptation (dispatched, feat/trade-002-a);
+1. (done) communicator right-click-air offhand conflict + deprecation warnings
+   (merge `5c9e12a`).
+2. trade: FR-TRADE-003-A Secure Trade direct integration merged (`808e1b9`) —
+   XP legs, identity, audit, protocol v10/30, SecureTrade MIT helpers. Deferred:
+   the container-backed 54-slot menu (needs a custom MenuType that would break
+   no-FR-client join, so the registry-safe plain TradeScreen + XP is used) and
+   the durable trade journal (/fr trade history placeholder).
 3. re-run real-machine Level 3 regression with Human (mail restart persistence,
    no-FR client join, /fr communicator issue + restart persistence, offhand
-   right-click, crash-window/RCON/old-protocol rejection).
+   right-click, XP trade, crash-window/RCON/old-protocol rejection).
 
 Always read this section before starting work.
 
