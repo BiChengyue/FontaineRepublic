@@ -44,12 +44,24 @@ public final class MoneyScreen extends Screen {
     private Button previousPageButton;
     private Button nextPageButton;
 
+    private final String prefilledTarget;
     private int flowPage;
     private String statusMessage = "";
     private int statusColor = FrGuiUtil.COLOR_MUTED;
 
     public MoneyScreen() {
+        this(null);
+    }
+
+    /**
+     * Opens the money screen with the transfer target pre-filled
+     * (FR-ITEM-001-A §2.3: right-click a player while holding the
+     * communicator). The value is a display pre-fill only; the server
+     * re-resolves the target on submit.
+     */
+    public MoneyScreen(String prefilledTarget) {
         super(Component.literal("Money"));
+        this.prefilledTarget = prefilledTarget;
     }
 
     @Override
@@ -60,6 +72,9 @@ public final class MoneyScreen extends Screen {
                 Component.literal("Target (name / UUID / registry number)")
         ));
         targetBox.setMaxLength(TransferFormComposer.MAX_TARGET);
+        if (prefilledTarget != null) {
+            targetBox.setValue(prefilledTarget);
+        }
         amountBox = addRenderableWidget(new EditBox(
                 this.font, FORM_X + 4, FORM_Y + 36, fieldWidth, 16,
                 Component.literal("Amount")

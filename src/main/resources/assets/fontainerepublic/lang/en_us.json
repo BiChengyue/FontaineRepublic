@@ -1,6 +1,7 @@
 {
     "mod.fontainerepublic.name": "FontaineRepublic",
     "mod.fontainerepublic.description": "Nation Simulation / RPG Server Core Mod",
+    "item.fontainerepublic.communicator": "Portable Communicator",
     "fontainerepublic.help.index.title": "FontaineRepublic help. Modules: use /fr help <module> for details.",
     "fontainerepublic.help.index.line.money": "  money: personal money commands",
     "fontainerepublic.help.index.line.bank": "  bank: central-bank official duties (on-site)",

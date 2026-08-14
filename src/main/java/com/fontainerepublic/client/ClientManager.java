@@ -50,6 +50,13 @@ public final class ClientManager {
             }
             MinecraftForge.EVENT_BUS.addListener(ClientManager::onRegisterClientCommands);
             MinecraftForge.EVENT_BUS.addListener(FrHudRenderer::onRenderGui);
+            // FR-ITEM-001: communicator right-click interactions (players /
+            // blocks) open the transfer form / land view. Registered only on
+            // the physical client, so a dedicated server never loads
+            // CommunicatorInteraction.
+            MinecraftForge.EVENT_BUS.addListener(CommunicatorInteraction::onEntityInteract);
+            MinecraftForge.EVENT_BUS.addListener(CommunicatorInteraction::onRightClickBlock);
+            MinecraftForge.EVENT_BUS.addListener(CommunicatorInteraction::onRightClickEmpty);
             initialized = true;
             LOGGER.debug("[FR Client] ClientManager initialized (/frclient + HUD)");
         }
@@ -81,52 +88,105 @@ public final class ClientManager {
     }
 
     private static int openMain() {
+        if (!gateAllows()) {
+            return 0;
+        }
         Minecraft.getInstance().setScreen(new FrMainScreen());
         return 1;
     }
 
     private static int openMoney() {
+        if (!gateAllows()) {
+            return 0;
+        }
         Minecraft.getInstance().setScreen(new MoneyScreen());
         return 1;
     }
 
     private static int openCitizen() {
+        if (!gateAllows()) {
+            return 0;
+        }
         Minecraft.getInstance().setScreen(new CitizenScreen());
         return 1;
     }
 
     private static int openHistory() {
+        if (!gateAllows()) {
+            return 0;
+        }
         Minecraft.getInstance().setScreen(new HistoryScreen());
         return 1;
     }
 
     private static int openNotifications() {
+        if (!gateAllows()) {
+            return 0;
+        }
         Minecraft.getInstance().setScreen(new NotificationScreen());
         return 1;
     }
 
     private static int openGovernment() {
+        if (!gateAllows()) {
+            return 0;
+        }
         Minecraft.getInstance().setScreen(new GovernmentScreen());
         return 1;
     }
 
     private static int openParliament() {
+        if (!gateAllows()) {
+            return 0;
+        }
         Minecraft.getInstance().setScreen(new ParliamentScreen());
         return 1;
     }
 
     private static int openCourt() {
+        if (!gateAllows()) {
+            return 0;
+        }
         Minecraft.getInstance().setScreen(new CourtScreen());
         return 1;
     }
 
     private static int openLand() {
+        if (!gateAllows()) {
+            return 0;
+        }
         Minecraft.getInstance().setScreen(new LandScreen());
         return 1;
     }
 
     private static int openGuide() {
+        if (!gateAllows()) {
+            return 0;
+        }
         Minecraft.getInstance().setScreen(new GuideScreen());
         return 1;
+    }
+
+    /**
+     * UX gate (FR-ITEM-001-A §2.2): every /frclient open is refused with a
+     * chat hint while the local player does not hold the communicator. Pure
+     * UX check — the server command surface remains the only authority.
+     */
+    private static boolean gateAllows() {
+        net.minecraft.world.entity.player.Player player =
+                Minecraft.getInstance().player;
+        if (player == null) {
+            return false;
+        }
+        if (CommunicatorGate.holdsCommunicator(player)) {
+            return true;
+        }
+        player.displayClientMessage(
+                net.minecraft.network.chat.Component.literal(
+                        CommunicatorGate.GATE_MESSAGE
+                ),
+                false
+        );
+        return false;
     }
 }

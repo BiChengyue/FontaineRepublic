@@ -90,6 +90,20 @@ public final class FrMainScreen extends Screen {
     }
 
     private void open(Screen screen) {
+        net.minecraft.client.player.LocalPlayer player =
+                net.minecraft.client.Minecraft.getInstance().player;
+        if (player != null
+                && !com.fontainerepublic.client.CommunicatorGate
+                .holdsCommunicator(player)) {
+            player.displayClientMessage(
+                    Component.literal(
+                            com.fontainerepublic.client.CommunicatorGate
+                                    .GATE_MESSAGE
+                    ),
+                    false
+            );
+            return;
+        }
         net.minecraft.client.Minecraft.getInstance().setScreen(screen);
     }
 
