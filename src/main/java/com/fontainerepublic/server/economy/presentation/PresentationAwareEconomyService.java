@@ -3,6 +3,7 @@ package com.fontainerepublic.server.economy.presentation;
 import com.fontainerepublic.server.economy.api.EconomyPage;
 import com.fontainerepublic.server.economy.api.EconomyService;
 import com.fontainerepublic.server.economy.api.TransferReceipt;
+import com.fontainerepublic.server.economy.api.TradeSettlementReceipt;
 import com.fontainerepublic.server.economy.model.EconomyAccount;
 import com.fontainerepublic.server.economy.model.EconomyTransaction;
 import com.fontainerepublic.server.economy.model.NotificationSummary;
@@ -119,6 +120,38 @@ public final class PresentationAwareEconomyService implements EconomyService {
     ) {
         TransferReceipt receipt = delegate.transferByPlayer(fromPlayerId, toPlayerId, amount, memo);
         notifyTransfer(receipt);
+        return receipt;
+    }
+
+    @Override
+    public TradeSettlementReceipt executeTradeSettlement(
+            SubjectId a,
+            SubjectId b,
+            long aOffered,
+            long bOffered,
+            int taxRatePercent,
+            String memo
+    ) {
+        TradeSettlementReceipt receipt = delegate.executeTradeSettlement(
+                a, b, aOffered, bOffered, taxRatePercent, memo
+        );
+        // Presentation refresh for the two player sides only; the treasury
+        // leg has no player projection.
+        try {
+            delegate.getAccount(a).ifPresent(
+                    account -> notifier.balanceChanged(a, account)
+            );
+            delegate.getAccount(b).ifPresent(
+                    account -> notifier.balanceChanged(b, account)
+            );
+        } catch (RuntimeException failure) {
+            LOGGER.debug(
+                    "[Economy] Presentation balance refresh failed after trade "
+                            + "settlement {}: {}",
+                    receipt.transactionIds(),
+                    failure.getMessage()
+            );
+        }
         return receipt;
     }
 

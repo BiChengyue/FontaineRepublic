@@ -101,4 +101,12 @@ public final class DisplayMessageHandlers {
                         .acceptLandInfo(message)
         );
     }
+
+    public static NetworkMessageHandler<TradeStateSyncPacket> tradeStateSync() {
+        return (message, context) -> DistExecutor.unsafeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> com.fontainerepublic.client.net.ClientNetworkExecutor
+                        .acceptTradeStateSync(message)
+        );
+    }
 }

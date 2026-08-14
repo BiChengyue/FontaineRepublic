@@ -184,12 +184,12 @@ public final class ClientStageB3aFoundationTestMain {
     // ------------------------------------------------------------------
 
     private static void testProtocolV5Contract() {
-        check(NetworkProtocol.VERSION.equals("5"), "Protocol version is 5");
-        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 9,
-                "Protocol v5 expects exactly nine display messages");
+        check(NetworkProtocol.VERSION.equals("6"), "Protocol version is 6");
+        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 16,
+                "Protocol v6 expects exactly sixteen ledger messages");
         check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT
-                        == 7 + 2,
-                "Ledger grows by exactly the two B-3b messages");
+                        == 9 + 7,
+                "Ledger grows by exactly the seven FR-TRADE-001 messages");
     }
 
     // ------------------------------------------------------------------

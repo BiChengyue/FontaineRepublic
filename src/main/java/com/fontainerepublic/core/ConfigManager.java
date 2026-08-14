@@ -67,6 +67,9 @@ public class ConfigManager {
     /** Default: no Hydro Archon emergency authority UUID configured. */
     public static final String DEFAULT_EMERGENCY_HYDRO_ARCHON_UUID = "";
 
+    /** Default trade settlement tax rate in percent (FR-TRADE-001-A §6.1). */
+    public static final int DEFAULT_TRADE_TAX_RATE_PERCENT = 5;
+
     private static final ForgeConfigSpec.IntValue COMMIT_MIN_INTERVAL_MILLIS;
     private static final ForgeConfigSpec.IntValue COMMIT_MAX_BYTES_PER_NAMESPACE;
 
@@ -89,6 +92,7 @@ public class ConfigManager {
     private static final ForgeConfigSpec.IntValue INSTITUTION_MAX_ZONE_Z_SIZE;
     private static final ForgeConfigSpec.IntValue INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS;
     private static final ForgeConfigSpec.ConfigValue<String> EMERGENCY_HYDRO_ARCHON_UUID;
+    private static final ForgeConfigSpec.IntValue TRADE_TAX_RATE_PERCENT;
 
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -302,6 +306,25 @@ public class ConfigManager {
                 .define(
                         "hydroArchonUuid",
                         DEFAULT_EMERGENCY_HYDRO_ARCHON_UUID
+                );
+        builder.pop();
+
+        builder.comment(
+                "FR-TRADE-001 communicator trade settlement tax. The rate "
+                        + "applies only to paying sides of a trade settlement "
+                        + "(floor(offer * rate / 100), see FR-TRADE-001-A "
+                        + "§6.1); 0 disables the tax."
+        ).push("trade");
+        TRADE_TAX_RATE_PERCENT = builder
+                .comment(
+                        "Trade settlement tax rate in percent. Range [0, 100]; "
+                                + "0 disables the tax."
+                )
+                .defineInRange(
+                        "tradeTaxRatePercent",
+                        DEFAULT_TRADE_TAX_RATE_PERCENT,
+                        0,
+                        100
                 );
         builder.pop();
         SPEC = builder.build();
@@ -528,6 +551,18 @@ public class ConfigManager {
             throw new IllegalStateException(
                     "Emergency authority config is not loaded", notLoaded
             );
+        }
+    }
+
+    /**
+     * Configured trade settlement tax rate in percent; falls back to the
+     * default when the config is not loaded yet (FR-TRADE-001-A §6.1).
+     */
+    public static int tradeTaxRatePercent() {
+        try {
+            return TRADE_TAX_RATE_PERCENT.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_TRADE_TAX_RATE_PERCENT;
         }
     }
 }

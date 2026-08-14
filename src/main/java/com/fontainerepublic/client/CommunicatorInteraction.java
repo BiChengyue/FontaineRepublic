@@ -1,9 +1,9 @@
 package com.fontainerepublic.client;
 
 import com.fontainerepublic.client.gui.land.LandScreen;
-import com.fontainerepublic.client.gui.money.MoneyScreen;
 import com.fontainerepublic.client.gui.money.TransferFormComposer;
 import com.fontainerepublic.client.gui.FrMainScreen;
+import com.fontainerepublic.client.trade.ClientTradeSender;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.player.Player;
@@ -41,11 +41,11 @@ public final class CommunicatorInteraction {
         if (!(event.getTarget() instanceof Player target)) {
             return;
         }
-        String targetName = prefillTargetName(target.getGameProfile().getName());
-        if (targetName == null) {
-            return;
-        }
-        Minecraft.getInstance().setScreen(new MoneyScreen(targetName));
+        // FR-TRADE-001-A §5: right-clicking a player sends the C2S trade
+        // request (the money-transfer form is still reachable from the FR
+        // client main menu). The server re-validates online presence, the
+        // communicator gate and session conflicts.
+        ClientTradeSender.sendRequest(target.getUUID());
     }
 
     /** Right-click on a block while holding the communicator. */
