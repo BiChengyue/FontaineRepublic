@@ -18,3 +18,6 @@ saves/
 .DS_Store
 Thumbs.db
 .codex_tmp/
+
+# 上游第三方源码克隆（仅用于归档，归档产物在 docs/third_party/）
+.upstream-securetrade/

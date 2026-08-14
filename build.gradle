@@ -300,6 +300,14 @@ tasks.register('tradeFoundationTest', JavaExec) {
     systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
 }
 
+tasks.register('experiencePointMathTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-TRADE-002-A integer-only XP arithmetic validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.server.trade.ExperiencePointMathTestMain'
+}
+
 tasks.register('mailFoundationTest', JavaExec) {
     group = 'verification'
     description = 'Runs dependency-free FR-MAIL-001 communicator mail subsystem validation.'
@@ -347,6 +355,7 @@ tasks.named('check') {
     dependsOn tasks.named('clientItemFoundationTest')
     dependsOn tasks.named('communicatorCarrierFoundationTest')
     dependsOn tasks.named('tradeFoundationTest')
+    dependsOn tasks.named('experiencePointMathTest')
     dependsOn tasks.named('mailFoundationTest')
     dependsOn tasks.named('landClaimFoundationTest')
 }

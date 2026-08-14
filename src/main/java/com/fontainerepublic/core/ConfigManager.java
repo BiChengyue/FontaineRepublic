@@ -79,6 +79,21 @@ public class ConfigManager {
     /** Default trade settlement tax rate in percent (FR-TRADE-001-A §6.1). */
     public static final int DEFAULT_TRADE_TAX_RATE_PERCENT = 5;
 
+    /** Default trade tax rate in basis points (FR-TRADE-002-A §9: 500 = 5%). */
+    public static final int DEFAULT_TRADE_TAX_RATE_BPS = 500;
+
+    /** Default pending trade-request timeout in seconds (FR-TRADE-002-A §7). */
+    public static final int DEFAULT_TRADE_REQUEST_TIMEOUT_SECONDS = 30;
+
+    /** Default repeated-request cooldown in seconds (FR-TRADE-002-A §7). */
+    public static final int DEFAULT_TRADE_REQUEST_COOLDOWN_SECONDS = 5;
+
+    /** Default both-ready locked countdown in seconds (FR-TRADE-002-A §7). */
+    public static final int DEFAULT_TRADE_LOCKED_COUNTDOWN_SECONDS = 5;
+
+    /** Default maximum XP points one player may offer (FR-TRADE-002-A §8.2). */
+    public static final long DEFAULT_TRADE_MAX_OFFER_XP = 1_000_000_000L;
+
     /** Default mail postage fee per letter (FR-MAIL-001-A §6.3). */
     public static final long DEFAULT_MAIL_POSTAGE_FEE = 10;
 
@@ -117,6 +132,11 @@ public class ConfigManager {
     private static final ForgeConfigSpec.IntValue INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS;
     private static final ForgeConfigSpec.ConfigValue<String> EMERGENCY_HYDRO_ARCHON_UUID;
     private static final ForgeConfigSpec.IntValue TRADE_TAX_RATE_PERCENT;
+    private static final ForgeConfigSpec.IntValue TRADE_TAX_RATE_BPS;
+    private static final ForgeConfigSpec.IntValue TRADE_REQUEST_TIMEOUT_SECONDS;
+    private static final ForgeConfigSpec.IntValue TRADE_REQUEST_COOLDOWN_SECONDS;
+    private static final ForgeConfigSpec.IntValue TRADE_LOCKED_COUNTDOWN_SECONDS;
+    private static final ForgeConfigSpec.LongValue TRADE_MAX_OFFER_XP;
     private static final ForgeConfigSpec.LongValue MAIL_POSTAGE_FEE;
     private static final ForgeConfigSpec.LongValue MAIL_ATTACHMENT_FEE;
     private static final ForgeConfigSpec.LongValue MAIL_BROADCAST_FEE;
@@ -394,6 +414,64 @@ public class ConfigManager {
                         DEFAULT_TRADE_TAX_RATE_PERCENT,
                         0,
                         100
+                );
+        TRADE_TAX_RATE_BPS = builder
+                .comment(
+                        "FR-TRADE-002-A trade tax quote rate in basis points "
+                                + "(500 = 5%; tax = floor(offer * rateBps / 10000)). "
+                                + "Range [0, 10000]; 0 disables the tax. This is the "
+                                + "server-authoritative quote authority of the trade "
+                                + "module; completed settlements are never recalculated."
+                )
+                .defineInRange(
+                        "tradeTaxRateBps",
+                        DEFAULT_TRADE_TAX_RATE_BPS,
+                        0,
+                        10_000
+                );
+        TRADE_REQUEST_TIMEOUT_SECONDS = builder
+                .comment(
+                        "FR-TRADE-002-A pending trade-request timeout in seconds. "
+                                + "Range [1, 3600]."
+                )
+                .defineInRange(
+                        "requestTimeoutSeconds",
+                        DEFAULT_TRADE_REQUEST_TIMEOUT_SECONDS,
+                        1,
+                        3_600
+                );
+        TRADE_REQUEST_COOLDOWN_SECONDS = builder
+                .comment(
+                        "FR-TRADE-002-A repeated-request cooldown between the same "
+                                + "two players in seconds. Range [0, 3600]; 0 disables."
+                )
+                .defineInRange(
+                        "requestCooldownSeconds",
+                        DEFAULT_TRADE_REQUEST_COOLDOWN_SECONDS,
+                        0,
+                        3_600
+                );
+        TRADE_LOCKED_COUNTDOWN_SECONDS = builder
+                .comment(
+                        "FR-TRADE-002-A both-ready confirmation countdown in seconds. "
+                                + "Range [1, 60]."
+                )
+                .defineInRange(
+                        "lockedCountdownSeconds",
+                        DEFAULT_TRADE_LOCKED_COUNTDOWN_SECONDS,
+                        1,
+                        60
+                );
+        TRADE_MAX_OFFER_XP = builder
+                .comment(
+                        "FR-TRADE-002-A maximum XP points one player may offer. "
+                                + "Range [1, 10000000000]."
+                )
+                .defineInRange(
+                        "maxOfferXp",
+                        DEFAULT_TRADE_MAX_OFFER_XP,
+                        1L,
+                        10_000_000_000L
                 );
         builder.pop();
 
@@ -739,6 +817,55 @@ public class ConfigManager {
             return TRADE_TAX_RATE_PERCENT.get();
         } catch (IllegalStateException notLoaded) {
             return DEFAULT_TRADE_TAX_RATE_PERCENT;
+        }
+    }
+
+    /**
+     * Configured trade tax quote rate in basis points; falls back to the
+     * default (500 = 5%) when the config is not loaded yet (FR-TRADE-002-A
+     * §9).
+     */
+    public static int tradeTaxRateBps() {
+        try {
+            return TRADE_TAX_RATE_BPS.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_TRADE_TAX_RATE_BPS;
+        }
+    }
+
+    /** Configured pending trade-request timeout in seconds; falls back. */
+    public static int tradeRequestTimeoutSeconds() {
+        try {
+            return TRADE_REQUEST_TIMEOUT_SECONDS.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_TRADE_REQUEST_TIMEOUT_SECONDS;
+        }
+    }
+
+    /** Configured repeated-request cooldown in seconds; falls back. */
+    public static int tradeRequestCooldownSeconds() {
+        try {
+            return TRADE_REQUEST_COOLDOWN_SECONDS.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_TRADE_REQUEST_COOLDOWN_SECONDS;
+        }
+    }
+
+    /** Configured both-ready locked countdown in seconds; falls back. */
+    public static int tradeLockedCountdownSeconds() {
+        try {
+            return TRADE_LOCKED_COUNTDOWN_SECONDS.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_TRADE_LOCKED_COUNTDOWN_SECONDS;
+        }
+    }
+
+    /** Configured maximum XP points one player may offer; falls back. */
+    public static long tradeMaxOfferXp() {
+        try {
+            return TRADE_MAX_OFFER_XP.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_TRADE_MAX_OFFER_XP;
         }
     }
 
