@@ -2,6 +2,7 @@ package com.fontainerepublic.server.economy.presentation;
 
 import com.fontainerepublic.server.economy.api.EconomyPage;
 import com.fontainerepublic.server.economy.api.EconomyService;
+import com.fontainerepublic.server.economy.api.MailPostageReceipt;
 import com.fontainerepublic.server.economy.api.TransferReceipt;
 import com.fontainerepublic.server.economy.api.TradeSettlementReceipt;
 import com.fontainerepublic.server.economy.model.EconomyAccount;
@@ -149,6 +150,31 @@ public final class PresentationAwareEconomyService implements EconomyService {
                     "[Economy] Presentation balance refresh failed after trade "
                             + "settlement {}: {}",
                     receipt.transactionIds(),
+                    failure.getMessage()
+            );
+        }
+        return receipt;
+    }
+
+    @Override
+    public MailPostageReceipt chargePostage(
+            SubjectId payer,
+            long postageFee,
+            long attachmentFee,
+            String memo
+    ) {
+        MailPostageReceipt receipt = delegate.chargePostage(
+                payer, postageFee, attachmentFee, memo
+        );
+        try {
+            delegate.getAccount(payer).ifPresent(
+                    account -> notifier.balanceChanged(payer, account)
+            );
+        } catch (RuntimeException failure) {
+            LOGGER.debug(
+                    "[Economy] Presentation balance refresh failed after mail "
+                            + "postage for {}: {}",
+                    payer,
                     failure.getMessage()
             );
         }

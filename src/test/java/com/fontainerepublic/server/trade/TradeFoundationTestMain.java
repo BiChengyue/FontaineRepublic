@@ -232,10 +232,10 @@ public final class TradeFoundationTestMain {
     // ------------------------------------------------------------------
 
     private static void testProtocolLedgerRegistration() {
-        check(NetworkProtocol.VERSION.equals("6"),
-                "the protocol version is v6");
-        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 16,
-                "the production ledger expects 16 messages (IDs 0-15)");
+        check(NetworkProtocol.VERSION.equals("7"),
+                "the protocol version is v7");
+        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 23,
+                "the production ledger expects 23 messages (IDs 0-22)");
 
         Map<Integer, NetworkMessageSpec<?>> byId = collectLedger();
         check(byId.size() == NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT,

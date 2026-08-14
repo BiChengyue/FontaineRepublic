@@ -68,4 +68,9 @@ public final class PresentationAwareCitizenService implements CitizenService {
     public CitizenReceipt setStatus(UUID playerId, CitizenStatus status) {
         return delegate.setStatus(playerId, status);
     }
+
+    @Override
+    public java.util.List<CitizenService.CitizenIdentity> activeCitizens(int limit) {
+        return delegate.activeCitizens(limit);
+    }
 }

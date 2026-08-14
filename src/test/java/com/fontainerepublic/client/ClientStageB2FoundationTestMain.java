@@ -338,6 +338,11 @@ public final class ClientStageB2FoundationTestMain {
         public CitizenReceipt setStatus(UUID playerId, CitizenStatus status) {
             throw new UnsupportedOperationException("not used");
         }
+
+        @Override
+        public List<CitizenService.CitizenIdentity> activeCitizens(int limit) {
+            return List.of();
+        }
     }
 
     private static final class EmptySubjectRegistry implements SubjectRegistryService {

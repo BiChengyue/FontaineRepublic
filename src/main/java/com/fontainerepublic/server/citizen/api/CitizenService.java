@@ -4,6 +4,7 @@ import com.fontainerepublic.server.citizen.model.CitizenRank;
 import com.fontainerepublic.server.citizen.model.CitizenRecord;
 import com.fontainerepublic.server.citizen.model.CitizenStatus;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -63,4 +64,20 @@ public interface CitizenService {
      *         or the durable store rejected the snapshot
      */
     CitizenReceipt setStatus(UUID playerId, CitizenStatus status);
+
+    /**
+     * Bounded, purpose-scoped read projection of the active citizen set
+     * (FR-CIT-001-A, extended for the mail broadcast recipient range,
+     * FR-MAIL-001-A §6.6): every citizen record with status
+     * {@link CitizenStatus#CITIZEN}, capped at {@code limit} in stable order.
+     * Used only to derive the broadcast recipient range and to alert online
+     * citizens; it exposes no permissions, balances, or other data.
+     */
+    List<CitizenIdentity> activeCitizens(int limit);
+
+    /**
+     * Minimal identity projection of one active citizen for range derivation.
+     */
+    record CitizenIdentity(UUID playerId, com.fontainerepublic.server.registry.model.SubjectId subjectId) {
+    }
 }

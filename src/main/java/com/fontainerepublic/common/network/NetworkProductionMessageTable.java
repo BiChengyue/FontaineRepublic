@@ -1,11 +1,19 @@
 package com.fontainerepublic.common.network;
 
+import com.fontainerepublic.common.mail.MailBroadcastPacket;
+import com.fontainerepublic.common.mail.MailDeletePacket;
+import com.fontainerepublic.common.mail.MailListRequestPacket;
+import com.fontainerepublic.common.mail.MailMessageHandlers;
+import com.fontainerepublic.common.mail.MailReadPacket;
+import com.fontainerepublic.common.mail.MailSendPacket;
 import com.fontainerepublic.common.network.display.BalanceSyncPacket;
 import com.fontainerepublic.common.network.display.CitizenInfoPacket;
 import com.fontainerepublic.common.network.display.DisplayMessageHandlers;
 import com.fontainerepublic.common.network.display.GovernmentInfoPacket;
 import com.fontainerepublic.common.network.display.JusticeInfoPacket;
 import com.fontainerepublic.common.network.display.LandInfoPacket;
+import com.fontainerepublic.common.network.display.MailAlertPacket;
+import com.fontainerepublic.common.network.display.MailboxSyncPacket;
 import com.fontainerepublic.common.network.display.NotificationPacket;
 import com.fontainerepublic.common.network.display.ParliamentInfoPacket;
 import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
@@ -36,7 +44,7 @@ import java.util.Optional;
 public final class NetworkProductionMessageTable {
 
     /** Total number of messages expected by the current protocol revision. */
-    public static final int EXPECTED_MESSAGE_COUNT = 16;
+    public static final int EXPECTED_MESSAGE_COUNT = 23;
 
     // Per-message C2S rate policies (FR-NET-001 rate limiting; bounded
     // interactive abuse control, not business authority).
@@ -50,6 +58,18 @@ public final class NetworkProductionMessageTable {
             new RateLimitPolicy(10, 2, 1_000_000_000L, 200_000_000L);
     private static final RateLimitPolicy TRADE_CANCEL_POLICY =
             new RateLimitPolicy(10, 2, 1_000_000_000L, 200_000_000L);
+    // FR-MAIL-001-A: mail C2S rate policies (bounded interactive abuse
+    // control; never business authority).
+    private static final RateLimitPolicy MAIL_SEND_POLICY =
+            new RateLimitPolicy(6, 2, 3_000_000_000L, 500_000_000L);
+    private static final RateLimitPolicy MAIL_LIST_POLICY =
+            new RateLimitPolicy(20, 4, 1_000_000_000L, 100_000_000L);
+    private static final RateLimitPolicy MAIL_READ_POLICY =
+            new RateLimitPolicy(20, 4, 1_000_000_000L, 100_000_000L);
+    private static final RateLimitPolicy MAIL_DELETE_POLICY =
+            new RateLimitPolicy(20, 4, 1_000_000_000L, 100_000_000L);
+    private static final RateLimitPolicy MAIL_BROADCAST_POLICY =
+            new RateLimitPolicy(2, 1, 5_000_000_000L, 1_000_000_000L);
 
     private NetworkProductionMessageTable() {
     }
@@ -175,6 +195,63 @@ public final class NetworkProductionMessageTable {
                 TradeStateSyncPacket::encode,
                 TradeStateSyncPacket::decode,
                 DisplayMessageHandlers.tradeStateSync()
+        ));
+        // FR-MAIL-001-A: mail ledger (IDs 16-22). C2S send/list/read/delete/
+        // broadcast carry explicit rate policies; sync/alert are S2C (ID 20,
+        // 21).
+        registration.register(c2sSpec(
+                16,
+                MailSendPacket.class,
+                MailSendPacket::encode,
+                MailSendPacket::decode,
+                MailMessageHandlers.send(),
+                MAIL_SEND_POLICY
+        ));
+        registration.register(c2sSpec(
+                17,
+                MailListRequestPacket.class,
+                MailListRequestPacket::encode,
+                MailListRequestPacket::decode,
+                MailMessageHandlers.list(),
+                MAIL_LIST_POLICY
+        ));
+        registration.register(c2sSpec(
+                18,
+                MailReadPacket.class,
+                MailReadPacket::encode,
+                MailReadPacket::decode,
+                MailMessageHandlers.read(),
+                MAIL_READ_POLICY
+        ));
+        registration.register(c2sSpec(
+                19,
+                MailDeletePacket.class,
+                MailDeletePacket::encode,
+                MailDeletePacket::decode,
+                MailMessageHandlers.delete(),
+                MAIL_DELETE_POLICY
+        ));
+        registration.register(displaySpec(
+                20,
+                MailboxSyncPacket.class,
+                MailboxSyncPacket::encode,
+                MailboxSyncPacket::decode,
+                DisplayMessageHandlers.mailboxSync()
+        ));
+        registration.register(displaySpec(
+                21,
+                MailAlertPacket.class,
+                MailAlertPacket::encode,
+                MailAlertPacket::decode,
+                DisplayMessageHandlers.mailAlert()
+        ));
+        registration.register(c2sSpec(
+                22,
+                MailBroadcastPacket.class,
+                MailBroadcastPacket::encode,
+                MailBroadcastPacket::decode,
+                MailMessageHandlers.broadcast(),
+                MAIL_BROADCAST_POLICY
         ));
     }
 

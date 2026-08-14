@@ -32,12 +32,25 @@ public final class FrHudRenderer {
             return;
         }
         ClientPresentationCache cache = ClientPresentationCache.instance();
-        List<String> lines = new ArrayList<>(2);
+        List<String> lines = new ArrayList<>(3);
         lines.add(ClientViewProjection.balanceLine(cache));
         int pending = ClientViewProjection.notificationLines(cache).size();
         if (pending > 0) {
             lines.add(pending + " pending notification"
                     + (pending == 1 ? "" : "s"));
+        }
+        // FR-MAIL-001-A §6.5: new-mail HUD badge, shown only while the player's
+        // inventory contains the communicator. No client / no communicator = no
+        // mail badge (zero impact).
+        net.minecraft.world.entity.player.Player player = Minecraft.getInstance().player;
+        if (player != null
+                && com.fontainerepublic.client.CommunicatorGate
+                .inventoryContainsCommunicator(player)) {
+            int unread = com.fontainerepublic.client.mail.ClientMailCache.instance().unread();
+            if (unread > 0) {
+                lines.add("✉ " + unread + " unread mail"
+                        + (unread == 1 ? "" : "s"));
+            }
         }
         FrGuiUtil.drawCard(
                 event.getGuiGraphics(),
@@ -45,7 +58,7 @@ public final class FrHudRenderer {
                 HUD_X,
                 HUD_Y,
                 HUD_WIDTH,
-                lines.size() > 1 ? HUD_HEIGHT + 10 : HUD_HEIGHT,
+                lines.size() > 1 ? HUD_HEIGHT + 10 * (lines.size() - 1) : HUD_HEIGHT,
                 "FR — " + ClientViewProjection.currencyName(cache),
                 lines,
                 2

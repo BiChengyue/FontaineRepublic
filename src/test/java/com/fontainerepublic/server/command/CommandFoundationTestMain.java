@@ -16,6 +16,7 @@ import com.fontainerepublic.server.command.registration.CommandContributionSpec;
 import com.fontainerepublic.server.command.registration.CommandRegistrationException;
 import com.fontainerepublic.server.economy.api.EconomyPage;
 import com.fontainerepublic.server.economy.api.EconomyService;
+import com.fontainerepublic.server.economy.api.MailPostageReceipt;
 import com.fontainerepublic.server.economy.api.TradeSettlementReceipt;
 import com.fontainerepublic.server.economy.api.TransferReceipt;
 import com.fontainerepublic.server.economy.model.EconomyAccount;
@@ -1045,6 +1046,11 @@ public final class CommandFoundationTestMain {
         public CitizenReceipt setStatus(UUID playerId, CitizenStatus status) {
             throw new UnsupportedOperationException("not used in command tests");
         }
+
+        @Override
+        public List<CitizenService.CitizenIdentity> activeCitizens(int limit) {
+            return List.of();
+        }
     }
 
     private static final class FailingCitizen implements CitizenService {
@@ -1069,6 +1075,11 @@ public final class CommandFoundationTestMain {
         @Override
         public CitizenReceipt setStatus(UUID playerId, CitizenStatus status) {
             throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public List<CitizenService.CitizenIdentity> activeCitizens(int limit) {
+            return List.of();
         }
     }
 
@@ -1135,6 +1146,24 @@ public final class CommandFoundationTestMain {
                 String memo
         ) {
             throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public MailPostageReceipt chargePostage(
+                SubjectId payer,
+                long postageFee,
+                long attachmentFee,
+                String memo
+        ) {
+            return new MailPostageReceipt(
+                    1L,
+                    payer,
+                    postageFee,
+                    attachmentFee,
+                    postageFee + attachmentFee,
+                    1L,
+                    true
+            );
         }
 
         @Override
@@ -1318,6 +1347,24 @@ public final class CommandFoundationTestMain {
                 String memo
         ) {
             throw new UnsupportedOperationException("not used in command tests");
+        }
+
+        @Override
+        public MailPostageReceipt chargePostage(
+                SubjectId payer,
+                long postageFee,
+                long attachmentFee,
+                String memo
+        ) {
+            return new MailPostageReceipt(
+                    1L,
+                    payer,
+                    postageFee,
+                    attachmentFee,
+                    postageFee + attachmentFee,
+                    1L,
+                    true
+            );
         }
 
         @Override

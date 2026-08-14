@@ -43,6 +43,21 @@ public final class CommunicatorGate {
         return isCommunicator(mainHand) || isCommunicator(offHand);
     }
 
+    /** True while the player's inventory (any slot) contains the communicator
+     *  (FR-MAIL-001-A §6.5 new-mail reminder gate). */
+    public static boolean inventoryContainsCommunicator(Player player) {
+        if (player == null) {
+            return false;
+        }
+        net.minecraft.world.entity.player.Inventory inventory = player.getInventory();
+        for (int index = 0; index < inventory.getContainerSize(); index++) {
+            if (isCommunicator(inventory.getItem(index))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** True if the stack carries the communicator item (empty-safe). */
     public static boolean isCommunicator(ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
