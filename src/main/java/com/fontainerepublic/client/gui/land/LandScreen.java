@@ -46,6 +46,12 @@ public final class LandScreen extends Screen {
                 .bounds(centerX + 40, this.height - 40, 40, 20)
                 .build());
         addRenderableWidget(Button.builder(
+                        Component.literal("我的地块"),
+                        button -> this.minecraft.setScreen(new MyLandRightsScreen())
+                )
+                .bounds(centerX - 20, this.height - 64, 60, 20)
+                .build());
+        addRenderableWidget(Button.builder(
                         Component.literal("Back"),
                         button -> this.onClose()
                 )

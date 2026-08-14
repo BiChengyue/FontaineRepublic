@@ -177,6 +177,40 @@ public interface LandService {
     LandSummary publicSummary();
 
     /**
+     * Self-only bounded page of the authenticated caller's own <em>current</em>
+     * usage rights (FR-LAND-002-A §3.2). {@code authenticatedPlayerId} must
+     * come only from the server connection or a player command source; the
+     * service converts it to {@code OwnerReference.forPlayer(...)} and enforces
+     * the authoritative PlayerData/subject resolution chain, failing closed
+     * when unavailable. There is <b>no target/holder parameter</b>, so no
+     * other player's rights can ever be queried.
+     *
+     * <p>{@code afterParcelId} is an exclusive cursor by
+     * {@code ParcelId.canonicalKey()} ascending order; a first page uses
+     * {@code expectedStoreRevision == 0}. Only {@code UsageRight.validAt(now)}
+     * entries are returned. {@code limit} must be in {@code [1,
+     * MyUsageRightsQueryLimits.MAX_LIMIT]} — out-of-range inputs are rejected
+     * ({@link MyUsageRightsStatus#INVALID_REQUEST}), never silently clamped.
+     * Revision drift returns a {@link MyUsageRightsStatus#RESET_REQUIRED} page
+     * with no entries. Read-only: never persists, never increments a revision,
+     * never writes an audit transaction.</p>
+     *
+     * <p>The returned {@link MyUsageRightsPage} is the single explicitly allowed
+     * person-scoped page record (never a raw collection) and carries projection
+     * fields only for the caller's own current rights.</p>
+     *
+     * @throws com.fontainerepublic.server.land.persistence.LandUnavailableException
+     *         with a stable code when the holder cannot be resolved or the
+     *         request is invalid (mapped to {@link MyUsageRightsStatus#UNAVAILABLE}
+     *         / {@link MyUsageRightsStatus#INVALID_REQUEST} at the transport)
+     */
+    MyUsageRightsPage myUsageRights(
+            UUID authenticatedPlayerId,
+            Optional<ParcelId> afterParcelId,
+            long expectedStoreRevision,
+            int limit);
+
+    /**
      * Config-driven event-time decision: may the player build on the parcel?
      * Resolved at event time; a cached decision is never authoritative.
      * Unknown parcels and unavailable services fail closed ({@code false}).

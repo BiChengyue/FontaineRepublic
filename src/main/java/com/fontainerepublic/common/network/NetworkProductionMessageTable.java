@@ -5,6 +5,9 @@ import com.fontainerepublic.common.landclaim.LandClaimPacket;
 import com.fontainerepublic.common.landclaim.LandInspectPacket;
 import com.fontainerepublic.common.landclaim.LandInspectResultPacket;
 import com.fontainerepublic.common.landclaim.LandClaimResultPacket;
+import com.fontainerepublic.common.landrights.LandRightsMessageHandlers;
+import com.fontainerepublic.common.landrights.MyLandRightsPagePacket;
+import com.fontainerepublic.common.landrights.MyLandRightsRequestPacket;
 import com.fontainerepublic.common.mail.MailBroadcastPacket;
 import com.fontainerepublic.common.mail.MailDeletePacket;
 import com.fontainerepublic.common.mail.MailListRequestPacket;
@@ -49,7 +52,7 @@ import java.util.Optional;
 public final class NetworkProductionMessageTable {
 
     /** Total number of messages expected by the current protocol revision. */
-    public static final int EXPECTED_MESSAGE_COUNT = 27;
+    public static final int EXPECTED_MESSAGE_COUNT = 29;
 
     // Per-message C2S rate policies (FR-NET-001 rate limiting; bounded
     // interactive abuse control, not business authority).
@@ -81,6 +84,11 @@ public final class NetworkProductionMessageTable {
             new RateLimitPolicy(10, 2, 1_000_000_000L, 100_000_000L);
     private static final RateLimitPolicy LAND_CLAIM_POLICY =
             new RateLimitPolicy(4, 1, 2_000_000_000L, 500_000_000L);
+    // FR-LAND-002-A §7: self-only my-usage-rights page query C2S rate policy
+    // (bounded interactive abuse control; never business authority). Short
+    // burst 2, sustained ~10 requests/second (one token refill per 100ms).
+    private static final RateLimitPolicy MY_LAND_QUERY_POLICY =
+            new RateLimitPolicy(2, 1, 100_000_000L, 100_000_000L);
 
     private NetworkProductionMessageTable() {
     }
@@ -296,6 +304,23 @@ public final class NetworkProductionMessageTable {
                 LandClaimResultPacket::encode,
                 LandClaimResultPacket::decode,
                 DisplayMessageHandlers.landClaimResult()
+        ));
+        // FR-LAND-002-A: self-only my-usage-rights page (IDs 27/28). C2S query
+        // carries an explicit rate policy; the S2C page is display-only.
+        registration.register(c2sSpec(
+                27,
+                MyLandRightsRequestPacket.class,
+                MyLandRightsRequestPacket::encode,
+                MyLandRightsRequestPacket::decode,
+                LandRightsMessageHandlers.request(),
+                MY_LAND_QUERY_POLICY
+        ));
+        registration.register(displaySpec(
+                28,
+                MyLandRightsPagePacket.class,
+                MyLandRightsPagePacket::encode,
+                MyLandRightsPagePacket::decode,
+                DisplayMessageHandlers.myLandRightsPage()
         ));
     }
 

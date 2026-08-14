@@ -288,4 +288,42 @@ public final class ClientViewProjection {
         }
         return lines;
     }
+
+    /**
+     * Bounded projection of the authenticated player's own current usage-rights
+     * page into display lines (one per right), or a placeholder / status line
+     * when the cache holds no usable page. Presentation-only — the page is
+     * bounded by the packet and this method never returns more lines than the
+     * page holds.
+     */
+    public static List<String> myLandRightsLines(
+            com.fontainerepublic.client.landrights.ClientMyLandRightsCache cache
+    ) {
+        com.fontainerepublic.common.landrights.MyLandRightsPagePacket page =
+                cache.page();
+        if (page == null) {
+            return List.of("No page yet.");
+        }
+        if (!"OK".equals(page.status())) {
+            return List.of("Status: " + page.status() + ".");
+        }
+        if (page.entries().isEmpty()) {
+            return List.of("You hold no current usage rights.");
+        }
+        List<String> lines = new ArrayList<>(page.entries().size());
+        for (com.fontainerepublic.common.landrights.MyLandRightsPagePacket.Entry entry
+                : page.entries()) {
+            StringBuilder line = new StringBuilder()
+                    .append(entry.dimension())
+                    .append(" #").append(digestPrefix(entry.parcelId().toString()))
+                    .append(' ').append(entry.zoneType());
+            if (entry.expiresAt() == 0L) {
+                line.append(" (no expiry)");
+            } else {
+                line.append(" until ").append(formatTime(entry.expiresAt()));
+            }
+            lines.add(line.toString());
+        }
+        return lines;
+    }
 }

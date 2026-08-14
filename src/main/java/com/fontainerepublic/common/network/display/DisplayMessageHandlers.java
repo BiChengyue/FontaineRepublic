@@ -143,4 +143,13 @@ public final class DisplayMessageHandlers {
                         .acceptLandClaimResult(message)
         );
     }
+
+    public static NetworkMessageHandler<com.fontainerepublic.common.landrights.MyLandRightsPagePacket>
+            myLandRightsPage() {
+        return (message, context) -> DistExecutor.unsafeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> com.fontainerepublic.client.net.ClientNetworkExecutor
+                        .acceptMyLandRightsPage(message)
+        );
+    }
 }
