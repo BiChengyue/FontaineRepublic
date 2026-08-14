@@ -21,3 +21,8 @@ llm-pi-ai:
 agent-default-model:
   provider: opencode-go
   model: deepseek-v4-flash
+
+# Headless subprocesses must be able to write the shared repo metadata (.git)
+# to self-commit; mirror the legacy reasonix --permission-mode auto posture.
+permissionPresets:
+  defaultPreset: danger-full-access
