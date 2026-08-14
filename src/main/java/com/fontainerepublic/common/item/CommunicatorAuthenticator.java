@@ -1,6 +1,5 @@
 package com.fontainerepublic.common.item;
 
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
 import javax.crypto.Mac;
@@ -30,7 +29,7 @@ import java.util.UUID;
  * issuance; older keys may remain verification-only. Removing a key
  * invalidates every device signed by it and therefore requires an audited
  * reissue plan (FR-ITEM-002-A §4.2). This class holds no link to any
- * {@code client/} code and no {@code DeferredRegister<Item>}, so an
+ * {@code client/} code and no custom item registry entry, so an
  * FR-absent Forge client is unaffected.</p>
  */
 public final class CommunicatorAuthenticator {
@@ -53,12 +52,8 @@ public final class CommunicatorAuthenticator {
 
     /** True when the stack is the vanilla carrier item (empty-safe). */
     public static boolean isCarrierItem(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) {
-            return false;
-        }
-        ResourceLocation key = net.minecraftforge.registries.ForgeRegistries.ITEMS
-                .getKey(stack.getItem());
-        return key != null && FRItemIds.CARRIER_ITEM_REGISTRY_NAME.equals(key.toString());
+        return stack != null && !stack.isEmpty()
+                && stack.is(net.minecraft.world.item.Items.CLOCK);
     }
 
     /**

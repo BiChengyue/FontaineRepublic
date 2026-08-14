@@ -80,7 +80,7 @@ public final class CommunicatorIssuer {
         }
 
         static String text(String value) {
-            StringBuilder json = new StringBuilder("{"text":"");
+            StringBuilder json = new StringBuilder("{\"text\":\"");
             for (int i = 0; i < value.length(); i++) {
                 char c = value.charAt(i);
                 switch (c) {
@@ -89,7 +89,7 @@ public final class CommunicatorIssuer {
                     default -> json.append(c);
                 }
             }
-            json.append(""}");
+            json.append("\"}");
             return json.toString();
         }
     }
