@@ -283,6 +283,14 @@ tasks.register('clientItemFoundationTest', JavaExec) {
     systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
 }
 
+tasks.register('communicatorCarrierFoundationTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-ITEM-002 vanilla-clock carrier codec + HMAC validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.common.item.CommunicatorCarrierFoundationTestMain'
+}
+
 tasks.register('tradeFoundationTest', JavaExec) {
     group = 'verification'
     description = 'Runs dependency-free FR-TRADE-001 communicator trade subsystem validation.'
@@ -337,6 +345,7 @@ tasks.named('check') {
     dependsOn tasks.named('clientStageB3aFoundationTest')
     dependsOn tasks.named('clientStageB3bFoundationTest')
     dependsOn tasks.named('clientItemFoundationTest')
+    dependsOn tasks.named('communicatorCarrierFoundationTest')
     dependsOn tasks.named('tradeFoundationTest')
     dependsOn tasks.named('mailFoundationTest')
     dependsOn tasks.named('landClaimFoundationTest')
