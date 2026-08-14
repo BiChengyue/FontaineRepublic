@@ -63,6 +63,8 @@ public final class EconomyEmergencyFoundationTestMain {
             UUID.fromString("00000000-0000-0000-0000-0000000000aa");
     private static final UUID TARGET_UUID =
             UUID.fromString("00000000-0000-0000-0000-0000000000bb");
+    private static final UUID OTHER_UUID =
+            UUID.fromString("00000000-0000-0000-0000-0000000000cc");
     private static final SubjectId TARGET = SubjectId.of(TARGET_UUID);
     private static final long START = 1_000L;
 
@@ -77,6 +79,7 @@ public final class EconomyEmergencyFoundationTestMain {
         testReclaimConfirm();
         testReclaimInsufficientRejected();
         testReclaimNoAccountRejected();
+        testUnresolvedTargetRejected();
         testInvalidAmountRejected();
         testOverflowRejected();
         testStaleRevisionRejectedAtConfirm();
@@ -139,11 +142,13 @@ public final class EconomyEmergencyFoundationTestMain {
         EconomyEmergencyProviders.bind(
                 new EconomyEmergencyProvider(
                         h.economyRepository,
-                        EconomyEmergencyProvider.PROVIDER_IDENTITY_ISSUE
+                        EconomyEmergencyProvider.PROVIDER_IDENTITY_ISSUE,
+                        EconomyEmergencyFoundationTestMain::resolveTestTarget
                 ),
                 new EconomyEmergencyProvider(
                         h.economyRepository,
-                        EconomyEmergencyProvider.PROVIDER_IDENTITY_RECLAIM
+                        EconomyEmergencyProvider.PROVIDER_IDENTITY_RECLAIM,
+                        EconomyEmergencyFoundationTestMain::resolveTestTarget
                 )
         );
         Optional<EmergencyActionProvider> resolved =
@@ -294,6 +299,28 @@ public final class EconomyEmergencyFoundationTestMain {
         PreviewResult preview = h.service.preview(reclaimRequest("10"), console());
         require(!preview.accepted() && "NO_ACCOUNT".equals(preview.failureCode()),
                 "reclaim without an account is rejected at preview");
+    }
+
+    private static void testUnresolvedTargetRejected() {
+        Harness h = harness(1L);
+        PreviewResult preview = h.service.preview(
+                new EmergencyRequest(
+                        "economy",
+                        "issue",
+                        "1.0.0",
+                        EmergencyTargetType.PLAYER_UUID,
+                        OTHER_UUID.toString(),
+                        EmergencyCategory.DEBUG,
+                        "test",
+                        Map.of("amount", "10")
+                ),
+                console()
+        );
+        require(!preview.accepted()
+                        && "PLAYER_NOT_PROVISIONED".equals(preview.failureCode()),
+                "target without an authoritative subject is rejected at preview");
+        require(h.economyRepository.snapshot().accounts().isEmpty(),
+                "rejected unresolved target publishes no account");
     }
 
     private static void testInvalidAmountRejected() {
@@ -556,11 +583,13 @@ public final class EconomyEmergencyFoundationTestMain {
             EconomyEmergencyProviders.bind(
                     new EconomyEmergencyProvider(
                             economyRepository,
-                            EconomyEmergencyProvider.PROVIDER_IDENTITY_ISSUE
+                            EconomyEmergencyProvider.PROVIDER_IDENTITY_ISSUE,
+                            EconomyEmergencyFoundationTestMain::resolveTestTarget
                     ),
                     new EconomyEmergencyProvider(
                             economyRepository,
-                            EconomyEmergencyProvider.PROVIDER_IDENTITY_RECLAIM
+                            EconomyEmergencyProvider.PROVIDER_IDENTITY_RECLAIM,
+                            EconomyEmergencyFoundationTestMain::resolveTestTarget
                     )
             );
             long positiveEpoch = Math.max(epoch, 1L);
@@ -631,6 +660,13 @@ public final class EconomyEmergencyFoundationTestMain {
                 "test reason",
                 parameters
         );
+    }
+
+    /** Test target resolver: only the known target UUID resolves. */
+    private static Optional<SubjectId> resolveTestTarget(UUID playerId) {
+        return TARGET_UUID.equals(playerId)
+                ? Optional.of(TARGET)
+                : Optional.empty();
     }
 
     private static void issue(Harness h, String amount) {
