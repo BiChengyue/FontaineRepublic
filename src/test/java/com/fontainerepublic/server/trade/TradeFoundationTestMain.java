@@ -10,6 +10,7 @@ import com.fontainerepublic.common.trade.TradeAgreePacket;
 import com.fontainerepublic.common.trade.TradeCancelPacket;
 import com.fontainerepublic.common.trade.TradeOfferItemPacket;
 import com.fontainerepublic.common.trade.TradeOfferMoneyPacket;
+import com.fontainerepublic.common.trade.TradeOfferXpPacket;
 import com.fontainerepublic.common.trade.TradeRequestPacket;
 import com.fontainerepublic.common.trade.TradeRespondPacket;
 import com.fontainerepublic.core.DurableCommitResult;
@@ -232,10 +233,10 @@ public final class TradeFoundationTestMain {
     // ------------------------------------------------------------------
 
     private static void testProtocolLedgerRegistration() {
-        check(NetworkProtocol.VERSION.equals("9"),
-                "the protocol version is v9");
-        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 29,
-                "the production ledger expects 29 messages (IDs 0-28)");
+        check(NetworkProtocol.VERSION.equals("10"),
+                "the protocol version is v10");
+        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 30,
+                "the production ledger expects 30 messages (IDs 0-29)");
 
         Map<Integer, NetworkMessageSpec<?>> byId = collectLedger();
         check(byId.size() == NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT,
@@ -247,6 +248,7 @@ public final class TradeFoundationTestMain {
         assertC2s(byId, 12, TradeOfferItemPacket.class);
         assertC2s(byId, 13, TradeAgreePacket.class);
         assertC2s(byId, 14, TradeCancelPacket.class);
+        assertC2s(byId, 29, TradeOfferXpPacket.class);
 
         NetworkMessageSpec<?> snapshot = byId.get(15);
         check(snapshot != null && snapshot.messageClass() == TradeStateSyncPacket.class,
@@ -340,6 +342,14 @@ public final class TradeFoundationTestMain {
                 TradeCancelPacket::decode
         );
         check(cancel.sessionId() == 7L, "TradeCancelPacket round-trips");
+
+        TradeOfferXpPacket xp = roundTrip(
+                new TradeOfferXpPacket(7L, 1_500L),
+                TradeOfferXpPacket::encode,
+                TradeOfferXpPacket::decode
+        );
+        check(xp.sessionId() == 7L && xp.xpPoints() == 1_500L,
+                "TradeOfferXpPacket round-trips");
     }
 
     private static void testPacketValueBounds() {
@@ -363,7 +373,15 @@ public final class TradeFoundationTestMain {
         expectThrows(IllegalArgumentException.class,
                 () -> new TradeCancelPacket(0L),
                 "a non-positive cancel session id is rejected");
+        expectThrows(IllegalArgumentException.class,
+                () -> new TradeOfferXpPacket(0L, 1L),
+                "a non-positive XP session id is rejected");
+        expectThrows(IllegalArgumentException.class,
+                () -> new TradeOfferXpPacket(
+                        1L, TradeOfferXpPacket.MAX_OFFER_XP + 1L),
+                "an out-of-bound XP offer is rejected");
     }
+
 
     // ------------------------------------------------------------------
     // repository-level settlement harness

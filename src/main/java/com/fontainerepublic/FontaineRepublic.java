@@ -651,12 +651,16 @@ public class FontaineRepublic {
      */
     private void bindTradeServices() {
         EconomyService economy = economyService().orElse(null);
+        SubjectRegistryService subjectRegistry = subjectRegistryService().orElse(null);
+        AuditService audit = auditService().orElse(null);
         coreManager.getRuntimeContainer(TradeModule.MODULE_ID)
                 .flatMap(container -> container.instance())
                 .filter(TradeModule.class::isInstance)
                 .map(TradeModule.class::cast)
                 .ifPresent(module -> module.bindServices(
                         economy,
+                        subjectRegistry,
+                        audit,
                         networkBootstrap.sendService()
                 ));
     }

@@ -3,6 +3,7 @@ package com.fontainerepublic.server.trade.service;
 import com.fontainerepublic.common.item.CommunicatorAuthenticator;
 import com.fontainerepublic.server.communicator.CommunicatorAuthority;
 import com.fontainerepublic.server.trade.api.ServerTradePlayerAccess;
+import com.fontainerepublic.server.trade.xp.ExperiencePointMath;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -103,6 +104,30 @@ public final class ServerPlayerAccess implements ServerTradePlayerAccess {
         Inventory inventory = requirePlayer(playerId).getInventory();
         inventory.add(remaining);
         return remaining.isEmpty();
+    }
+
+    @Override
+    public long totalExperience(UUID playerId) {
+        ServerPlayer player = requirePlayer(playerId);
+        return ExperiencePointMath.totalXpFor(
+                player.experienceLevel,
+                player.experienceProgress
+        );
+    }
+
+    @Override
+    public void setTotalExperience(UUID playerId, long totalXp) {
+        ServerPlayer player = requirePlayer(playerId);
+        long clamped = Math.max(0L, totalXp);
+        int level = ExperiencePointMath.levelForXp(clamped);
+        long levelBase = ExperiencePointMath.xpForLevel(level);
+        long nextBase = ExperiencePointMath.xpForLevel(level + 1);
+        long span = nextBase - levelBase;
+        player.experienceLevel = level;
+        player.experienceProgress = span <= 0L
+                ? 0.0f
+                : Math.max(0.0f, Math.min(1.0f, (float) (clamped - levelBase) / (float) span));
+        player.totalExperience = (int) Math.min(Integer.MAX_VALUE, clamped);
     }
 
     @Override

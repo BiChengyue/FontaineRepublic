@@ -5,6 +5,7 @@ import com.fontainerepublic.common.trade.TradeAgreePacket;
 import com.fontainerepublic.common.trade.TradeCancelPacket;
 import com.fontainerepublic.common.trade.TradeOfferItemPacket;
 import com.fontainerepublic.common.trade.TradeOfferMoneyPacket;
+import com.fontainerepublic.common.trade.TradeOfferXpPacket;
 import com.fontainerepublic.common.trade.TradeRequestPacket;
 import com.fontainerepublic.common.trade.TradeRespondPacket;
 
@@ -52,6 +53,12 @@ public final class ClientTradeSender {
 
     public static void sendWithdrawItem(long sessionId, int slot) {
         sendOfferItem(sessionId, slot, TradeOfferItemPacket.WITHDRAW_MARKER);
+    }
+
+    public static void sendOfferXp(long sessionId, long xpPoints) {
+        NetworkBootstrap.instance().sendToServer(
+                new TradeOfferXpPacket(sessionId, xpPoints)
+        );
     }
 
     public static void sendAgree(long sessionId, boolean agree) {

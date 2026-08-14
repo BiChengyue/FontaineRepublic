@@ -6,6 +6,7 @@ import com.fontainerepublic.client.trade.ClientTradeSender;
 import com.fontainerepublic.common.network.display.TradeStateSyncPacket;
 import com.fontainerepublic.common.trade.TradeOfferItemPacket;
 import com.fontainerepublic.common.trade.TradeOfferMoneyPacket;
+import com.fontainerepublic.common.trade.TradeOfferXpPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -44,6 +45,7 @@ public final class TradeScreen extends Screen {
     private static final int INV_COLS = 9;
 
     private EditBox amountBox;
+    private EditBox xpBox;
     private Button agreeButton;
     private Button cancelAgreeButton;
     private Button cancelTradeButton;
@@ -74,6 +76,28 @@ public final class TradeScreen extends Screen {
                         button -> offerMoney()
                 )
                 .bounds(OWN_X + 120, 157, 72, 18)
+                .build());
+
+        xpBox = addRenderableWidget(new EditBox(
+                this.font,
+                OWN_X + 4,
+                178,
+                110,
+                16,
+                Component.literal("XP offer")
+        ));
+        xpBox.setMaxLength(19);
+        addRenderableWidget(Button.builder(
+                        Component.literal("Offer XP"),
+                        button -> offerXp()
+                )
+                .bounds(OWN_X + 120, 178, 72, 18)
+                .build());
+        addRenderableWidget(Button.builder(
+                        Component.literal("Clear XP"),
+                        button -> ClientTradeSender.sendOfferXp(currentSessionId(), 0L)
+                )
+                .bounds(OWN_X + 4, 198, 88, 16)
                 .build());
         addRenderableWidget(Button.builder(
                         Component.literal("Back"),
@@ -181,6 +205,22 @@ public final class TradeScreen extends Screen {
                 "Money: " + snapshot.otherMoney(),
                 OTHER_X + 4,
                 PANEL_Y + PANEL_HEIGHT - 16,
+                FrGuiUtil.COLOR_BODY,
+                false
+        );
+        graphics.drawString(
+                this.font,
+                "XP: " + snapshot.ownXp(),
+                OWN_X + 4,
+                178 + 20,
+                FrGuiUtil.COLOR_BODY,
+                false
+        );
+        graphics.drawString(
+                this.font,
+                "XP: " + snapshot.otherXp(),
+                OTHER_X + 4,
+                178 + 20,
                 FrGuiUtil.COLOR_BODY,
                 false
         );
@@ -368,6 +408,30 @@ public final class TradeScreen extends Screen {
         statusColor = FrGuiUtil.COLOR_ACCENT;
     }
 
+    private void offerXp() {
+        TradeStateSyncPacket snapshot = ClientTradeCache.instance().snapshot();
+        if (snapshot == null) {
+            return;
+        }
+        long amount;
+        try {
+            amount = Long.parseLong(xpBox.getValue().trim());
+        } catch (NumberFormatException invalid) {
+            statusMessage = "Enter a valid XP amount (0 clears the offer).";
+            statusColor = FrGuiUtil.COLOR_ERROR;
+            return;
+        }
+        if (amount < 0 || amount > TradeOfferXpPacket.MAX_OFFER_XP) {
+            statusMessage = "XP amount out of range.";
+            statusColor = FrGuiUtil.COLOR_ERROR;
+            return;
+        }
+        ClientTradeSender.sendOfferXp(currentSessionId(), amount);
+        xpBox.setValue("");
+        statusMessage = "XP offer sent.";
+        statusColor = FrGuiUtil.COLOR_ACCENT;
+    }
+
     /** Bounded session id from the latest snapshot (0 when absent — the C2S
      *  packet validates positive ids, so a stale send is a server no-op). */
     private static long currentSessionId() {
@@ -378,6 +442,7 @@ public final class TradeScreen extends Screen {
     private void updateControls(TradeStateSyncPacket snapshot) {
         if (snapshot == null) {
             setVisible(amountBox, false);
+            setVisible(xpBox, false);
             hide(agreeButton, cancelAgreeButton, cancelTradeButton,
                     acceptButton, refuseButton, closeButton);
             return;
@@ -390,6 +455,7 @@ public final class TradeScreen extends Screen {
                 || phase == TradeStateSyncPacket.PHASE_CANCELLED;
 
         setVisible(amountBox, interactive);
+        setVisible(xpBox, interactive);
         setActive(agreeButton, interactive && !snapshot.ownAgree());
         setActive(cancelAgreeButton, interactive && snapshot.ownAgree());
         setActive(cancelTradeButton, interactive || requested);

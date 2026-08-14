@@ -44,6 +44,10 @@ public interface TradeService {
      *  {@code LOCKED -> OPEN}. */
     void offerItem(UUID actor, long sessionId, int slot, int inventoryIndex);
 
+    /** Experience offer (total XP points, {@code 0} clears); any offer change
+     *  resets both agreement flags and reverts {@code LOCKED -> OPEN}. */
+    void offerXp(UUID actor, long sessionId, long xpPoints);
+
     /** Agreement toggle; both sides agreed enters the 5-second
      *  {@code LOCKED} window, any toggle during the window reverts to
      *  {@code OPEN} and restarts the countdown. */

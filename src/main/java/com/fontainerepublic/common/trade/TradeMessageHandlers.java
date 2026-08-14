@@ -65,6 +65,16 @@ public final class TradeMessageHandlers {
         );
     }
 
+    public static NetworkMessageHandler<TradeOfferXpPacket> offerXp() {
+        return (message, context) -> service(context).ifPresent(
+                service -> service.offerXp(
+                        sender(context),
+                        message.sessionId(),
+                        message.xpPoints()
+                )
+        );
+    }
+
     public static NetworkMessageHandler<TradeAgreePacket> agree() {
         return (message, context) -> service(context).ifPresent(
                 service -> service.agree(

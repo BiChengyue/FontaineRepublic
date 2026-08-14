@@ -820,14 +820,14 @@ public final class LandRightsFoundationTestMain {
     // ------------------------------------------------------------------
 
     private static void testProtocolV9Ledger() {
-        require(NetworkProtocol.VERSION.equals("9"), "protocol is now v9");
-        require(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 29,
-                "the production ledger expects 29 messages");
+        require(NetworkProtocol.VERSION.equals("10"), "protocol is now v10");
+        require(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 30,
+                "the production ledger expects 30 messages");
 
         LedgerCollector collector = new LedgerCollector();
         NetworkProductionMessageTable.registerAll(collector);
-        require(collector.byId.size() == 29,
-                "registerAll registers exactly 29 messages");
+        require(collector.byId.size() == 30,
+                "registerAll registers exactly 30 messages");
 
         NetworkMessageSpec<?> req = collector.byId.get(27);
         require(req != null
@@ -863,9 +863,9 @@ public final class LandRightsFoundationTestMain {
                         0, 1, 2, 3, 4, 5, 6, 7, 8,
                         9, 10, 11, 12, 13, 14, 15,
                         16, 17, 18, 19, 20, 21, 22,
-                        23, 24, 25, 26, 27, 28
+                        23, 24, 25, 26, 27, 28, 29
                 )),
-                "ledger IDs are exactly 0..28 in ascending order, append-only");
+                "ledger IDs are exactly 0..29 in ascending order, append-only");
     }
 
     // ------------------------------------------------------------------
