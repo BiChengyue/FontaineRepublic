@@ -79,6 +79,25 @@ public final class ClientNetworkExecutor {
         ClientPresentationCache.instance().setLand(message);
     }
 
+    /** FR-MAIL-001-A §6.6: server-pushed mailbox sync projection. */
+    public static void acceptMailboxSync(
+            com.fontainerepublic.common.network.display.MailboxSyncPacket message
+    ) {
+        ensureLogoutCleanup();
+        com.fontainerepublic.client.mail.ClientMailCache.instance().setSync(message);
+    }
+
+    /** FR-MAIL-001-A §2.3: server-pushed new-mail alert (unread count). */
+    public static void acceptMailAlert(
+            com.fontainerepublic.common.network.display.MailAlertPacket message
+    ) {
+        ensureLogoutCleanup();
+        com.fontainerepublic.client.mail.ClientMailCache.instance().setAlert(
+                message.unreadCount(),
+                message.summary()
+        );
+    }
+
     /**
      * FR-TRADE-001-A §5: server-pushed per-viewer trade snapshot. The cache
      * is display-only; a REQUESTED snapshot opens the trade screen so the
@@ -118,6 +137,7 @@ public final class ClientNetworkExecutor {
                     (ClientPlayerNetworkEvent.LoggingOut event) -> {
                         ClientPresentationCache.instance().clear();
                         ClientTradeCache.instance().clear();
+                        com.fontainerepublic.client.mail.ClientMailCache.instance().clear();
                     }
             );
             logoutListenerRegistered = true;

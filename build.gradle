@@ -283,6 +283,15 @@ tasks.register('tradeFoundationTest', JavaExec) {
     systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
 }
 
+tasks.register('mailFoundationTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-MAIL-001 communicator mail subsystem validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.server.mail.MailFoundationTestMain'
+    systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
+}
+
 tasks.named('check') {
     dependsOn tasks.named('playerDataTest')
     dependsOn tasks.named('playerDirectoryFoundationTest')
@@ -310,4 +319,5 @@ tasks.named('check') {
     dependsOn tasks.named('clientStageB3bFoundationTest')
     dependsOn tasks.named('clientItemFoundationTest')
     dependsOn tasks.named('tradeFoundationTest')
+    dependsOn tasks.named('mailFoundationTest')
 }

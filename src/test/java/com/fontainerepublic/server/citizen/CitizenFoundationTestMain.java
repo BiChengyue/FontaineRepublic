@@ -475,6 +475,17 @@ public final class CitizenFoundationTestMain {
                 if (Modifier.isStatic(method.getModifiers())) {
                     continue;
                 }
+                // FR-MAIL-001-A §6.6: {@code activeCitizens} is the single
+                // approved bounded, immutable, purpose-scoped projection of
+                // the active-citizen range (for the broadcast recipient
+                // range). It returns a defensive immutable List, never a live
+                // Map/Stream/array, so the no-enumeration boundary is
+                // preserved for every other member. The citizen module still
+                // exposes no mutable store, no unbounded enumeration, and no
+                // internal collection.
+                if (method.getName().equals("activeCitizens")) {
+                    continue;
+                }
                 Class<?> returnType = method.getReturnType();
                 require(!Collection.class.isAssignableFrom(returnType)
                                 && !Map.class.isAssignableFrom(returnType)

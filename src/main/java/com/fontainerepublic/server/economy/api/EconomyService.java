@@ -126,6 +126,31 @@ public interface EconomyService {
             String memo
     );
 
+    /**
+     * Atomic mail postage/attachment fee charge (FR-MAIL-001-A §6.3): debits
+     * the payer's personal account by {@code postageFee + attachmentFee} and
+     * credits the treasury by the same total in one atomic snapshot, appending
+     * one {@code TAX} transaction leg ({@code to == null}). Total supply
+     * {@code = sum(accounts) + treasury} is conserved exactly. The payer must
+     * hold the total and must not be frozen. This is the dedicated system
+     * settlement channel of the mail module: the mail service enforces the
+     * player-facing authority rules (sender communicator gate, active subject,
+     * recipient resolution, fee computation) at its own boundary; the
+     * implementation enforces only source existence, balance, capacity and
+     * revision staleness. Institution senders never reach this path (their
+     * send is free).
+     *
+     * <p>Fee inputs may be {@code 0} each (a plain letter has only the
+     * postage fee; {@code postageFee + attachmentFee} must be positive). The
+     * memo is optional, normalized, bounded and display-only.</p>
+     */
+    MailPostageReceipt chargePostage(
+            SubjectId payer,
+            long postageFee,
+            long attachmentFee,
+            String memo
+    );
+
     /** Bounded pending incoming-transfer summaries for the subject. */
     List<NotificationSummary> pendingNotifications(SubjectId subjectId);
 

@@ -109,4 +109,20 @@ public final class DisplayMessageHandlers {
                         .acceptTradeStateSync(message)
         );
     }
+
+    public static NetworkMessageHandler<MailboxSyncPacket> mailboxSync() {
+        return (message, context) -> DistExecutor.unsafeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> com.fontainerepublic.client.net.ClientNetworkExecutor
+                        .acceptMailboxSync(message)
+        );
+    }
+
+    public static NetworkMessageHandler<MailAlertPacket> mailAlert() {
+        return (message, context) -> DistExecutor.unsafeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> com.fontainerepublic.client.net.ClientNetworkExecutor
+                        .acceptMailAlert(message)
+        );
+    }
 }

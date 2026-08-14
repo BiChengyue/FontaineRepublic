@@ -12,6 +12,7 @@ import com.fontainerepublic.server.citizen.persistence.CitizenUnavailableExcepti
 import com.fontainerepublic.server.registry.api.PlayerPresence;
 import com.fontainerepublic.server.registry.model.SubjectRecord;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -103,6 +104,28 @@ public final class DefaultCitizenService implements CitizenService {
                 !updated.equals(current),
                 now()
         );
+    }
+
+    @Override
+    public List<CitizenService.CitizenIdentity> activeCitizens(int limit) {
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be positive");
+        }
+        CitizenRepository repo = repository;
+        if (repo == null) {
+            return List.of();
+        }
+        List<CitizenService.CitizenIdentity> result = new java.util.ArrayList<>();
+        for (CitizenRecord record : repo.snapshot().citizens().values()) {
+            if (record.status() != CitizenStatus.CITIZEN) {
+                continue;
+            }
+            result.add(new CitizenService.CitizenIdentity(record.playerId(), record.subjectId()));
+            if (result.size() >= limit) {
+                break;
+            }
+        }
+        return List.copyOf(result);
     }
 
     private CitizenRecord requireCitizen(UUID playerId) {

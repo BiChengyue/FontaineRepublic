@@ -3,6 +3,7 @@ package com.fontainerepublic.server.economy.service;
 import com.fontainerepublic.server.economy.api.CurrencyPresentation;
 import com.fontainerepublic.server.economy.api.EconomyPage;
 import com.fontainerepublic.server.economy.api.EconomyService;
+import com.fontainerepublic.server.economy.api.MailPostageReceipt;
 import com.fontainerepublic.server.economy.api.SubjectDirectory;
 import com.fontainerepublic.server.economy.api.TransferReceipt;
 import com.fontainerepublic.server.economy.api.TradeSettlementReceipt;
@@ -288,6 +289,61 @@ public final class DefaultEconomyService implements EconomyService {
                 bOffered,
                 taxRatePercent,
                 normalized,
+                repository.storeRevision(),
+                timestamp
+        );
+    }
+
+    @Override
+    public MailPostageReceipt chargePostage(
+            SubjectId payer,
+            long postageFee,
+            long attachmentFee,
+            String memo
+    ) {
+        Objects.requireNonNull(payer, "payer");
+        if (postageFee < 0 || attachmentFee < 0) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "Postage/attachment fees must not be negative"
+            );
+        }
+        long total;
+        try {
+            total = Math.addExact(postageFee, attachmentFee);
+        } catch (ArithmeticException overflow) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "Total mail charge would overflow"
+            );
+        }
+        if (total <= 0) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "A mail charge must move a positive total"
+            );
+        }
+        if (total > limits.maxBalance()) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "Mail charge must be at most " + limits.maxBalance()
+            );
+        }
+        String normalized = normalizeMemo(memo);
+        long timestamp = now();
+        // Deliberately no active-subject/cooldown gate here: this is the
+        // system postage channel of the mail module. The mail service
+        // enforces the player-facing authority rules (sender communicator
+        // gate, active subject, fee computation) at its own boundary; the
+        // repository enforces source existence, balance, capacity and
+        // revision staleness and fail-closes the charge on any violation.
+        EconomyAccount payerAccount = repository.requireAccount(payer);
+        return repository.chargePostage(
+                payer,
+                postageFee,
+                attachmentFee,
+                normalized,
+                payerAccount.accountRevision(),
                 repository.storeRevision(),
                 timestamp
         );

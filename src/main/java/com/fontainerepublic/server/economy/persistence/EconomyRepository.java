@@ -6,6 +6,7 @@ import com.fontainerepublic.core.DurableCommitStatus;
 import com.fontainerepublic.server.economy.model.EconomyEmergencyReceipt;
 import com.fontainerepublic.server.economy.api.TransferReceipt;
 import com.fontainerepublic.server.economy.api.TradeSettlementReceipt;
+import com.fontainerepublic.server.economy.api.MailPostageReceipt;
 import com.fontainerepublic.server.economy.model.EconomyAccount;
 import com.fontainerepublic.server.economy.model.EconomyTransaction;
 import com.fontainerepublic.server.economy.model.NotificationSummary;
@@ -646,6 +647,143 @@ public final class EconomyRepository {
                 aTax,
                 bTax,
                 createdIds,
+                true
+        );
+    }
+
+    /**
+     * Atomic mail postage/attachment fee charge (FR-MAIL-001-A §6.3): one
+     * replacement snapshot that debits the payer's personal account by
+     * {@code postageFee + attachmentFee} and credits the treasury by the same
+     * total, appending one {@code TAX} transaction leg ({@code to == null}).
+     * Total supply {@code = sum(accounts) + treasury} is conserved exactly.
+     * The source must hold the total and must not be frozen; stale expected
+     * revisions reject at the final boundary; nothing is published on failure.
+     * Institution senders never reach this path (their send is free).
+     */
+    public MailPostageReceipt chargePostage(
+            SubjectId from,
+            long postageFee,
+            long attachmentFee,
+            String memo,
+            long expectedFromAccountRevision,
+            long expectedStoreRevision,
+            long timestamp
+    ) {
+        requireOwnerThread();
+        Objects.requireNonNull(from, "from");
+        if (postageFee < 0 || attachmentFee < 0) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "Postage/attachment fees must not be negative"
+            );
+        }
+        long total;
+        try {
+            total = Math.addExact(postageFee, attachmentFee);
+        } catch (ArithmeticException overflow) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Total postage charge would overflow"
+            );
+        }
+        if (total <= 0) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_AMOUNT_INVALID,
+                    "A postage charge must move a positive total"
+            );
+        }
+        if (expectedStoreRevision != storeRevision) {
+            throw stale("store");
+        }
+
+        EconomyAccount source = accounts.get(from);
+        if (source == null) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_NO_ACCOUNT,
+                    "No economy account for postage payer " + from
+            );
+        }
+        if (source.accountRevision() != expectedFromAccountRevision) {
+            throw stale("account " + from);
+        }
+        if (source.frozen()) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_FROZEN,
+                    "Account of subject " + from + " is frozen"
+            );
+        }
+        if (source.balance() < total) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_INSUFFICIENT_FUNDS,
+                    "Insufficient balance for postage payer " + from
+            );
+        }
+        if (nextTransactionId == Long.MAX_VALUE) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_CAPACITY_EXCEEDED,
+                    "Economy transaction id space exhausted"
+            );
+        }
+        requireStoreRevisionSpace();
+
+        long newTreasury;
+        try {
+            newTreasury = Math.addExact(treasuryBalance, total);
+        } catch (ArithmeticException overflow) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Treasury balance would overflow"
+            );
+        }
+        if (newTreasury > limits.maxBalance()) {
+            throw new EconomyUnavailableException(
+                    EconomyUnavailableException.CODE_OVERFLOW,
+                    "Treasury balance would exceed the maximum of " + limits.maxBalance()
+            );
+        }
+
+        long newId = nextTransactionId;
+        EconomyAccount newSource = source.withBalance(source.balance() - total, newId);
+        EconomyTransaction transaction = new EconomyTransaction(
+                EconomyTransaction.CURRENT_SCHEMA_VERSION,
+                newId,
+                timestamp,
+                from,
+                null,
+                total,
+                TransactionType.TAX,
+                memo
+        );
+
+        LinkedHashMap<SubjectId, EconomyAccount> nextAccounts =
+                new LinkedHashMap<>(accounts);
+        nextAccounts.put(from, newSource);
+
+        LinkedHashMap<Long, EconomyTransaction> nextTransactions =
+                new LinkedHashMap<>(transactions);
+        nextTransactions.put(newId, transaction);
+        if (nextTransactions.size() > limits.maxTransactions()) {
+            Long oldest = nextTransactions.keySet().iterator().next();
+            nextTransactions.remove(oldest);
+        }
+
+        commitAndPublish(buildSnapshot(
+                storeRevision + 1,
+                newId + 1,
+                newTreasury,
+                nextAccounts,
+                nextTransactions,
+                pendingNotifications,
+                receiptsCopy()
+        ));
+        return new MailPostageReceipt(
+                timestamp,
+                from,
+                postageFee,
+                attachmentFee,
+                total,
+                newId,
                 true
         );
     }

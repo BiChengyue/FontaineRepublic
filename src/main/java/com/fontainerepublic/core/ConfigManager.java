@@ -70,6 +70,18 @@ public class ConfigManager {
     /** Default trade settlement tax rate in percent (FR-TRADE-001-A §6.1). */
     public static final int DEFAULT_TRADE_TAX_RATE_PERCENT = 5;
 
+    /** Default mail postage fee per letter (FR-MAIL-001-A §6.3). */
+    public static final long DEFAULT_MAIL_POSTAGE_FEE = 10;
+
+    /** Default mail per-attachment fee (money attachment or item slot each). */
+    public static final long DEFAULT_MAIL_ATTACHMENT_FEE = 100;
+
+    /** Default mail broadcast fee (institution sends are free by default). */
+    public static final long DEFAULT_MAIL_BROADCAST_FEE = 0;
+
+    /** Default mail broadcast cooldown in milliseconds (5 minutes). */
+    public static final long DEFAULT_MAIL_BROADCAST_COOLDOWN_MILLIS = 300_000L;
+
     private static final ForgeConfigSpec.IntValue COMMIT_MIN_INTERVAL_MILLIS;
     private static final ForgeConfigSpec.IntValue COMMIT_MAX_BYTES_PER_NAMESPACE;
 
@@ -93,6 +105,14 @@ public class ConfigManager {
     private static final ForgeConfigSpec.IntValue INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS;
     private static final ForgeConfigSpec.ConfigValue<String> EMERGENCY_HYDRO_ARCHON_UUID;
     private static final ForgeConfigSpec.IntValue TRADE_TAX_RATE_PERCENT;
+    private static final ForgeConfigSpec.LongValue MAIL_POSTAGE_FEE;
+    private static final ForgeConfigSpec.LongValue MAIL_ATTACHMENT_FEE;
+    private static final ForgeConfigSpec.LongValue MAIL_BROADCAST_FEE;
+    private static final ForgeConfigSpec.LongValue MAIL_BROADCAST_COOLDOWN_MILLIS;
+    private static final ForgeConfigSpec.ConfigValue<String> MAIL_MANAGER_PARLIAMENT;
+    private static final ForgeConfigSpec.ConfigValue<String> MAIL_MANAGER_COURT;
+    private static final ForgeConfigSpec.ConfigValue<String> MAIL_MANAGER_BANK;
+    private static final ForgeConfigSpec.ConfigValue<String> MAIL_MANAGER_GOVERNMENT;
 
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -325,6 +345,78 @@ public class ConfigManager {
                         DEFAULT_TRADE_TAX_RATE_PERCENT,
                         0,
                         100
+                );
+        builder.pop();
+
+        builder.comment(
+                "FR-MAIL-001 communicator mail feature. Postage/attachment fees "
+                        + "are charged from a personal sender and credit the treasury; "
+                        + "institution senders are free. A mailbox manager is a "
+                        + "comma-separated list of player UUIDs; when empty the "
+                        + "Hydro Archon holds it by default."
+        ).push("mail");
+        MAIL_POSTAGE_FEE = builder
+                .comment("Fixed postage fee per letter. Range [0, 1000000].")
+                .defineInRange(
+                        "postageFee",
+                        DEFAULT_MAIL_POSTAGE_FEE,
+                        0L,
+                        1_000_000L
+                );
+        MAIL_ATTACHMENT_FEE = builder
+                .comment("Fee per attachment (a money attachment or an item slot "
+                        + "each). Range [0, 1000000].")
+                .defineInRange(
+                        "attachmentFee",
+                        DEFAULT_MAIL_ATTACHMENT_FEE,
+                        0L,
+                        1_000_000L
+                );
+        MAIL_BROADCAST_FEE = builder
+                .comment("Fee per institution broadcast. Range [0, 1000000]; "
+                        + "0 (default) = free.")
+                .defineInRange(
+                        "broadcastFee",
+                        DEFAULT_MAIL_BROADCAST_FEE,
+                        0L,
+                        1_000_000L
+                );
+        MAIL_BROADCAST_COOLDOWN_MILLIS = builder
+                .comment("Minimum interval between broadcasts per institution "
+                        + "in milliseconds. Range [0, 86400000]; 0 disables.")
+                .defineInRange(
+                        "broadcastCooldownMillis",
+                        DEFAULT_MAIL_BROADCAST_COOLDOWN_MILLIS,
+                        0L,
+                        86_400_000L
+                );
+        MAIL_MANAGER_PARLIAMENT = builder
+                .comment("Mailbox managers (player UUIDs, comma-separated) of "
+                        + "the parliament mailbox; empty = Hydro Archon default.")
+                .define(
+                        "mailboxManagerParliament",
+                        ""
+                );
+        MAIL_MANAGER_COURT = builder
+                .comment("Mailbox managers (player UUIDs, comma-separated) of "
+                        + "the court mailbox; empty = Hydro Archon default.")
+                .define(
+                        "mailboxManagerCourt",
+                        ""
+                );
+        MAIL_MANAGER_BANK = builder
+                .comment("Mailbox managers (player UUIDs, comma-separated) of "
+                        + "the central-bank mailbox; empty = Hydro Archon default.")
+                .define(
+                        "mailboxManagerBank",
+                        ""
+                );
+        MAIL_MANAGER_GOVERNMENT = builder
+                .comment("Mailbox managers (player UUIDs, comma-separated) of "
+                        + "the government mailbox; empty = Hydro Archon default.")
+                .define(
+                        "mailboxManagerGovernment",
+                        ""
                 );
         builder.pop();
         SPEC = builder.build();
@@ -563,6 +655,71 @@ public class ConfigManager {
             return TRADE_TAX_RATE_PERCENT.get();
         } catch (IllegalStateException notLoaded) {
             return DEFAULT_TRADE_TAX_RATE_PERCENT;
+        }
+    }
+
+    /** Configured mail postage fee per letter (FR-MAIL-001-A §6.3). */
+    public static long mailPostageFee() {
+        try {
+            return MAIL_POSTAGE_FEE.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_MAIL_POSTAGE_FEE;
+        }
+    }
+
+    /** Configured mail per-attachment fee. */
+    public static long mailAttachmentFee() {
+        try {
+            return MAIL_ATTACHMENT_FEE.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_MAIL_ATTACHMENT_FEE;
+        }
+    }
+
+    /** Configured mail broadcast fee (0 = free). */
+    public static long mailBroadcastFee() {
+        try {
+            return MAIL_BROADCAST_FEE.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_MAIL_BROADCAST_FEE;
+        }
+    }
+
+    /** Configured mail broadcast cooldown in milliseconds (0 = disabled). */
+    public static long mailBroadcastCooldownMillis() {
+        try {
+            return MAIL_BROADCAST_COOLDOWN_MILLIS.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_MAIL_BROADCAST_COOLDOWN_MILLIS;
+        }
+    }
+
+    /** Configured parliament-mailbox manager player UUIDs (comma-separated). */
+    public static String mailManagerParliament() {
+        return mailManager(MAIL_MANAGER_PARLIAMENT);
+    }
+
+    /** Configured court-mailbox manager player UUIDs (comma-separated). */
+    public static String mailManagerCourt() {
+        return mailManager(MAIL_MANAGER_COURT);
+    }
+
+    /** Configured central-bank-mailbox manager player UUIDs. */
+    public static String mailManagerBank() {
+        return mailManager(MAIL_MANAGER_BANK);
+    }
+
+    /** Configured government-mailbox manager player UUIDs. */
+    public static String mailManagerGovernment() {
+        return mailManager(MAIL_MANAGER_GOVERNMENT);
+    }
+
+    private static String mailManager(ForgeConfigSpec.ConfigValue<String> value) {
+        try {
+            String raw = value.get();
+            return raw == null ? "" : raw.trim();
+        } catch (IllegalStateException notLoaded) {
+            return "";
         }
     }
 }

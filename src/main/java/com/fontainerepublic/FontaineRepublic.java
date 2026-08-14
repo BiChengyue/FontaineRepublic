@@ -34,6 +34,8 @@ import com.fontainerepublic.server.justice.api.JusticeService;
 import com.fontainerepublic.server.login.LoginProvisioningHook;
 import com.fontainerepublic.server.land.LandModule;
 import com.fontainerepublic.server.land.api.LandService;
+import com.fontainerepublic.server.mail.MailModule;
+import com.fontainerepublic.server.mail.api.MailService;
 import com.fontainerepublic.server.network.NetworkRuntimeModule;
 import com.fontainerepublic.server.parliament.ParliamentCommand;
 import com.fontainerepublic.server.parliament.ParliamentModule;
@@ -136,6 +138,7 @@ public class FontaineRepublic {
         JusticeModule.register(coreManager.moduleRegistry());
         EmergencyModule.register(coreManager.moduleRegistry());
         TradeModule.register(coreManager.moduleRegistry());
+        MailModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
             TestModule.registerAll(coreManager.moduleRegistry());
             LOGGER.warn(
@@ -192,6 +195,7 @@ public class FontaineRepublic {
         bindParliamentServices();
         bindJusticeServices();
         bindTradeServices();
+        bindMailServices();
         if (runtimeValidationEnabled) {
             TestModule.logAvailability(coreManager);
         }
@@ -468,6 +472,11 @@ public class FontaineRepublic {
                                 player.getGameProfile().getName()
                         );
                         institutionPresentationSync().sync(player.getUUID());
+                        // FR-MAIL-001-A: push the mailbox sync + unread alert
+                        // at login (no-client parity).
+                        mailService().ifPresent(mail -> mail.requestSync(
+                                player.getUUID()
+                        ));
                     } catch (RuntimeException failed) {
                         LOGGER.error(
                                 "[FontaineRepublic] PlayerData login failed for {} ({}): {}",
@@ -604,6 +613,46 @@ public class FontaineRepublic {
                 .filter(TradeModule.class::isInstance)
                 .map(TradeModule.class::cast)
                 .map(TradeModule::service);
+    }
+
+    /**
+     * Binds the authoritative economy, subject-registry, player-directory,
+     * citizen and government services to the mail module after the runtime
+     * start (dependency order guaranteed by module resolution).
+     */
+    private void bindMailServices() {
+        EconomyService economy = economyService().orElse(null);
+        SubjectRegistryService subjectRegistry = subjectRegistryService().orElse(null);
+        var playerDirectory = coreManager.getRuntimeContainer(PlayerDataModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(PlayerDataModule.class::isInstance)
+                .map(PlayerDataModule.class::cast)
+                .map(PlayerDataModule::directoryService)
+                .orElse(null);
+        CitizenService citizen = citizenService().orElse(null);
+        GovernmentService government = governmentService().orElse(null);
+        coreManager.getRuntimeContainer(MailModule.MODULE_ID)
+                .flatMap(container -> container.instance())
+                .filter(MailModule.class::isInstance)
+                .map(MailModule.class::cast)
+                .ifPresent(module -> module.bindServices(
+                        economy,
+                        subjectRegistry,
+                        playerDirectory,
+                        citizen,
+                        government,
+                        networkBootstrap.sendService()
+                ));
+    }
+
+    private java.util.Optional<MailService> mailService() {
+        return coreManager.getRuntimeContainer(MailModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(MailModule.class::isInstance)
+                .map(MailModule.class::cast)
+                .map(MailModule::service);
     }
 
     /**

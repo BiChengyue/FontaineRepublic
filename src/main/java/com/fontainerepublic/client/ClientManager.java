@@ -68,6 +68,8 @@ public final class ClientManager {
                 .executes(context -> openMain())
                 .then(Commands.literal("money")
                         .executes(context -> openMoney()))
+                .then(Commands.literal("mail")
+                        .executes(context -> openMail()))
                 .then(Commands.literal("citizen")
                         .executes(context -> openCitizen()))
                 .then(Commands.literal("history")
@@ -100,6 +102,15 @@ public final class ClientManager {
             return 0;
         }
         Minecraft.getInstance().setScreen(new MoneyScreen());
+        return 1;
+    }
+
+    private static int openMail() {
+        if (!gateAllows()) {
+            return 0;
+        }
+        Minecraft.getInstance().setScreen(
+                new com.fontainerepublic.client.gui.mail.MailScreen());
         return 1;
     }
 
