@@ -526,6 +526,26 @@ public final class MailRepository {
     // ------------------------------------------------------------------
 
     private static final class DataManagerMailStore implements MailStore {
+
+        /**
+         * Maximum retries for the transient shared durable-commit rate guard
+         * (FR-MAIL-001-FIX-01). The mail {@link MailService#send} and claim
+         * flows perform two or three back-to-back durable commits across
+         * namespaces (economy postage/transfer, then the mail store). Because
+         * {@link DataManager#commitModuleData} enforces the FR-CORE-002
+         * {@code minIntervalMillis} rate guard on a single shared wall-clock
+         * timestamp, the mail commit that immediately follows an economy
+         * commit is rejected with {@link DataManager#CODE_RATE_GUARD}. Without
+         * a bounded retry that transient rejection is surfaced as
+         * {@code CODE_STORE_FAILURE}, the mail is silently dropped, and a
+         * clean restart loads {@code revision=0} (the Level 3 release blocker).
+         * Retrying within the mail store — without touching core interfaces —
+         * self-heals the race while leaving the rate guard intact for genuine
+         * abuse.
+         */
+        private static final int MAX_RATE_GUARD_RETRIES = 5;
+        private static final long RATE_GUARD_RETRY_DELAY_MILLIS = 120L;
+
         @Override
         public CompoundTag load() {
             return DataManager.getModuleData(MODULE_DATA_KEY).copy();
@@ -533,10 +553,23 @@ public final class MailRepository {
 
         @Override
         public DurableCommitResult commit(CompoundTag snapshot) {
-            return DataManager.commitModuleData(
-                    MODULE_DATA_KEY,
-                    Objects.requireNonNull(snapshot, "snapshot").copy()
-            );
+            CompoundTag copy = Objects.requireNonNull(snapshot, "snapshot").copy();
+            DurableCommitResult result =
+                    DataManager.commitModuleData(MODULE_DATA_KEY, copy);
+            for (int attempt = 0;
+                 attempt < MAX_RATE_GUARD_RETRIES
+                         && result.status() != DurableCommitStatus.COMMITTED
+                         && DataManager.CODE_RATE_GUARD.equals(result.failureCode());
+                 attempt++) {
+                try {
+                    Thread.sleep(RATE_GUARD_RETRY_DELAY_MILLIS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+                result = DataManager.commitModuleData(MODULE_DATA_KEY, copy);
+            }
+            return result;
         }
     }
 }

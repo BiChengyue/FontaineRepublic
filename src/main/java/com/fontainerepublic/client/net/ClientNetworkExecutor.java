@@ -96,6 +96,27 @@ public final class ClientNetworkExecutor {
                 message.unreadCount(),
                 message.summary()
         );
+        // FR-MAIL-001-FIX-01 §2.3: the chat-reminder fallback — show the bounded
+        // latest-mail summary as an action-bar line so the reminder is visible
+        // even when the HUD badge is off-screen. Display-only; never authori-
+        // tative. Only fires while the player carries the communicator (the
+        // server already gates the send, but the client re-checks for parity).
+        if (message.unreadCount() > 0) {
+            net.minecraft.client.Minecraft minecraft =
+                    net.minecraft.client.Minecraft.getInstance();
+            if (minecraft.player != null
+                    && (com.fontainerepublic.client.CommunicatorGate
+                            .inventoryContainsCommunicator(minecraft.player)
+                            || com.fontainerepublic.client.CommunicatorGate
+                            .holdsCommunicator(minecraft.player))) {
+                minecraft.player.displayClientMessage(
+                        net.minecraft.network.chat.Component.literal(
+                                "✉ " + message.unreadCount() + " unread mail — "
+                                        + message.summary()),
+                        true
+                );
+            }
+        }
     }
 
     /**
