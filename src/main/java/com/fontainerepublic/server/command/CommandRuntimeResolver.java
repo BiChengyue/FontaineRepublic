@@ -18,6 +18,8 @@ import com.fontainerepublic.server.institutionaccess.InstitutionAccessModule;
 import com.fontainerepublic.server.institutionaccess.api.InstitutionAccessService;
 import com.fontainerepublic.server.justice.JusticeModule;
 import com.fontainerepublic.server.justice.api.JusticeService;
+import com.fontainerepublic.server.landclaim.LandClaimModule;
+import com.fontainerepublic.server.landclaim.api.LandClaimService;
 import com.fontainerepublic.server.parliament.ParliamentModule;
 import com.fontainerepublic.server.parliament.api.ParliamentService;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
@@ -200,6 +202,19 @@ public final class CommandRuntimeResolver {
                 .filter(JusticeModule.class::isInstance)
                 .map(JusticeModule.class::cast)
                 .map(JusticeModule::service);
+    }
+
+    /**
+     * Execution-time resolution of the current ACTIVE land-claim service
+     * (FR-LAND-CLAIM-001-A §3.4; resolved per invocation, never cached).
+     */
+    public Optional<LandClaimService> landClaimService() {
+        return coreManager.getRuntimeContainer(LandClaimModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(LandClaimModule.class::isInstance)
+                .map(LandClaimModule.class::cast)
+                .map(LandClaimModule::service);
     }
 
     private ModuleDiagnostic diagnostic(

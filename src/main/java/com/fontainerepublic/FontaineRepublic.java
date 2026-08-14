@@ -13,6 +13,7 @@ import com.fontainerepublic.server.command.CitizenCommand;
 import com.fontainerepublic.server.command.CommandBootstrap;
 import com.fontainerepublic.server.command.CommandRuntimeResolver;
 import com.fontainerepublic.server.command.MoneyCommand;
+import com.fontainerepublic.server.command.LandCommand;
 import com.fontainerepublic.server.command.registration.CommandContributionRegistry;
 import com.fontainerepublic.server.command.registration.CommandContributionSpec;
 import com.fontainerepublic.server.audit.AuditModule;
@@ -34,6 +35,8 @@ import com.fontainerepublic.server.justice.api.JusticeService;
 import com.fontainerepublic.server.login.LoginProvisioningHook;
 import com.fontainerepublic.server.land.LandModule;
 import com.fontainerepublic.server.land.api.LandService;
+import com.fontainerepublic.server.landclaim.LandClaimModule;
+import com.fontainerepublic.server.landclaim.api.LandClaimService;
 import com.fontainerepublic.server.mail.MailModule;
 import com.fontainerepublic.server.mail.api.MailService;
 import com.fontainerepublic.server.network.NetworkRuntimeModule;
@@ -139,6 +142,7 @@ public class FontaineRepublic {
         EmergencyModule.register(coreManager.moduleRegistry());
         TradeModule.register(coreManager.moduleRegistry());
         MailModule.register(coreManager.moduleRegistry());
+        LandClaimModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
             TestModule.registerAll(coreManager.moduleRegistry());
             LOGGER.warn(
@@ -170,6 +174,10 @@ public class FontaineRepublic {
                 "court",
                 CourtCommand::create
         ));
+        commandContributionRegistry.register(new CommandContributionSpec(
+                "land",
+                LandCommand::create
+        ));
         event.enqueueWork(() -> {
             commandContributionRegistry.freeze();
             networkBootstrap.registerProductionMessagesAndFreeze();
@@ -196,6 +204,7 @@ public class FontaineRepublic {
         bindJusticeServices();
         bindTradeServices();
         bindMailServices();
+        bindLandClaimServices();
         if (runtimeValidationEnabled) {
             TestModule.logAvailability(coreManager);
         }
@@ -653,6 +662,35 @@ public class FontaineRepublic {
                 .filter(MailModule.class::isInstance)
                 .map(MailModule.class::cast)
                 .map(MailModule::service);
+    }
+
+    /**
+     * Binds the authoritative land service to the land-claim module after the
+     * runtime start (dependency order guaranteed by module resolution, but the
+     * service reference is only resolvable once containers exist).
+     *
+     * <p>FR-LAND-CLAIM-001-FIX-01 F5: if the hard land dependency is
+     * unexpectedly unavailable, the module fails closed — one explicit warning
+     * is logged, {@code LandClaimRuntime} stays unbound and command/C2S
+     * resolution returns empty instead of a startup NPE.</p>
+     */
+    private void bindLandClaimServices() {
+        landService().ifPresent(land ->
+                coreManager.getRuntimeContainer(LandClaimModule.MODULE_ID)
+                        .flatMap(container -> container.instance())
+                        .filter(LandClaimModule.class::isInstance)
+                        .map(LandClaimModule.class::cast)
+                        .ifPresent(module -> module.bindServices(land))
+        );
+    }
+
+    private java.util.Optional<LandClaimService> landClaimService() {
+        return coreManager.getRuntimeContainer(LandClaimModule.MODULE_ID)
+                .filter(container -> container.state() == ModuleState.ACTIVE)
+                .flatMap(container -> container.instance())
+                .filter(LandClaimModule.class::isInstance)
+                .map(LandClaimModule.class::cast)
+                .map(LandClaimModule::service);
     }
 
     /**

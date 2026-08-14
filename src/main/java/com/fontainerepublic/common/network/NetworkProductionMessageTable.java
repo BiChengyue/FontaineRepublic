@@ -1,5 +1,10 @@
 package com.fontainerepublic.common.network;
 
+import com.fontainerepublic.common.landclaim.LandClaimMessageHandlers;
+import com.fontainerepublic.common.landclaim.LandClaimPacket;
+import com.fontainerepublic.common.landclaim.LandInspectPacket;
+import com.fontainerepublic.common.landclaim.LandInspectResultPacket;
+import com.fontainerepublic.common.landclaim.LandClaimResultPacket;
 import com.fontainerepublic.common.mail.MailBroadcastPacket;
 import com.fontainerepublic.common.mail.MailDeletePacket;
 import com.fontainerepublic.common.mail.MailListRequestPacket;
@@ -44,7 +49,7 @@ import java.util.Optional;
 public final class NetworkProductionMessageTable {
 
     /** Total number of messages expected by the current protocol revision. */
-    public static final int EXPECTED_MESSAGE_COUNT = 23;
+    public static final int EXPECTED_MESSAGE_COUNT = 27;
 
     // Per-message C2S rate policies (FR-NET-001 rate limiting; bounded
     // interactive abuse control, not business authority).
@@ -70,6 +75,12 @@ public final class NetworkProductionMessageTable {
             new RateLimitPolicy(20, 4, 1_000_000_000L, 100_000_000L);
     private static final RateLimitPolicy MAIL_BROADCAST_POLICY =
             new RateLimitPolicy(2, 1, 5_000_000_000L, 1_000_000_000L);
+    // FR-LAND-CLAIM-001-A: land-claim C2S rate policies (bounded interactive
+    // abuse control; never business authority).
+    private static final RateLimitPolicy LAND_INSPECT_POLICY =
+            new RateLimitPolicy(10, 2, 1_000_000_000L, 100_000_000L);
+    private static final RateLimitPolicy LAND_CLAIM_POLICY =
+            new RateLimitPolicy(4, 1, 2_000_000_000L, 500_000_000L);
 
     private NetworkProductionMessageTable() {
     }
@@ -252,6 +263,39 @@ public final class NetworkProductionMessageTable {
                 MailBroadcastPacket::decode,
                 MailMessageHandlers.broadcast(),
                 MAIL_BROADCAST_POLICY
+        ));
+        // FR-LAND-CLAIM-001-A: land-claim ledger (IDs 23-26). C2S
+        // inspect/claim carry explicit rate policies; S2C results (24, 26)
+        // are display-only.
+        registration.register(c2sSpec(
+                23,
+                LandInspectPacket.class,
+                LandInspectPacket::encode,
+                LandInspectPacket::decode,
+                LandClaimMessageHandlers.inspect(),
+                LAND_INSPECT_POLICY
+        ));
+        registration.register(displaySpec(
+                24,
+                LandInspectResultPacket.class,
+                LandInspectResultPacket::encode,
+                LandInspectResultPacket::decode,
+                DisplayMessageHandlers.landInspectResult()
+        ));
+        registration.register(c2sSpec(
+                25,
+                LandClaimPacket.class,
+                LandClaimPacket::encode,
+                LandClaimPacket::decode,
+                LandClaimMessageHandlers.claim(),
+                LAND_CLAIM_POLICY
+        ));
+        registration.register(displaySpec(
+                26,
+                LandClaimResultPacket.class,
+                LandClaimResultPacket::encode,
+                LandClaimResultPacket::decode,
+                DisplayMessageHandlers.landClaimResult()
         ));
     }
 

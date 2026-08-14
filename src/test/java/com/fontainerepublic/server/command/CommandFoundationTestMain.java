@@ -81,6 +81,7 @@ public final class CommandFoundationTestMain {
         testHelpGuide();
         testMoneyPayTargetResolution();
         testLoginProvisioningHook();
+        testLandCommandNonPlayerRejection();
         System.out.println("[FR-CMD-001] Command foundation validation passed");
     }
 
@@ -402,30 +403,32 @@ public final class CommandFoundationTestMain {
         // surfaces MoneyCommand (UUID/amount/memo/page arguments),
         // BankCommand (official-duty target/amount/terminal/reason arguments,
         // FR-ECO-002-A), CitizenCommand (read-only, argument-free by design,
-        // FR-CIT-001-A §5), and in HelpCommand (/fr help <module>
-        // module argument, FR-CMD-GUIDE-001). Every other command source
-        // file must remain argument-free.
+        // FR-CIT-001-A §5), in HelpCommand (/fr help <module>
+        // module argument, FR-CMD-GUIDE-001), and in LandCommand
+        // (/fr land inspect <x> <y> <z> and /fr land claim <x> <y> <z>
+        // block-coordinate arguments, FR-LAND-CLAIM-001-A §3.4). Every other
+        // command source file must remain argument-free.
         for (Path file : commandFiles(commandDirectory)) {
             String fileName = file.getFileName().toString();
             if (fileName.equals("FrameworkAdminCommand.java")
                     || fileName.equals("MoneyCommand.java")
                     || fileName.equals("BankCommand.java")
                     || fileName.equals("CitizenCommand.java")
-                    || fileName.equals("HelpCommand.java")) {
+                    || fileName.equals("HelpCommand.java")
+                    || fileName.equals("LandCommand.java")) {
                 continue;
             }
             check(
                     !read(file).contains("Commands.argument("),
                     "Command argument parsing is only permitted in "
                             + "FrameworkAdminCommand/MoneyCommand/BankCommand/"
-                            + "CitizenCommand/HelpCommand: "
+                            + "CitizenCommand/HelpCommand/LandCommand: "
                             + file.getFileName()
             );
         }
         for (String forbiddenLiteral : List.of(
                 "literal(\"economy\")",
                 "literal(\"top\")",
-                "literal(\"land\")",
                 "literal(\"court\")",
                 "literal(\"election\")",
                 "literal(\"save\")",
@@ -818,6 +821,66 @@ public final class CommandFoundationTestMain {
         // 所有失败路径合计零转账:解析失败绝不到达 economy 变更边界。
         check(economy.transfers.size() == beforeFailures,
                 "Failed target resolution must never reach the economy mutation");
+    }
+
+    // ------------------------------------------------------------------
+    // FR-LAND-CLAIM-001-FIX-01 F4: behavioral land command surface
+    // ------------------------------------------------------------------
+
+    /**
+     * The no-client /fr land commands are player-only. With a non-player
+     * source the real Brigadier callback must fail closed immediately with
+     * the bounded "Only a player can ..." feedback and must never reach a
+     * LandClaimService. Proved through the executable callback, not a source
+     * scan.
+     */
+    private static void testLandCommandNonPlayerRejection() {
+        CoreManager coreManager = new CoreManager(new ModuleRegistry());
+        CommandRuntimeResolver resolver = new CommandRuntimeResolver(coreManager);
+
+        CapturingSource inspectCapture = new CapturingSource();
+        CommandSourceStack inspectSource = source(inspectCapture, 0);
+        int inspectResult = LandCommand.inspect(inspectSource, resolver, 0, 60, 0);
+        check(inspectResult == CommandFeedback.FAILURE,
+                "land inspect on a non-player source must fail");
+        check(inspectCapture.lastMessage().contains("Only a player can inspect land."),
+                "land inspect non-player feedback must be explicit");
+
+        CapturingSource claimCapture = new CapturingSource();
+        CommandSourceStack claimSource = source(claimCapture, 0);
+        int claimResult = LandCommand.claim(claimSource, resolver, 0, 60, 0);
+        check(claimResult == CommandFeedback.FAILURE,
+                "land claim on a non-player source must fail");
+        check(claimCapture.lastMessage().contains("Only a player can claim land."),
+                "land claim non-player feedback must be explicit");
+
+        // An OP level does not change the player-only gate (it is satisfied
+        // only by a live ServerPlayer, independent of the command permission
+        // level), so even an OP source without a player entity is rejected.
+        CapturingSource operatorCapture = new CapturingSource();
+        CommandSourceStack operatorSource = source(operatorCapture, Commands.LEVEL_GAMEMASTERS);
+        int opInspect = LandCommand.inspect(operatorSource, resolver, 0, 60, 0);
+        check(opInspect == CommandFeedback.FAILURE
+                        && operatorCapture.lastMessage().contains(
+                        "Only a player can inspect land."),
+                "an OP source without a player entity must still be rejected");
+
+        // The command tree exposes /fr land to every source (no requires (op)
+        // gate), which is exactly why the authority must live in the shared
+        // LandClaimService — the command itself must not gate on OP.
+        CommandContributionRegistry registry = new CommandContributionRegistry();
+        registry.register(new CommandContributionSpec(
+                "land", (context, cResolver) -> LandCommand.create(context, cResolver)));
+        registry.freeze();
+        CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
+        bootstrap(registry, coreManager)
+                .register(dispatcher, null, Commands.CommandSelection.ALL);
+        CommandNode<CommandSourceStack> land =
+                dispatcher.getRoot().getChild("fr").getChild("land");
+        check(land != null, "/fr land must be contributed");
+        check(land.canUse(source(new CapturingSource(), 0)),
+                "/fr land must not require an OP-level permission gate "
+                        + "(authority lives in the shared service)");
     }
 
     private static SubjectRecord subject(

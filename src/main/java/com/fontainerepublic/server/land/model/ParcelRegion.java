@@ -1,5 +1,7 @@
 package com.fontainerepublic.server.land.model;
 
+import java.util.Objects;
+
 /**
  * Immutable axis-aligned block region of a land parcel (FR-LAND-001-A §3.1).
  *
@@ -32,5 +34,16 @@ public record ParcelRegion(
         return x >= minX && x <= maxX
                 && y >= minY && y <= maxY
                 && z >= minZ && z <= maxZ;
+    }
+
+    /**
+     * Whether this inclusive region shares any block volume with {@code other}
+     * (axis-aligned overlap on every axis).
+     */
+    public boolean intersects(ParcelRegion other) {
+        Objects.requireNonNull(other, "other");
+        return this.maxX >= other.minX && this.minX <= other.maxX
+                && this.maxY >= other.minY && this.minY <= other.maxY
+                && this.maxZ >= other.minZ && this.minZ <= other.maxZ;
     }
 }

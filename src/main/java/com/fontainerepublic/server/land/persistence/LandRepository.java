@@ -129,6 +129,17 @@ public final class LandRepository {
                 .findFirst();
     }
 
+    /**
+     * Exact bounded point lookup of the parcel containing a block position in
+     * a dimension (FR-LAND-CLAIM-001-A §3.1): the caller-supplied dimension
+     * must be a canonical resource key; a position not covered by any parcel
+     * yields {@link Optional#empty()}. Deliberately a single-value bounded
+     * query, never a bulk enumeration or another player's detail leak.
+     */
+    public Optional<LandParcel> parcelAt(String dimension, int x, int y, int z) {
+        return findParcelAt(dimension, x, y, z);
+    }
+
     public int size() {
         requireOwnerThread();
         return parcels.size();
@@ -197,6 +208,114 @@ public final class LandRepository {
                 reports
         ));
         return parcel;
+    }
+
+    /**
+     * Atomically creates a republic-owned parcel <em>and</em> an initial
+     * non-expiring usage right for {@code holder} in a single complete
+     * replacement snapshot (FR-LAND-CLAIM-001-A §3.2). Unlike a
+     * {@code createParcel} followed by a separate {@code grantUsage} — two
+     * independent durable commits that cannot form an atomic claim — this
+     * method builds the parcel with its initial right in one candidate
+     * snapshot and calls {@code commitAndPublish} exactly once. On success the
+     * parcel and right both start at revision 1 and the store revision +1
+     * exactly once; on any validation, capacity, overlap, or durable-commit
+     * failure nothing is published and the operation can be safely retried.
+     */
+    public LandParcel createParcelWithUsage(
+            String dimension,
+            ParcelRegion region,
+            ZoneType zoneType,
+            LandAccess access,
+            OwnerReference holder,
+            long grantedAt,
+            long expiresAt
+    ) {
+        requireOwnerThread();
+        Objects.requireNonNull(dimension, "dimension");
+        Objects.requireNonNull(region, "region");
+        Objects.requireNonNull(zoneType, "zoneType");
+        Objects.requireNonNull(access, "access");
+        Objects.requireNonNull(holder, "holder");
+        if (expiresAt != 0 && expiresAt <= grantedAt) {
+            throw new LandUnavailableException(
+                    LandUnavailableException.CODE_INVALID_REQUEST,
+                    "expiresAt must be 0 (no expiry) or after grantedAt"
+            );
+        }
+        if (parcels.size() >= limits.maxParcels()) {
+            throw capacity("Parcel count would exceed the budget of "
+                    + limits.maxParcels());
+        }
+        requireStoreRevisionSpace();
+
+        ParcelId parcelId = assignParcelId();
+        requireNoOverlap(dimension, region);
+        UsageRight right = new UsageRight(
+                UsageRight.CURRENT_SCHEMA_VERSION,
+                holder,
+                UsageType.USAGE_GRANT,
+                grantedAt,
+                expiresAt,
+                1
+        );
+        LandParcel parcel = new LandParcel(
+                LandParcel.CURRENT_SCHEMA_VERSION,
+                parcelId,
+                dimension,
+                region,
+                zoneType,
+                com.fontainerepublic.server.land.model.LandOwnership.REPUBLIC,
+                access,
+                Map.of(holder, right),
+                1
+        );
+        LinkedHashMap<ParcelId, LandParcel> next = new LinkedHashMap<>(parcels);
+        next.put(parcelId, parcel);
+        commitAndPublish(new LandStoreSnapshot(
+                LandStoreSnapshot.CURRENT_STORE_VERSION,
+                storeRevision + 1,
+                next,
+                reports
+        ));
+        return parcel;
+    }
+
+    private void requireNoOverlap(String dimension, ParcelRegion region) {
+        for (LandParcel existing : parcels.values()) {
+            if (existing.dimension().equals(dimension)
+                    && existing.region().intersects(region)) {
+                throw new LandUnavailableException(
+                        LandUnavailableException.CODE_OVERLAP,
+                        "Request region overlaps existing parcel "
+                                + existing.parcelId().canonicalKey()
+                );
+            }
+        }
+    }
+
+    /**
+     * Bounded full-region overlap probe (FR-LAND-CLAIM-001-FIX F2): whether
+     * any existing parcel in {@code dimension} shares block volume with
+     * {@code region}, using the very same inclusive
+     * {@link ParcelRegion#intersects} predicate as {@link #requireNoOverlap}.
+     * Read-only, single-writer owner-thread serialized, never exposing any
+     * parcel identity or detail — only a boolean. This is a presentation-time
+     * probe and is never authoritative; the authoritative overlap decision
+     * remains the {@link #requireNoOverlap} check inside
+     * {@link #createParcelWithUsage}.
+     */
+    public boolean regionOverlaps(String dimension, ParcelRegion region) {
+        requireOwnerThread();
+        Objects.requireNonNull(dimension, "dimension");
+        Objects.requireNonNull(region, "region");
+        for (LandParcel existing : parcels.values()) {
+            if (existing.dimension().equals(dimension)
+                    && existing.region().intersects(region)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

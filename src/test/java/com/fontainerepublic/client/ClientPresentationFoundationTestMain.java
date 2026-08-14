@@ -78,17 +78,17 @@ public final class ClientPresentationFoundationTestMain {
     // ------------------------------------------------------------------
 
     private static void testProtocolPredicates() {
-        check(NetworkProtocol.VERSION.equals("7"), "Protocol version is 7");
-        check(NetworkProtocol.clientAccepts("7"), "Client accepts exact v7");
-        check(!NetworkProtocol.clientAccepts("6"), "Client rejects v6");
+        check(NetworkProtocol.VERSION.equals("8"), "Protocol version is 8");
+        check(NetworkProtocol.clientAccepts("8"), "Client accepts exact v8");
+        check(!NetworkProtocol.clientAccepts("7"), "Client rejects v7");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ABSENT.version()),
                 "Client rejects an absent server channel");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Client rejects ACCEPTVANILLA");
-        check(NetworkProtocol.serverAccepts("7"), "Server accepts exact v7");
+        check(NetworkProtocol.serverAccepts("8"), "Server accepts exact v8");
         check(NetworkProtocol.serverAccepts(NetworkRegistry.ABSENT.version()),
                 "Server accepts ABSENT.version()");
-        check(!NetworkProtocol.serverAccepts("6"), "Server rejects v6");
+        check(!NetworkProtocol.serverAccepts("7"), "Server rejects v7");
         check(!NetworkProtocol.serverAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Server rejects ACCEPTVANILLA");
     }
@@ -221,8 +221,8 @@ public final class ClientPresentationFoundationTestMain {
                 if (file.getFileName().toString().equals("DisplayMessageHandlers.java")) {
                     int references = count(source, "com.fontainerepublic.client.net");
                     int unsafeCalls = count(source, "DistExecutor.unsafeRunWhenOn");
-                    check(references == 12 && unsafeCalls == 12,
-                            "client executor referenced exactly twelve times, "
+                    check(references == 14 && unsafeCalls == 14,
+                            "client executor referenced exactly fourteen times, "
                                     + "each inside a DistExecutor.unsafeRunWhenOn supplier");
                     check(!source.contains("DistExecutor.safeRunWhenOn"),
                             "handlers use unsafeRunWhenOn (Forge safe-referent "

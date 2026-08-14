@@ -34,9 +34,44 @@ public final class ClientGuiFoundationTestMain {
         testBalanceProjection();
         testFlowProjection();
         testNotificationProjection();
+        testLandLocationResponseCorrelation();
         testSideIsolationSourceScan();
         testMainEntrySideIsolation();
         System.out.println("[FR-CLIENT-001-B] Client GUI/HUD foundation validation passed");
+    }
+
+    // ------------------------------------------------------------------
+    // FR-LAND-CLAIM-001-FIX-01 F3: S2C result / screen target correlation
+    // ------------------------------------------------------------------
+
+    /**
+     * A late inspect/claim response for one opened location must never render
+     * in a newly opened screen for a different block. The pure target
+     * correlation is outcome-tested: a mismatched echoed target is rejected
+     * and a matching one is accepted, on both axis and dimension mismatches.
+     */
+    private static void testLandLocationResponseCorrelation() {
+        String dim = "minecraft:overworld";
+        // A screen opened at (100, 60, 200):
+        //  - exact match of the echoed result target is accepted.
+        check(com.fontainerepublic.client.landclaim.LandClaimTarget.matches(
+                        dim, 100, 60, 200, dim, 100, 60, 200),
+                "a matching dimension + coordinates must be accepted");
+        //  - a different x is stale and must be ignored.
+        check(!com.fontainerepublic.client.landclaim.LandClaimTarget.matches(
+                        dim, 100, 60, 200, dim, 101, 60, 200),
+                "a mismatched x target must be rejected");
+        //  - a different y/z also rejects.
+        check(!com.fontainerepublic.client.landclaim.LandClaimTarget.matches(
+                        dim, 100, 60, 200, dim, 100, 61, 200),
+                "a mismatched y target must be rejected");
+        check(!com.fontainerepublic.client.landclaim.LandClaimTarget.matches(
+                        dim, 100, 60, 200, dim, 100, 60, 201),
+                "a mismatched z target must be rejected");
+        //  - a different dimension rejects regardless of coordinates.
+        check(!com.fontainerepublic.client.landclaim.LandClaimTarget.matches(
+                        dim, 100, 60, 200, "minecraft:the_nether", 100, 60, 200),
+                "a mismatched dimension must be rejected");
     }
 
     // ------------------------------------------------------------------

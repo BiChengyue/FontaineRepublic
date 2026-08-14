@@ -292,6 +292,15 @@ tasks.register('mailFoundationTest', JavaExec) {
     systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
 }
 
+tasks.register('landClaimFoundationTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-LAND-CLAIM-001 communicator land-claim subsystem validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.server.landclaim.LandClaimFoundationTestMain'
+    systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
+}
+
 tasks.named('check') {
     dependsOn tasks.named('playerDataTest')
     dependsOn tasks.named('playerDirectoryFoundationTest')
@@ -320,4 +329,5 @@ tasks.named('check') {
     dependsOn tasks.named('clientItemFoundationTest')
     dependsOn tasks.named('tradeFoundationTest')
     dependsOn tasks.named('mailFoundationTest')
+    dependsOn tasks.named('landClaimFoundationTest')
 }

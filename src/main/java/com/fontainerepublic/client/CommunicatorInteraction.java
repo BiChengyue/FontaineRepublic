@@ -1,11 +1,12 @@
 package com.fontainerepublic.client;
 
-import com.fontainerepublic.client.gui.land.LandScreen;
+import com.fontainerepublic.client.gui.land.LandLocationScreen;
 import com.fontainerepublic.client.gui.money.TransferFormComposer;
 import com.fontainerepublic.client.gui.FrMainScreen;
 import com.fontainerepublic.client.trade.ClientTradeSender;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 
@@ -19,10 +20,10 @@ import net.minecraftforge.event.entity.player.PlayerInteractEvent;
  * transfer still submits through {@code /fr money pay ...} and every
  * authority rule stays on the server (FR-ITEM-001-A §3).</p>
  *
- * <p>Right-click a player while holding the communicator → the transfer form
- * opens with the target pre-filled; right-click a block → the read-only land
- * overview opens (parcel purchase / claim is a later task,
- * FR-LAND-CLAIM-001).</p>
+ * <p>Right-click a player while holding the communicator → a C2S trade request
+ * is sent; right-click a block → the parcel-location view opens for that exact
+ * position (FR-LAND-CLAIM-001), offering an unowned parcel claim when the
+ * server reports it claimable.</p>
  */
 public final class CommunicatorInteraction {
 
@@ -57,7 +58,33 @@ public final class CommunicatorInteraction {
         if (!CommunicatorGate.holdsCommunicator(player)) {
             return;
         }
-        Minecraft.getInstance().setScreen(new LandScreen());
+        // FR-LAND-CLAIM-001-A §5: the parcel-location view opens carrying the
+        // clicked block position and the player's current dimension; it sends
+        // the LandInspectPacket and, when claimable, offers the claim step.
+        //
+        // FR-LAND-CLAIM-001-FIX-01 (F1): RightClickBlock is cancellable in
+        // Forge 1.20.1. Cancelling the logical-client event replaces the
+        // ordinary block interaction so a chest/door/button/lever is not also
+        // activated while the land screen opens — the land view opens *instead
+        // of* the block's normal use, not *in addition to* it. In vanilla this
+        // event's cancellation is the target-block-NONE path, which suppresses
+        // the downstream ServerboundUseItemOnPacket the server would otherwise
+        // re-fire against the block. Only the local-client communicator path is
+        // cancelled; the dedicated server never loads this class and
+        // server-side block interactions are untouched.
+        //
+        // FR-LAND-CLAIM-001-FIX-01 (F2): Forge 1.20.1 defaults the event's
+        // cancellationResult to InteractionResult.PASS. Although cancelling
+        // denies the block/item useOn, PASS lets the client retry later
+        // interactions / the other hand on the next click; reporting SUCCESS
+        // completes the interaction so the client stops trying after the land
+        // screen opens.
+        event.setCancellationResult(InteractionResult.SUCCESS);
+        event.setCanceled(true);
+        Minecraft.getInstance().setScreen(new LandLocationScreen(
+                event.getPos(),
+                player.level().dimension().location().toString()
+        ));
     }
 
     /** Right-click on empty air while holding the communicator opens the FR

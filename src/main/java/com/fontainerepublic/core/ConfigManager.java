@@ -28,6 +28,15 @@ public class ConfigManager {
     /** Default: PRIVATE parcels require a live usage right. */
     public static final boolean DEFAULT_LAND_PRIVATE_REQUIRES_USAGE_RIGHT = true;
 
+    /** Default horizontal half-width of a claimed land parcel (3×3 plane). */
+    public static final int DEFAULT_LAND_CLAIM_HALF_WIDTH = 1;
+
+    /** Default vertical height of a claimed land parcel in blocks. */
+    public static final int DEFAULT_LAND_CLAIM_HEIGHT = 8;
+
+    /** Default zone type name of a claimed land parcel. */
+    public static final String DEFAULT_LAND_CLAIM_ZONE_TYPE = "RESIDENTIAL";
+
     /** Default economy currency display name (FR-ECO-001-C §7). */
     public static final String DEFAULT_ECONOMY_CURRENCY_DISPLAY_NAME = "Mora";
 
@@ -89,6 +98,9 @@ public class ConfigManager {
     private static final ForgeConfigSpec.BooleanValue LAND_PUBLIC_ACCESS_ALLOWED;
     private static final ForgeConfigSpec.BooleanValue LAND_RESTRICTED_REQUIRES_USAGE_RIGHT;
     private static final ForgeConfigSpec.BooleanValue LAND_PRIVATE_REQUIRES_USAGE_RIGHT;
+    private static final ForgeConfigSpec.IntValue LAND_CLAIM_HALF_WIDTH;
+    private static final ForgeConfigSpec.IntValue LAND_CLAIM_HEIGHT;
+    private static final ForgeConfigSpec.ConfigValue<String> LAND_CLAIM_ZONE_TYPE;
 
     private static final ForgeConfigSpec.ConfigValue<String> ECONOMY_CURRENCY_DISPLAY_NAME;
     private static final ForgeConfigSpec.ConfigValue<String> ECONOMY_CURRENCY_SYMBOL;
@@ -176,6 +188,43 @@ public class ConfigManager {
                         "privateRequiresUsageRight",
                         DEFAULT_LAND_PRIVATE_REQUIRES_USAGE_RIGHT
                 );
+        builder.comment(
+                "FR-LAND-CLAIM-001 communicator land-claim default parcel shape."
+        ).push("claim");
+        LAND_CLAIM_HALF_WIDTH = builder
+                .comment(
+                        "Horizontal half-width of a claimed parcel in blocks "
+                                + "around the clicked block (halfWidth 1 = a "
+                                + "3x3 surface). Range [0, 16]."
+                )
+                .defineInRange(
+                        "halfWidth",
+                        DEFAULT_LAND_CLAIM_HALF_WIDTH,
+                        0,
+                        16
+                );
+        LAND_CLAIM_HEIGHT = builder
+                .comment(
+                        "Vertical height of a claimed parcel in blocks, from "
+                                + "the clicked block upward. Range [1, 64]."
+                )
+                .defineInRange(
+                        "height",
+                        DEFAULT_LAND_CLAIM_HEIGHT,
+                        1,
+                        64
+                );
+        LAND_CLAIM_ZONE_TYPE = builder
+                .comment(
+                        "Planning designation of a claimed parcel (a ZoneType "
+                                + "enum name); an invalid value falls back to "
+                                + "RESIDENTIAL."
+                )
+                .define(
+                        "zoneType",
+                        DEFAULT_LAND_CLAIM_ZONE_TYPE
+                );
+        builder.pop();
         builder.pop();
 
         builder.comment("FR-ECO-001 economy player services.").push("economy");
@@ -488,6 +537,41 @@ public class ConfigManager {
             return LAND_PRIVATE_REQUIRES_USAGE_RIGHT.get();
         } catch (IllegalStateException notLoaded) {
             return DEFAULT_LAND_PRIVATE_REQUIRES_USAGE_RIGHT;
+        }
+    }
+
+    /**
+     * Configured default half-width of a claimed parcel (FR-LAND-CLAIM-001-A
+     * §3.2); falls back to the default when the config is not loaded yet.
+     */
+    public static int landClaimHalfWidth() {
+        try {
+            return LAND_CLAIM_HALF_WIDTH.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_LAND_CLAIM_HALF_WIDTH;
+        }
+    }
+
+    /** Configured default vertical height of a claimed parcel; falls back. */
+    public static int landClaimHeight() {
+        try {
+            return LAND_CLAIM_HEIGHT.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_LAND_CLAIM_HEIGHT;
+        }
+    }
+
+    /**
+     * Configured default zone type name of a claimed parcel (a ZoneType enum
+     * name); falls back to RESIDENTIAL when the config is not loaded yet. An
+     * invalid configured value is resolved by the caller to RESIDENTIAL.
+     */
+    public static String landClaimZoneTypeName() {
+        try {
+            String value = LAND_CLAIM_ZONE_TYPE.get();
+            return value == null ? DEFAULT_LAND_CLAIM_ZONE_TYPE : value;
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_LAND_CLAIM_ZONE_TYPE;
         }
     }
 

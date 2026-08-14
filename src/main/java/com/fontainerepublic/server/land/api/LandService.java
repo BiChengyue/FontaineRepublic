@@ -2,6 +2,7 @@ package com.fontainerepublic.server.land.api;
 
 import com.fontainerepublic.server.land.model.LandParcel;
 import com.fontainerepublic.server.land.model.ParcelId;
+import com.fontainerepublic.server.land.model.ParcelRegion;
 import com.fontainerepublic.server.land.model.ViolationReport;
 import com.fontainerepublic.server.registry.model.OwnerReference;
 import com.fontainerepublic.server.land.model.ZoneType;
@@ -114,6 +115,55 @@ public interface LandService {
 
     /** Exact lookup: the parcel with the given server-assigned id, if any. */
     Optional<LandParcel> getParcel(ParcelId parcelId);
+
+    /**
+     * Exact bounded point lookup of the parcel covering a block position in a
+     * dimension (FR-LAND-CLAIM-001-A §3.1). {@code dimension} must be a
+     * canonical resource key; a position not part of any parcel yields
+     * {@link Optional#empty()}. Deliberately a single-value bounded query,
+     * never a bulk enumeration or another player's detail leak.
+     */
+    Optional<LandParcel> parcelAt(String dimension, int x, int y, int z);
+
+    /**
+     * Bounded, non-enumerating full-region overlap test (FR-LAND-CLAIM-001-FIX
+     * F2): whether any existing parcel in {@code dimension} shares any block
+     * volume with the proposed {@code region}, using the same inclusive
+     * axis-aligned intersection semantics as the mutation ({@link
+     * #createParcelWithUsage}). {@code dimension} must be a canonical resource
+     * key and {@code region} the already-clamped proposed parcel region. This
+     * is a read-only presentation-time probe — never authoritative — so
+     * {@link #createParcelWithUsage} still performs the final overlap check
+     * inside its single owner-thread mutation. Exposes no parcel identity or
+     * detail, only a boolean.
+     */
+    boolean overlaps(String dimension, ParcelRegion region);
+
+    /**
+     * Authoritative atomic creation of a republic-owned parcel together with
+     * an initial usage right for {@code holder} in one complete replacement
+     * snapshot (FR-LAND-CLAIM-001-A §3.2). This single gated operation is what
+     * a land claim uses — unlike two independent durable commits
+     * (createParcel + grantUsage), it never leaves a parcel without its
+     * initial right. On success the parcel and right start at revision 1 and
+     * the store revision +1 exactly once, and the right is granted without
+     * expiry when {@code durationMillis == 0}. On any validation, capacity,
+     * same-dimension region overlap, or durable-commit failure nothing is
+     * published and the call can be safely retried.
+     *
+     * @throws com.fontainerepublic.server.land.persistence.LandUnavailableException
+     *         with a stable code when the actor or holder is not resolvable to
+     *         an active subject, the holder kind is unsupported, the region
+     *         overlaps an existing same-dimension parcel
+     *         ({@code CODE_OVERLAP}), capacity is exhausted, the request is
+     *         invalid, or the durable store rejected the snapshot
+     */
+    UsageReceipt createParcelWithUsage(
+            UUID actor,
+            CreateParcelRequest request,
+            OwnerReference holder,
+            long durationMillis
+    );
 
     /**
      * Single bounded read-only aggregate of the republic's land parcels

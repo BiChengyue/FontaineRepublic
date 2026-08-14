@@ -99,6 +99,31 @@ public final class ClientNetworkExecutor {
     }
 
     /**
+     * FR-LAND-CLAIM-001-A §5: server-pushed inspection result for the
+     * {@code LandLocationScreen}. Display-only; the server stays
+     * authoritative.
+     */
+    public static void acceptLandInspectResult(
+            com.fontainerepublic.common.landclaim.LandInspectResultPacket message
+    ) {
+        ensureLogoutCleanup();
+        com.fontainerepublic.client.landclaim.ClientLandClaimCache.instance()
+                .setInspectResult(message);
+    }
+
+    /**
+     * FR-LAND-CLAIM-001-A §5: server-pushed claim result (success or stable
+     * code). Display-only; the server stays authoritative.
+     */
+    public static void acceptLandClaimResult(
+            com.fontainerepublic.common.landclaim.LandClaimResultPacket message
+    ) {
+        ensureLogoutCleanup();
+        com.fontainerepublic.client.landclaim.ClientLandClaimCache.instance()
+                .setClaimResult(message);
+    }
+
+    /**
      * FR-TRADE-001-A §5: server-pushed per-viewer trade snapshot. The cache
      * is display-only; a REQUESTED snapshot opens the trade screen so the
      * invited player can accept or refuse (the server stays authoritative).
@@ -138,6 +163,8 @@ public final class ClientNetworkExecutor {
                         ClientPresentationCache.instance().clear();
                         ClientTradeCache.instance().clear();
                         com.fontainerepublic.client.mail.ClientMailCache.instance().clear();
+                        com.fontainerepublic.client.landclaim.ClientLandClaimCache.instance()
+                                .clear();
                     }
             );
             logoutListenerRegistered = true;

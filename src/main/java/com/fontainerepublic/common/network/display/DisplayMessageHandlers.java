@@ -125,4 +125,22 @@ public final class DisplayMessageHandlers {
                         .acceptMailAlert(message)
         );
     }
+
+    public static NetworkMessageHandler<com.fontainerepublic.common.landclaim.LandInspectResultPacket>
+            landInspectResult() {
+        return (message, context) -> DistExecutor.unsafeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> com.fontainerepublic.client.net.ClientNetworkExecutor
+                        .acceptLandInspectResult(message)
+        );
+    }
+
+    public static NetworkMessageHandler<com.fontainerepublic.common.landclaim.LandClaimResultPacket>
+            landClaimResult() {
+        return (message, context) -> DistExecutor.unsafeRunWhenOn(
+                Dist.CLIENT,
+                () -> () -> com.fontainerepublic.client.net.ClientNetworkExecutor
+                        .acceptLandClaimResult(message)
+        );
+    }
 }

@@ -2025,6 +2025,41 @@ public final class InstitutionAccessFoundationTestMain {
         }
 
         @Override
+        public Optional<LandParcel> parcelAt(String dimension, int x, int y, int z) {
+            for (LandParcel parcel : parcels.values()) {
+                if (parcel.dimension().equals(dimension)
+                        && parcel.region().contains(x, y, z)) {
+                    return Optional.of(parcel);
+                }
+            }
+            return Optional.empty();
+        }
+
+        @Override
+        public boolean overlaps(
+                String dimension,
+                com.fontainerepublic.server.land.model.ParcelRegion region
+        ) {
+            for (LandParcel parcel : parcels.values()) {
+                if (parcel.dimension().equals(dimension)
+                        && parcel.region().intersects(region)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        @Override
+        public UsageReceipt createParcelWithUsage(
+                UUID actor,
+                CreateParcelRequest request,
+                com.fontainerepublic.server.registry.model.OwnerReference holder,
+                long durationMillis
+        ) {
+            throw new UnsupportedOperationException("not used by the access boundary");
+        }
+
+        @Override
         public com.fontainerepublic.server.land.api.LandSummary publicSummary() {
             return new com.fontainerepublic.server.land.api.LandSummary(
                     parcels.size(), 0L, List.of(), 0L);

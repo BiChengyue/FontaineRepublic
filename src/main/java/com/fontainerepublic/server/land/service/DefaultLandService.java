@@ -14,6 +14,7 @@ import com.fontainerepublic.server.land.api.ViolationReceipt;
 import com.fontainerepublic.server.land.model.LandAccess;
 import com.fontainerepublic.server.land.model.LandParcel;
 import com.fontainerepublic.server.land.model.ParcelId;
+import com.fontainerepublic.server.land.model.ParcelRegion;
 import com.fontainerepublic.server.land.model.ViolationReport;
 import com.fontainerepublic.server.land.model.ZoneType;
 import com.fontainerepublic.server.land.persistence.LandRepository;
@@ -175,6 +176,52 @@ public final class DefaultLandService implements LandService {
     public Optional<LandParcel> getParcel(ParcelId parcelId) {
         Objects.requireNonNull(parcelId, "parcelId");
         return repository.findByParcelId(parcelId);
+    }
+
+    @Override
+    public Optional<LandParcel> parcelAt(String dimension, int x, int y, int z) {
+        Objects.requireNonNull(dimension, "dimension");
+        return repository.parcelAt(dimension, x, y, z);
+    }
+
+    @Override
+    public boolean overlaps(String dimension, ParcelRegion region) {
+        Objects.requireNonNull(dimension, "dimension");
+        Objects.requireNonNull(region, "region");
+        return repository.regionOverlaps(dimension, region);
+    }
+
+    @Override
+    public UsageReceipt createParcelWithUsage(
+            UUID actor,
+            CreateParcelRequest request,
+            OwnerReference holder,
+            long durationMillis
+    ) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(holder, "holder");
+        requireResolvableHolder(actor);
+        requirePlayerHolder(holder);
+        requireResolvableHolder(holderUuid(holder));
+        long grantedAt = now();
+        long expiresAt = resolveExpiry(grantedAt, durationMillis);
+        LandParcel parcel = repository.createParcelWithUsage(
+                request.dimension(),
+                request.region(),
+                request.zoneType(),
+                request.access(),
+                holder,
+                grantedAt,
+                expiresAt
+        );
+        return new UsageReceipt(
+                UsageChangeKind.GRANTED,
+                parcel,
+                holder,
+                true,
+                now()
+        );
     }
 
     @Override

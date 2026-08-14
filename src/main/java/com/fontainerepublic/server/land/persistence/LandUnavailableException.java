@@ -39,6 +39,9 @@ public final class LandUnavailableException extends RuntimeException {
     /** A parcel already exists for the requested id (server-id collision). */
     public static final String CODE_PARCEL_EXISTS = "PARCEL_EXISTS";
 
+    /** The full request region overlaps an existing same-dimension parcel. */
+    public static final String CODE_OVERLAP = "OVERLAP";
+
     /** The create request failed validation (dimension/region). */
     public static final String CODE_INVALID_REQUEST = "INVALID_REQUEST";
 
