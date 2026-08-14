@@ -231,8 +231,8 @@ public class FontaineRepublic {
     private void onServerStarting(ServerStartingEvent event) {
         DataManager.init(event.getServer());
         // FR-ITEM-002-A: bootstrap the server-only Water Mirror HMAC key map
-        // (a fresh random active key is generated when no seed is configured).
-        CommunicatorAuthority.authenticator(new byte[0]);
+        // from the persisted key (created + durably persisted on first run).
+        CommunicatorAuthority.authenticator(CommunicatorAuthority.loadOrCreateKey());
         coreManager.startRuntime();
         bindSubjectRegistryPlayerData();
         bindCitizenServices();
