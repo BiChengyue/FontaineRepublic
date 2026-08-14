@@ -1,0 +1,23 @@
+# dsh subprocess home settings: route the headless profile through OpenCode Go,
+# defaulting to deepseek-v4-flash. Copied into the project DSH_HOME on first use.
+llm-pi-ai:
+  providers:
+    opencode-go:
+      displayName: OpenCode Go
+      apiKeyEnv: OPENCODE_GO_API_KEY
+      api: openai-completions
+      baseURL: https://opencode.ai/zen/go/v1
+      compat:
+        thinkingFormat: deepseek
+      models:
+        - id: deepseek-v4-flash
+          name: DeepSeek V4 Flash
+          contextWindow: 1000000
+          maxTokens: 32768
+          reasoningEfforts:
+            off:
+            high: high
+            max: max
+agent-default-model:
+  provider: opencode-go
+  model: deepseek-v4-flash
