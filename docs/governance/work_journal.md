@@ -802,3 +802,41 @@
   ExitCode=0。
 - 尚未声称完成 Human 真机 UI 验证；待 Human 可用时验证传讯水镜入口、有效权益
   列表、分页与刷新。
+## 2026-08-14（中枢接管）| 项目中枢运作模式 + 第一批并行派发
+
+- 用户确认：由本会话全面接手项目中枢，负责「拆解→并行派发子代理→审查→返修→
+  合入 develop→推送」；用户只提需求/配合真机测试，技术自主裁量（不偏离架构
+  v2.7 / 路线图 v1.1 / 服务端权威原则）。
+- 运作模式修正：**不使用 goal 目标**（避免过早唤醒）；以「子代理完成通知」唤醒；
+  上下文通过文档（CLAUDE.md / current_status.md / work_journal.md）持久保持。
+- 真机 Level 3（2026-08-14）结论：两处发布阻断缺陷——(1) 邮件重启丢失；
+  (2) 无 FR 客户端因注册表 fontainerepublic:communicator 不兼容无法加入；
+  其余 FAIL/PARTIAL：邮件 UI/已读/金钱附件/HUD 提醒、通讯器右键空气副手冲突、
+  纯物品交易报错、交易与邮件 UI 不宜发布。未测：崩溃窗口 / RCON / 旧协议拒绝。
+- 第一批并行派发（3 个子代理，隔离 worktree，不自行合并）：
+  1. mail-defect-fix：修邮件持久化丢失 + 已读/金钱附件认领 + HUD/聊天提醒 +
+     MailScreen 排版（fix/mail-defects）。
+  2. registry-optional-client：按 FR-ITEM-002-A 改用原版时钟载体 + NBT 识别，
+     去除自定义物品注册（fix/registry-optional-client；设计变更，待 Human 批准合入）。
+  3. docs-state-sync：同步 CLAUDE.md 进度 + 提交 Level 3 报告与两个设计候选
+     （docs/state-sync-20260814）。
+- 待 Human 决策：① FR-ITEM-002-A 是否批准合入；② 交易方向（FR-TRADE-002-A
+  重做 vs 先修补现有交易 bug）。
+
+## 2026-08-14（中枢接管）| docs-state-sync 状态台账对齐 Level 3 结论
+
+- 在 develop（HEAD 0958d7b）上开分支 `docs/state-sync-20260814`，将项目状态
+  文档与 git 历史/代码对齐（代码 = 文档 = git）。
+- 更新 CLAUDE.md「Current Progress」：补齐已合并的通讯器功能（FR-ITEM-001
+  传讯水镜 / FR-TRADE-001 交易 / FR-MAIL-001 邮件 / FR-HUD 相关客户端视图 /
+  FR-LAND-CLAIM-001 购地 / FR-LAND-002 个人用地权益视图），当前协议 v9、
+  29 条生产消息、15 运行时模块、10 个 /frclient 视图；记录真机 Level 3
+  （2026-08-14）结论：两处发布阻断缺陷（邮件持久化丢失；无 FR 客户端因
+  注册表 fontainerepublic:communicator 不兼容无法加入）及若干 FAIL/PARTIAL，
+  最终门禁 REVISE BEFORE NEXT RELEASE CANDIDATE；据此重写 Next。
+- 对齐 current_status.md「Next Task」到 Level 3 结论；未改架构/路线图文档。
+- 提交证据与设计候选：Level 3 报告
+  docs/ai_recovery/evidence/FR-LEVEL3-FULL-RUNTIME-20260814-REPORT.md，以及两个
+  未授权设计候选 FR-ITEM-002-A / FR-TRADE-002-A；保守处理，未添加其他无关
+  未跟踪 docs 文件。
+- 未合并、未 push；回报待 Human 审。

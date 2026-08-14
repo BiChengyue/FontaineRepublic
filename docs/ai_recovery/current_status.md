@@ -1,4 +1,4 @@
-﻿# Current Status
+# Current Status
 
 > Last updated: 2026-08-13
 > Source of truth: CLAUDE.md, git history, codebase state
@@ -118,17 +118,25 @@ B-3b 全部实现、审查、合并、冒烟通过；Human 确认紧急发钞/�
 
 ## Next Task
 
-Coordinate real-machine (Level 3) verification of the full server surface
-with Human (console bootstrap, `/fr admin emergency` preview/confirm/inspect,
-central bank on-site duties, crash window) per
-docs/development/LEVEL3-RUNTIME-VERIFICATION-CHECKLIST.md §4.6. Client UI mod
-enters the staged implementation phase per Human's established sequence:
-Stage A (S2C presentation network surface, FR-CLIENT-001-IMPL-A) dispatched
-2026-08-14, implemented, independently reviewed (Level 1-2, full build green,
-protocol v2 + 3-message ledger, dedicated-server smoke clean with no client
-classloading), and merged into develop. Stage B (GUI/HUD) materials are
-prepared; Stage C is real-machine verification with Human. The Level 3 server
-verification still awaits Human.
+Real-machine Level 3 verification was executed on 2026-08-14 and is recorded in
+docs/ai_recovery/evidence/FR-LEVEL3-FULL-RUNTIME-20260814-REPORT.md. Final gate:
+REVISE BEFORE NEXT RELEASE CANDIDATE. Two release-blocking defects must be
+fixed before any release candidate:
+
+1. mail data disappears after a clean save/stop/restart (P0 persistence loss);
+2. a Forge client without FontaineRepublic cannot join because the server
+   registry contains the custom `fontainerepublic:communicator` item (P0
+   optional-client compatibility).
+
+Remaining FAIL/PARTIAL findings to schedule after the blockers: mail UI
+delivery/read/attachment/notification, trade session/settlement defects, land
+interaction consumption, offhand priority suppression, and emergency
+inspect/status diagnostics. Two follow-up design candidates are drafted but NOT
+authorized: FR-ITEM-002-A (optional-client communicator carrier) and
+FR-TRADE-002-A (Secure Trade controlled adaptation). Human decisions pending:
+whether to approve FR-ITEM-002-A for merge, and the trade direction
+(FR-TRADE-002-A rewrite vs patching the current trade bugs first). See
+docs/governance/continuous_development_ops.md for the operating handbook.
 
 2026-08-14: FR-CLIENT-001-IMPL-B (client GUI/HUD/forms: /frclient command
 surface, balance HUD/card, transfer form via /fr money pay, notifications,

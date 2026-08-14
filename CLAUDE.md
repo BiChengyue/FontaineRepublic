@@ -1,4 +1,4 @@
-﻿# # FontaineRepublic Project Rules
+# # FontaineRepublic Project Rules
 
 ## Project Identity
 
@@ -64,7 +64,9 @@ Follow:
 
 Current Phase:
 
-Phase 1 - Infrastructure Layer (implementation complete; pending review/merge)
+Phase 1 - Infrastructure Layer (implementation complete) + client first-release
+feature set complete; real-machine Level 3 verification executed 2026-08-14 with
+release-blocking findings.
 
 Completed:
 
@@ -84,52 +86,63 @@ Completed:
 - FR-CMD-001 Command Foundation
   (`f9e1806398723867e9cd1dc48ddcc04aeeb7be3e`)
 
+- Full server-side surface: FR-CORE-002, FR-AUD-001, FR-ID-001,
+  FR-ID-BOOTSTRAP-001, FR-CIT-001, FR-LAND-001, FR-ECO-001, FR-DATA-003,
+  FR-CMD-USER-001/002, FR-INST-002-B, FR-GOV-001, FR-PAR-001, FR-PAR-002,
+  FR-JUS-001, FR-ECO-002, FR-CMD-GUIDE-001, FR-EMG-001, FR-EMG-ECO-001,
+  FR-EMG-CMD-001 — all implemented, independently reviewed (Level 1-2), merged
+  into `develop`.
+
+- Client first-release feature set (FR-CLIENT-001-IMPL-A/B/B2/B3a/B3b):
+  S2C presentation network surface and 10 `/frclient` views (money, citizen,
+  history, notifications, guide, government, parliament, court, land + main
+  menu), protocol v5, ledger IDs 0-8 — implemented, reviewed, merged, and
+  smoke-verified.
+
+- Communicator features (merged into `develop`):
+  - FR-ITEM-001 (`fc4e8f1` `fde9e9f`) - portable Message Water Mirror item
+    (right-click player -> transfer, block -> land, air -> main menu).
+  - FR-TRADE-001 (`3c4b36f` `9872723`) - server-authoritative trade with
+    atomic multi-leg settlement and 5% payer tax, protocol v6, ledger 9-15.
+  - FR-MAIL-001 (`7118cf2` `c40c476`) - communicator mailbox, protocol v7,
+    ledger 16-22.
+  - FR-LAND-CLAIM-001 (`2a2354d`) - communicator land inspection/claim,
+    protocol v8, ledger 23-26.
+  - FR-LAND-002 (`ecc0edd` `046bfb6`) - personal land-usage rights view,
+    protocol v9, ledger 27-28.
+
 Current:
 
-Phase 1 infrastructure (FR-CORE-001 / FR-DATA-002 / FR-NET-001 / FR-CMD-001)
-is merged into `develop`. Phase 2 design candidates were produced on
-2026-08-02 on `codex/fr-inst-001-a-design` (FR-INST-001-A/B, FR-ECO-001-A/B/C,
-FR-EMG-001-A, FR-ID-001-A) and were independently reviewed on 2026-08-13
-(conditional pass). Follow-up design candidates FR-CORE-002-A (durable
-commit gate), FR-AUD-001-A (audit module), and
-FR-ECO-001-C-ACCOUNT-ALIGN-01 (account key alignment) were added.
+Current protocol is v9 with 29 production messages and 15 runtime modules.
+The full client feature set (all ten `/frclient` views plus the communicator
+water mirror, trade, mail, land claim, and personal land-rights view) is
+implemented, reviewed, merged into `develop`, and smoke-verified.
 
-The Phase 2 design batch received Human confirmation on 2026-08-13
-(FR-PHASE2-HUMAN-APPROVAL-01). Implementation phase is authorized per the
-reviewed sequencing. Server-side implementation is complete through the
-emergency catalogue: FR-CORE-002, FR-AUD-001, FR-ID-001, FR-ID-BOOTSTRAP-001,
-FR-CIT-001, FR-LAND-001, FR-ECO-001, FR-DATA-003, FR-CMD-USER-001/002,
-FR-INST-002-B (zone-based institution access), FR-GOV-001, FR-PAR-001,
-FR-PAR-002, FR-JUS-001, FR-ECO-002, FR-CMD-GUIDE-001, FR-EMG-001, and
-FR-EMG-ECO-001 (economy.issue/reclaim emergency catalogue) are implemented,
-independently reviewed (Level 1-2), and merged into `develop`; full-stack
-smoke passes with 12 modules. FR-EMG-CMD-001 (`/fr admin emergency`
-preview/confirm/inspect/status/bootstrap/stage/recover adapter) is also
-implemented, reviewed, merged, and smoke-verified — the paused server-side
-task queue is complete. FR-CLIENT-001-IMPL-A (client S2C presentation network
-surface: protocol v2, ledger IDs 0-2, DistExecutor side isolation, economy
-send wiring) and FR-CLIENT-001-IMPL-B (client GUI/HUD/forms: /frclient
-surface, balance HUD/card, transfer form, notifications, guide) are
-implemented, reviewed, merged, and smoke-verified. Note: Forge's
-DistExecutor.safeRunWhenOn rejects mod-owned client referents, so the mod
-entry uses an FMLClientSetupEvent listener for client init (dedicated server
-never loads client classes). FR-CLIENT-001-IMPL-B2 (citizen card + transaction
-history view, protocol v3, ledger IDs 0-4) is also implemented, reviewed,
-merged, and smoke-verified. FR-CLIENT-001-IMPL-B3a (government/parliament
-public info views, protocol v4, ledger IDs 0-6, login snapshot) is also
-implemented, reviewed, merged, and smoke-verified. Stage B-3b (court/land
-views, protocol v5, ledger IDs 0-8, single-value land aggregate) is also
-implemented, reviewed, merged, and smoke-verified — the client first-release
-feature set is complete (10 /frclient views). Stage C (real-machine
-verification) and the personal land-usage rights view remain.
+Real-machine Level 3 verification was executed on 2026-08-14
+(docs/ai_recovery/evidence/FR-LEVEL3-FULL-RUNTIME-20260814-REPORT.md). Server
+foundation, player identity, economy persistence, emergency mutation, land
+persistence, command registration, the current-client handshake, and most trade
+failure gates passed. The test found two release-blocking defects: (1) mail
+stored during a session disappears after a clean save/stop/restart; (2) a Forge
+client without FontaineRepublic cannot join because the server registry contains
+the custom `fontainerepublic:communicator` item. Additional FAIL/PARTIAL
+findings include the mail UI not supporting its own delivery contract, trade
+session/settlement defects, land interaction not fully consumed, offhand
+priority suppressing the communicator, and emergency inspect/status diagnostics.
+Final test gate: REVISE BEFORE NEXT RELEASE CANDIDATE.
 
 Next:
 
-Coordinate real-machine (Level 3) verification of the server surface, the
-client network surface, and the GUI with Human (emergency
-bootstrap/preview/confirm, central-bank on-site, crash window, FR client
-connect, all /frclient views), then optionally add the personal land-usage
-rights view (needs a scoped FR-LAND query design). See
+Address the two Level 3 release blockers before any release candidate:
+1. stop mail data loss (add a clean-stop/restart regression test);
+2. resolve the no-client/custom-registry conflict (FR-ITEM-002-A optional-client
+   communicator carrier — vanilla item carrier with server-authenticated data).
+
+Both FR-ITEM-002-A and FR-TRADE-002-A (Secure Trade controlled adaptation to
+replace the current trade session/UI path) are drafted as design candidates but
+are NOT authorized. Human decisions pending: whether to approve
+FR-ITEM-002-A for merge, and the trade direction (FR-TRADE-002-A rewrite vs
+patching the current trade bugs first). See
 docs/governance/continuous_development_ops.md for the operating handbook.
 
 Always read this section before starting work.
