@@ -189,10 +189,24 @@ communicator, protocol v7 ledger IDs 16-22) implemented by the dsh headless
 subprocess, independently re-verified (full build green, 36 tasks including
 mailFoundationTest), merged into develop (c40c476).
 
-**STOPPED per Human directive (2026-08-14): phase ended, task transferred to
-another AI.** No further dispatch (FR-LAND-CLAIM-001 prompt is ready but NOT
-dispatched). Takeover ticket: docs/ai_recovery/takeover_ticket_2026-08-14.md.
-Level 3 real-machine verification still awaits Human.
+**RESUMED by later Human directive (2026-08-14): takeover completed and
+continuous development re-authorized.** The earlier phase-stop instruction is
+historical and no longer blocks dispatch.
+
+2026-08-14: FR-LAND-CLAIM-001 (communicator land inspection/claim) completed
+through the DSH isolated-worktree pipeline and merged into `develop`
+(`2a2354d`). The implementation adds a Land-owned single-snapshot
+`createParcelWithUsage` operation (parcel/right/store revision +1, one durable
+commit, failure atomicity and retry), full planned-region overlap rejection,
+server-authoritative held-communicator/current-dimension/loaded-block/reach
+gates, `/fr land inspect|claim` no-client parity, a correlated client location
+screen, and protocol v8 ledger IDs 23-26 (27 messages total). Independent DSH
+REVIEW-01 required four corrections (block-use cancellation, truthful overlap
+inspection, response correlation and behavioral command tests); FIX-01/02
+closed them, REVIEW-02 returned APPROVE, and the Coordinator additionally
+verified Forge cancellation semantics (`InteractionResult.SUCCESS`). Final
+post-merge `gradlew build` passed all 37 tasks. Level 3 real-machine land-claim
+verification remains for Human when available; no remote push was performed.
 
 ## Phase 2 Design Candidates (added 2026-08-02)
 

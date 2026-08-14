@@ -767,3 +767,25 @@
   为提交 `7118cf2`，合并 develop `c40c476`。
 - **Human 指示：本阶段结束后中止任务并交接**——不再派发 FR-LAND-CLAIM-001；
   生成接任工单 `docs/ai_recovery/takeover_ticket_2026-08-14.md`。
+
+## 2026-08-14（下午）| 接管恢复 + FR-LAND-CLAIM-001 完成并入 develop
+
+- Human 后续明确恢复持续开发，并要求 Coordinator 仅负责设计/重点审查，普通实现
+  与普通审查优先交给 DSH；旧的阶段中止状态由此失效。
+- 执行前审查发现原设计的 `createParcel` → `grantUsage` 实际为两次独立 durable
+  commit，存在孤立地块风险；设计合同修正为 Land-owned
+  `createParcelWithUsage` 单快照提交，并补充完整区域相交、当前维度、区块加载、
+  服务端 reach、无客户端命令对等。设计/任务/派发材料提交 `f144504`。
+- DSH 在隔离工作树 `fr-land-claim-001-impl` 实施：默认 3×3×8、
+  RESIDENTIAL/PRIVATE、共和国所有、玩家永久使用权；协议 v8，账本 ID 23-26；
+  `/fr land inspect|claim` 与手机 C2S 共用同一服务端服务。
+- 独立 DSH REVIEW-01 发现并修复：右键未消费原方块交互、相邻重叠仍显示可申领、
+  S2C 旧响应污染新界面、命令测试仅源码扫描；同时强化 Land 不可用时 fail closed。
+  REVIEW-02 给出 APPROVE。Coordinator 进一步依据 Forge 47.4.18 源码确认取消结果
+  默认 PASS，追加 `InteractionResult.SUCCESS` 防止继续尝试另一只手/物品交互。
+- 验证：`clientItemFoundationTest commandFoundationTest landClaimFoundationTest
+  networkFoundationTest` 通过；隔离工作树及合并后 `gradlew build` 均
+  BUILD SUCCESSFUL（37 tasks）；`git diff --check` 通过。
+- 候选提交 `2a2354d` 快进并入 `develop`；原有无关 dirty/untracked 文件全部保留，
+  未 push。待 Human 可用时进行 Level 3 真机：水镜右键无主/有主地块、命令对等、
+  重启持久化与相邻重叠反馈。
