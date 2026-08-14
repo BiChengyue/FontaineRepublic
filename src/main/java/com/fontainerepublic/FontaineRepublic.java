@@ -6,6 +6,7 @@ import com.fontainerepublic.core.DataManager;
 import com.fontainerepublic.core.module.ModuleRegistry;
 import com.fontainerepublic.core.module.runtime.ModuleState;
 import com.fontainerepublic.core.module.test.TestModule;
+import com.fontainerepublic.common.item.FRItems;
 import com.fontainerepublic.common.network.NetworkBootstrap;
 import com.fontainerepublic.server.command.BankCommand;
 import com.fontainerepublic.server.command.CitizenCommand;
@@ -87,6 +88,10 @@ public class FontaineRepublic {
         @SuppressWarnings("removal") // Forge 1.20.1 API surface (deprecated for removal on newer JDKs)
         var modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         modEventBus.addListener(this::onCommonSetup);
+        // FR-ITEM-001: register the communicator item (common, both sides)
+        // before FMLCommonSetup; the deferred registry attaches to the mod
+        // event bus so the item exists on dedicated servers too.
+        FRItems.register(modEventBus);
         MinecraftForge.EVENT_BUS.addListener(this::onServerAboutToStart);
         MinecraftForge.EVENT_BUS.addListener(this::onServerStarting);
         MinecraftForge.EVENT_BUS.addListener(this::onServerStopping);

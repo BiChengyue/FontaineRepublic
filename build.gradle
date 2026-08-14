@@ -265,6 +265,15 @@ tasks.register('clientStageB3bFoundationTest', JavaExec) {
     systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
 }
 
+tasks.register('clientItemFoundationTest', JavaExec) {
+    group = 'verification'
+    description = 'Runs dependency-free FR-ITEM-001 communicator item + UI gate validation.'
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.fontainerepublic.client.ClientItemFoundationTestMain'
+    systemProperty 'fontainerepublic.projectDir', project.projectDir.absolutePath
+}
+
 tasks.named('check') {
     dependsOn tasks.named('playerDataTest')
     dependsOn tasks.named('playerDirectoryFoundationTest')
@@ -290,4 +299,5 @@ tasks.named('check') {
     dependsOn tasks.named('clientStageB2FoundationTest')
     dependsOn tasks.named('clientStageB3aFoundationTest')
     dependsOn tasks.named('clientStageB3bFoundationTest')
+    dependsOn tasks.named('clientItemFoundationTest')
 }
