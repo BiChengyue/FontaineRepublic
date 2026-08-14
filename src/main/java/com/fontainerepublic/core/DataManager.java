@@ -1,8 +1,10 @@
 package com.fontainerepublic.core;
 
 import com.mojang.logging.LogUtils;
+import net.minecraft.SharedConstants;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.NbtUtils;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.DimensionDataStorage;
@@ -36,12 +38,31 @@ import java.util.function.LongSupplier;
  *
  * <p>Server authority and owner-thread discipline are enforced; all persistent
  * state stays in SavedData/NBT under the single {@code fontainerepublic.dat}
- * root. A root whose {@code WorldIdentity} does not match the current world is
- * rejected (fail closed); a corrupt root disables persistence until the file
- * is repaired or removed — never auto-repaired.</p>
+ * root. New acknowledged writes publish the canonical Minecraft SavedData
+ * envelope: the FontaineRepublic payload (comprising {@code FormatVersion},
+ * {@code WorldIdentity}, and {@code modules}) lives under a top-level compound
+ * named {@code data} with the usual current {@code DataVersion} on the outer
+ * envelope — the same shape Minecraft's {@code DimensionDataStorage} publishes
+ * on autosave. The reader unwraps that envelope before validating
+ * {@code FormatVersion} and {@code WorldIdentity}, and also accepts the
+ * previously published legitimate raw payload (compatibility only; new writes
+ * are always enveloped). A root whose {@code WorldIdentity} does not match the
+ * current world is rejected (fail closed); an outer {@code data} key that is
+ * present but not a compound tag fails closed rather than being treated as a
+ * legacy raw payload; a corrupt root disables persistence until the file is
+ * repaired or removed — never auto-repaired.</p>
  */
 public class DataManager {
     private static final Logger LOGGER = LogUtils.getLogger();
+
+    /**
+     * Top-level envelope key under which the FontaineRepublic payload is
+     * persisted, matching Minecraft's {@code SavedData} envelope: the payload
+     * is the whole root under a compound named {@code data}, with the normal
+     * current {@code DataVersion} on the outer envelope
+     * (FR-CORE-002 envelope fix). Mirrors {@code NbtUtils.SNBT_DATA_TAG}.
+     */
+    public static final String ENVELOPE_DATA_KEY = "data";
 
     // Stable failure codes (FR-CORE-002 implementation task §3.6).
     public static final String CODE_THREAD_VIOLATION = "THREAD_VIOLATION";
@@ -125,12 +146,12 @@ public class DataManager {
      * Acknowledged durable commit of one module namespace (FR-CORE-002 §4).
      *
      * <p>Writes the complete root (current modules with {@code name} replaced
-     * by {@code snapshot}) to {@code fontainerepublic.dat} via temporary file
-     * + fsync + atomic rename. Returns {@link DurableCommitStatus#COMMITTED}
-     * only after the file is durably authoritative; only then is the
-     * in-memory module map swapped and any downstream effect visible. On any
-     * failure the memory, revisions, and the previously published file remain
-     * unchanged.</p>
+     * by {@code snapshot}) in the canonical Minecraft SavedData envelope to
+     * {@code fontainerepublic.dat} via temporary file + fsync + atomic rename.
+     * Returns {@link DurableCommitStatus#COMMITTED} only after the file is
+     * durably authoritative; only then is the in-memory module map swapped and
+     * any downstream effect visible. On any failure the memory, revisions, and
+     * the previously published file remain unchanged.</p>
      *
      * <p>The caller's tag is copied in; it is never mutated nor retained by
      * reference.</p>
@@ -179,15 +200,16 @@ public class DataManager {
             return result(DurableCommitStatus.FAILED, name, 0L, startedNanos, CODE_RATE_GUARD);
         }
 
-        CompoundTag root = buildRootWith(name, snapshot);
-        if (!root.getString(ModSavedData.WORLD_IDENTITY_KEY).equals(worldIdentity)) {
+        CompoundTag payload = buildRootWith(name, snapshot);
+        if (!payload.getString(ModSavedData.WORLD_IDENTITY_KEY).equals(worldIdentity)) {
             return result(DurableCommitStatus.FAILED, name, 0L, startedNanos, CODE_WORLD_IDENTITY);
         }
+        CompoundTag envelope = buildEnvelope(payload);
 
         Path rootFile = dataDir.resolve(ModSavedData.DATA_NAME + ".dat");
         DurableStoreWrite write;
         try {
-            write = store.writeAtomically(root, rootFile);
+            write = store.writeAtomically(envelope, rootFile);
         } catch (IOException unexpected) {
             LOGGER.error(
                     "[DataManager] Unexpected storage failure during commit of {}: {}",
@@ -272,21 +294,55 @@ public class DataManager {
         }
     }
 
+    /**
+     * Reads, unwraps, and validates the persisted root, returning the
+     * FontaineRepublic payload compound.
+     *
+     * <p>The canonical on-disk form is the Minecraft SavedData envelope: the
+     * payload under a top-level {@code data} compound (with a {@code
+     * DataVersion} on the outer envelope). For backward compatibility the
+     * previously published legitimate raw payload (no {@code data} key) is
+     * also accepted as the payload itself. An outer {@code data} key that is
+     * present but is not a compound tag is ambiguous and fails closed rather
+     * than being mis-read as a legacy raw payload. The returned payload is
+     * validated for the FontaineRepublic {@code FormatVersion}; world-identity
+     * validation happens in the caller.</p>
+     */
     private static CompoundTag readRootChecked(Path rootFile) {
         try {
-            CompoundTag root = NbtIo.readCompressed(rootFile.toFile());
-            if (root.getInt(ModSavedData.FORMAT_VERSION_KEY)
+            CompoundTag outer = NbtIo.readCompressed(rootFile.toFile());
+            CompoundTag payload;
+            if (outer.contains(ENVELOPE_DATA_KEY)) {
+                // Canonical envelope. A 'data' key of the wrong NBT type must
+                // not silently fall back to treating the outer tag as a
+                // legacy raw payload (fail closed, FR-CORE-002 envelope fix).
+                if (!outer.contains(ENVELOPE_DATA_KEY, net.minecraft.nbt.Tag.TAG_COMPOUND)) {
+                    failClosed(
+                            CODE_LOAD_FAILED,
+                            "root '" + ENVELOPE_DATA_KEY + "' is present but is not a compound tag"
+                    );
+                    return null;
+                }
+                payload = outer.getCompound(ENVELOPE_DATA_KEY);
+            } else {
+                // Backward compatibility: previously published legitimate raw
+                // FontaineRepublic root format. Compatibility only; all new
+                // production acknowledged writes use the canonical envelope.
+                payload = outer;
+            }
+            if (payload == null || payload.getInt(ModSavedData.FORMAT_VERSION_KEY)
                     != ModSavedData.CURRENT_FORMAT_VERSION) {
                 failClosed(
                         CODE_LOAD_FAILED,
                         "root format version "
-                                + root.getInt(ModSavedData.FORMAT_VERSION_KEY)
+                                + (payload == null ? "<missing>"
+                                : payload.getInt(ModSavedData.FORMAT_VERSION_KEY))
                                 + " is not supported (expected "
                                 + ModSavedData.CURRENT_FORMAT_VERSION + ")"
                 );
                 return null;
             }
-            return root;
+            return payload;
         } catch (IOException failure) {
             failClosed(CODE_LOAD_FAILED, "corrupt or unreadable root: " + failure.getMessage());
             return null;
@@ -353,6 +409,45 @@ public class DataManager {
         CompoundTag root = savedData.save(new CompoundTag());
         root.getCompound("modules").put(name, snapshot.copy());
         return root;
+    }
+
+    /**
+     * Wraps a FontaineRepublic payload in the canonical Minecraft SavedData
+     * envelope: the payload under a top-level {@code data} compound plus the
+     * normal current {@code DataVersion}. This mirrors exactly what Minecraft's
+     * {@code SavedData.save(File)} publishes for the autosave path, so the
+     * acknowledged-commit bytes and the autosave bytes agree.
+     *
+     * <p>Package-visible so the validation entry point can build the same
+     * autosave-view of in-memory state for its deterministic-encoding check.</p>
+     */
+    static CompoundTag buildEnvelope(CompoundTag payload) {
+        CompoundTag envelope = new CompoundTag();
+        envelope.put(ENVELOPE_DATA_KEY, payload);
+        addCurrentDataVersion(envelope);
+        return envelope;
+    }
+
+    /**
+     * Adds the normal current Minecraft {@code DataVersion} to the outer
+     * envelope (matching vanilla {@code SavedData} serialization). Uses the
+     * real current version — never a custom value. In a minimal bootstrap-free
+     * runtime there may be no detectable current version; that is treated as
+     * "not practical to include" and the metadata is skipped, since the reader
+     * forwards on the internal payload format version rather than {@code
+     * DataVersion}.
+     */
+    private static void addCurrentDataVersion(CompoundTag envelope) {
+        try {
+            SharedConstants.tryDetectVersion();
+            NbtUtils.addCurrentDataVersion(envelope);
+        } catch (RuntimeException unavailable) {
+            LOGGER.warn(
+                    "[DataManager] Could not resolve current Minecraft DataVersion; "
+                            + "skipping envelope metadata: {}",
+                    unavailable.getMessage()
+            );
+        }
     }
 
     private static int encodedBytes(CompoundTag snapshot) {

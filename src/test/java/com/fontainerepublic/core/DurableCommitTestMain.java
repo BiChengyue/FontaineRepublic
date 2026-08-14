@@ -39,6 +39,12 @@ public final class DurableCommitTestMain {
         testBoundsExceeded();
         testCrashBeforeRename();
         testCrashAfterRename();
+        testCanonicalEnvelopeReload();
+        testLegacyRawReloadAndRewriteCanonical();
+        testForgeAutosaveEnvelopeReload();
+        testWrongFormatVersionFailsClosed();
+        testEnvelopeWrongWorldIdentityFailsClosed();
+        testEnvelopeDataWrongTypeFailsClosed();
         System.out.println("[FR-CORE-002] Durable commit validation passed");
     }
 
@@ -88,16 +94,30 @@ public final class DurableCommitTestMain {
 
             CompoundTag loaded = NbtIo.readCompressed(rootFile.toFile());
             require(
-                    loaded.getString("WorldIdentity").equals(IDENTITY_A),
-                    "root file carries the world identity"
+                    loaded.contains(DataManager.ENVELOPE_DATA_KEY),
+                    "fresh commit writes the canonical data envelope"
             );
             require(
-                    loaded.getInt("FormatVersion") == ModSavedData.CURRENT_FORMAT_VERSION,
-                    "root file carries the format version"
+                    loaded.contains(DataManager.ENVELOPE_DATA_KEY, 10),
+                    "the data envelope key is a compound tag"
             );
             require(
-                    loaded.getCompound("modules").getCompound("ns").equals(payload),
-                    "root file contains the committed namespace"
+                    loaded.contains("DataVersion"),
+                    "canonical envelope carries the normal DataVersion metadata"
+            );
+            CompoundTag envelopePayload = loaded.getCompound(DataManager.ENVELOPE_DATA_KEY);
+            require(
+                    envelopePayload.getString("WorldIdentity").equals(IDENTITY_A),
+                    "envelope payload carries the world identity"
+            );
+            require(
+                    envelopePayload.getInt("FormatVersion")
+                            == ModSavedData.CURRENT_FORMAT_VERSION,
+                    "envelope payload carries the format version"
+            );
+            require(
+                    envelopePayload.getCompound("modules").getCompound("ns").equals(payload),
+                    "envelope payload contains the committed namespace"
             );
         } finally {
             cleanup(dir);
@@ -344,7 +364,8 @@ public final class DurableCommitTestMain {
 
             // Deterministic encoding: re-encoding the same in-memory root
             // (single source of truth) yields byte-identical output, so the
-            // autosave path and the commit path cannot diverge.
+            // autosave path and the commit path cannot diverge. Both paths wrap
+            // the payload in the canonical data envelope.
             CompoundTag rebuilt = rebuildRootFromMemory(IDENTITY_A);
             Path other = dir.resolve("reencoded.dat");
             NbtDurableStore.INSTANCE.writeAtomically(rebuilt, other);
@@ -358,8 +379,17 @@ public final class DurableCommitTestMain {
 
             CompoundTag autosaveRead = NbtIo.readCompressed(other.toFile());
             require(
-                    autosaveRead.getCompound("modules").getCompound("ns").equals(payload),
-                    "autosave-path content matches the committed namespace"
+                    autosaveRead.contains(DataManager.ENVELOPE_DATA_KEY),
+                    "autosave-path content exposes the canonical 'data' envelope key"
+            );
+            require(
+                    autosaveRead.contains(DataManager.ENVELOPE_DATA_KEY, 10),
+                    "autosave-path 'data' envelope key is a compound tag"
+            );
+            require(
+                    autosaveRead.getCompound(DataManager.ENVELOPE_DATA_KEY)
+                            .getCompound("modules").getCompound("ns").equals(payload),
+                    "autosave-path '/data/modules/ns' payload matches the committed namespace"
             );
         } finally {
             cleanup(dir);
@@ -517,6 +547,204 @@ public final class DurableCommitTestMain {
         }
     }
 
+    private static void testCanonicalEnvelopeReload() throws IOException {
+        Path dir = newTempDir();
+        try {
+            DataManager.resetForTest();
+            DataManager.initForTest(
+                    dir,
+                    IDENTITY_A,
+                    NbtDurableStore.INSTANCE,
+                    () -> true,
+                    new MutableClock(1_000),
+                    new DurableCommitPolicy(0, 8 * 1024 * 1024)
+            );
+            CompoundTag payload = snapshot("enveloped");
+            require(
+                    DataManager.commitModuleData("ns", payload).status()
+                            == DurableCommitStatus.COMMITTED,
+                    "canonical commit succeeds"
+            );
+
+            DataManager.resetForTest();
+            DataManager.initForTest(
+                    dir,
+                    IDENTITY_A,
+                    NbtDurableStore.INSTANCE,
+                    () -> true,
+                    new MutableClock(2_000),
+                    new DurableCommitPolicy(0, 8 * 1024 * 1024)
+            );
+            require(
+                    DataManager.getModuleData("ns").equals(payload),
+                    "canonical enveloped root reloads and preserves module data"
+            );
+        } finally {
+            cleanup(dir);
+        }
+    }
+
+    private static void testLegacyRawReloadAndRewriteCanonical() throws IOException {
+        Path dir = newTempDir();
+        try {
+            // A previously published legitimate raw root format (no envelope).
+            writeRootFile(dir, IDENTITY_A, Map.of("legacy", snapshot("old")));
+
+            DataManager.resetForTest();
+            DataManager.initForTest(
+                    dir,
+                    IDENTITY_A,
+                    NbtDurableStore.INSTANCE,
+                    () -> true,
+                    new MutableClock(1_000),
+                    new DurableCommitPolicy(0, 8 * 1024 * 1024)
+            );
+            require(
+                    DataManager.getModuleData("legacy").getString("k").equals("old"),
+                    "legacy raw root reloads through the backward-compatible reader"
+            );
+
+            // The next acknowledged commit must rewrite the file canonically.
+            require(
+                    DataManager.commitModuleData("ns", snapshot("v2")).status()
+                            == DurableCommitStatus.COMMITTED,
+                    "commit after legacy load succeeds"
+            );
+            CompoundTag rewritten = NbtIo.readCompressed(
+                    dir.resolve("fontainerepublic.dat").toFile()
+            );
+            require(
+                    rewritten.contains(DataManager.ENVELOPE_DATA_KEY, 10)
+                            && !rewritten.contains("modules"),
+                    "legacy raw root is rewritten as a canonical data envelope"
+            );
+            require(
+                    rewritten.getCompound(DataManager.ENVELOPE_DATA_KEY)
+                            .getCompound("modules").getCompound("ns").getString("k").equals("v2"),
+                    "rewritten envelope preserves committed module data"
+            );
+        } finally {
+            cleanup(dir);
+        }
+    }
+
+    private static void testForgeAutosaveEnvelopeReload() throws IOException {
+        Path dir = newTempDir();
+        try {
+            writeAutosaveEnvelope(dir, IDENTITY_A, Map.of("saved", snapshot("auto")));
+
+            DataManager.resetForTest();
+            DataManager.initForTest(
+                    dir,
+                    IDENTITY_A,
+                    NbtDurableStore.INSTANCE,
+                    () -> true,
+                    new MutableClock(1_000),
+                    new DurableCommitPolicy(0, 8 * 1024 * 1024)
+            );
+            require(
+                    DataManager.getModuleData("saved").getString("k").equals("auto"),
+                    "Forge/Minecraft-style autosave envelope reloads"
+            );
+        } finally {
+            cleanup(dir);
+        }
+    }
+
+    private static void testWrongFormatVersionFailsClosed() throws IOException {
+        Path dir = newTempDir();
+        try {
+            writeAutosaveEnvelope(dir, IDENTITY_A, Map.of("ns", snapshot("v")), 7);
+
+            DataManager.resetForTest();
+            DataManager.initForTest(
+                    dir,
+                    IDENTITY_A,
+                    NbtDurableStore.INSTANCE,
+                    () -> true,
+                    new MutableClock(1_000),
+                    new DurableCommitPolicy(0, 8 * 1024 * 1024)
+            );
+
+            DurableCommitResult result = DataManager.commitModuleData("ns", snapshot("v"));
+            require(
+                    result.status() == DurableCommitStatus.FAILED
+                            && result.failureCode().equals(DataManager.CODE_LOAD_FAILED),
+                    "envelope with wrong payload FormatVersion fails closed with LOAD_FAILED"
+            );
+        } finally {
+            cleanup(dir);
+        }
+    }
+
+    private static void testEnvelopeWrongWorldIdentityFailsClosed() throws IOException {
+        Path dir = newTempDir();
+        try {
+            // Canonical envelope whose payload WorldIdentity does not match.
+            writeAutosaveEnvelope(dir, IDENTITY_B, Map.of("ns", snapshot("v")));
+
+            DataManager.resetForTest();
+            DataManager.initForTest(
+                    dir,
+                    IDENTITY_A,
+                    NbtDurableStore.INSTANCE,
+                    () -> true,
+                    new MutableClock(1_000),
+                    new DurableCommitPolicy(0, 8 * 1024 * 1024)
+            );
+
+            DurableCommitResult result = DataManager.commitModuleData("ns", snapshot("v"));
+            require(
+                    result.status() == DurableCommitStatus.FAILED
+                            && result.failureCode().equals(DataManager.CODE_WORLD_IDENTITY),
+                    "envelope with mismatched WorldIdentity fails closed with WORLD_IDENTITY"
+            );
+            require(
+                    DataManager.getModuleData("ns").getAllKeys().isEmpty(),
+                    "mismatched-identity envelope publishes no module state"
+            );
+        } finally {
+            cleanup(dir);
+        }
+    }
+
+    private static void testEnvelopeDataWrongTypeFailsClosed() throws IOException {
+        Path dir = newTempDir();
+        try {
+            // Outer envelope has a 'data' key, but it is not a compound tag.
+            // This must fail closed rather than being mis-read as a legacy raw
+            // payload.
+            Files.createDirectories(dir);
+            CompoundTag outer = new CompoundTag();
+            outer.putString(DataManager.ENVELOPE_DATA_KEY, "not-a-compound");
+            outer.putInt("DataVersion", 3465);
+            NbtIo.writeCompressed(outer, dir.resolve("fontainerepublic.dat").toFile());
+
+            DataManager.resetForTest();
+            DataManager.initForTest(
+                    dir,
+                    IDENTITY_A,
+                    NbtDurableStore.INSTANCE,
+                    () -> true,
+                    new MutableClock(1_000),
+                    new DurableCommitPolicy(0, 8 * 1024 * 1024)
+            );
+
+            DurableCommitResult result = DataManager.commitModuleData("ns", snapshot("v"));
+            require(
+                    result.status() == DurableCommitStatus.FAILED
+                            && result.failureCode().equals(DataManager.CODE_LOAD_FAILED),
+                    "outer 'data' of wrong NBT type fails closed with LOAD_FAILED"
+            );
+            require(
+                    DataManager.getModuleData("ns").getAllKeys().isEmpty(),
+                    "wrong-typed 'data' publishes no module state"
+            );
+        } finally {
+            cleanup(dir);
+        }
+    }
+
     // ------------------------------------------------------------------
     // helpers
     // ------------------------------------------------------------------
@@ -528,17 +756,18 @@ public final class DurableCommitTestMain {
     }
 
     /**
-     * Rebuilds the root exactly as {@code ModSavedData.save} + commit do from
-     * the current in-memory state — the autosave-path view of the same state.
+     * Rebuilds the root exactly as {@code ModSavedData.save} + envelope do
+     * from the current in-memory state — the autosave-path view of the same
+     * state (payload under the canonical {@code data} envelope).
      */
     private static CompoundTag rebuildRootFromMemory(String identity) {
-        CompoundTag root = new CompoundTag();
+        CompoundTag payload = new CompoundTag();
         CompoundTag modules = new CompoundTag();
         modules.put("ns", DataManager.getModuleData("ns").copy());
-        root.put("modules", modules);
-        root.putString(ModSavedData.WORLD_IDENTITY_KEY, identity);
-        root.putInt(ModSavedData.FORMAT_VERSION_KEY, ModSavedData.CURRENT_FORMAT_VERSION);
-        return root;
+        payload.put("modules", modules);
+        payload.putString(ModSavedData.WORLD_IDENTITY_KEY, identity);
+        payload.putInt(ModSavedData.FORMAT_VERSION_KEY, ModSavedData.CURRENT_FORMAT_VERSION);
+        return DataManager.buildEnvelope(payload);
     }
 
     private static void writeRootFile(
@@ -554,6 +783,39 @@ public final class DurableCommitTestMain {
         modules.forEach(moduleTag::put);
         root.put("modules", moduleTag);
         NbtIo.writeCompressed(root, dataDir.resolve("fontainerepublic.dat").toFile());
+    }
+
+    /**
+     * Writes a Forge/Minecraft-style autosave envelope: the FontaineRepublic
+     * payload under a top-level {@code data} compound plus the current
+     * {@code DataVersion}, exactly as Minecraft's {@code SavedData} publishes.
+     */
+    private static void writeAutosaveEnvelope(
+            Path dataDir,
+            String identity,
+            Map<String, CompoundTag> modules
+    ) throws IOException {
+        writeAutosaveEnvelope(dataDir, identity, modules, ModSavedData.CURRENT_FORMAT_VERSION);
+    }
+
+    private static void writeAutosaveEnvelope(
+            Path dataDir,
+            String identity,
+            Map<String, CompoundTag> modules,
+            int formatVersion
+    ) throws IOException {
+        Files.createDirectories(dataDir);
+        CompoundTag payload = new CompoundTag();
+        payload.putString("WorldIdentity", identity);
+        payload.putInt("FormatVersion", formatVersion);
+        CompoundTag moduleTag = new CompoundTag();
+        modules.forEach(moduleTag::put);
+        payload.put("modules", moduleTag);
+
+        CompoundTag envelope = new CompoundTag();
+        envelope.put(DataManager.ENVELOPE_DATA_KEY, payload);
+        envelope.putInt("DataVersion", 3465);
+        NbtIo.writeCompressed(envelope, dataDir.resolve("fontainerepublic.dat").toFile());
     }
 
     private static Path newTempDir() throws IOException {
