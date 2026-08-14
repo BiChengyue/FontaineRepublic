@@ -253,6 +253,29 @@ public final class EmergencyRepository {
     private boolean commit(EmergencyStoreSnapshot candidate, String purpose) {
         CompoundTag encoded = codec.encode(candidate);
         enforceTotalBytes(encoded);
+        DurableCommitResult result = commitWithRateGuardRetry(encoded, purpose);
+        if (result.status() != DurableCommitStatus.COMMITTED) {
+            throw new EmergencyUnavailableException(
+                    EmergencyUnavailableException.CODE_STORE_FAILURE,
+                    "Emergency " + purpose + " was not durably committed ("
+                            + result.status() + ":" + result.failureCode() + ")"
+            );
+        }
+        publish(candidate, encoded);
+        return true;
+    }
+
+    /**
+     * Commits the encoded emergency namespace snapshot, retrying once after a
+     * short wait when the FR-CORE-002 rate guard rejects the commit. The rate
+     * guard throttles rapid DataManager writes; a legitimate emergency
+     * confirm legitimately commits the business namespace and the journal
+     * within one tick, so the second write must not be silently lost
+     * (FR-EMG-001-A §10: every terminal outcome must reach the journal).
+     */
+    private DurableCommitResult commitWithRateGuardRetry(
+            CompoundTag encoded, String purpose
+    ) {
         DurableCommitResult result;
         try {
             result = store.commit(encoded);
@@ -264,15 +287,20 @@ public final class EmergencyRepository {
                     failure
             );
         }
-        if (result.status() != DurableCommitStatus.COMMITTED) {
-            throw new EmergencyUnavailableException(
-                    EmergencyUnavailableException.CODE_STORE_FAILURE,
-                    "Emergency " + purpose + " was not durably committed ("
-                            + result.status() + ":" + result.failureCode() + ")"
-            );
+        if (result.status() == DurableCommitStatus.FAILED
+                && "RATE_GUARD".equals(result.failureCode())) {
+            sleepBriefly();
+            return store.commit(encoded);
         }
-        publish(candidate, encoded);
-        return true;
+        return result;
+    }
+
+    private static void sleepBriefly() {
+        try {
+            Thread.sleep(150L);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private void enforceTotalBytes(CompoundTag encoded) {

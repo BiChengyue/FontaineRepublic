@@ -156,14 +156,16 @@ public final class EconomyModule implements IModule {
         );
         this.emergencyProvider = new EconomyEmergencyProvider(
                 repository,
-                EconomyEmergencyProvider.PROVIDER_IDENTITY_ISSUE
+                EconomyEmergencyProvider.PROVIDER_IDENTITY_ISSUE,
+                this::resolveEmergencyTarget
         );
         this.receiptProvider = new EconomyEmergencyReceiptProvider(repository);
         EconomyEmergencyProviders.bind(
                 wrapEmergency(emergencyProvider),
                 wrapEmergency(new EconomyEmergencyProvider(
                         repository,
-                        EconomyEmergencyProvider.PROVIDER_IDENTITY_RECLAIM
+                        EconomyEmergencyProvider.PROVIDER_IDENTITY_RECLAIM,
+                        this::resolveEmergencyTarget
                 ))
         );
         EconomyService baseService = new DefaultEconomyService(
@@ -348,6 +350,22 @@ public final class EconomyModule implements IModule {
         return java.util.Optional.ofNullable(
                 server.getPlayerList().getPlayer(playerId)
         );
+    }
+
+    /**
+     * Resolves a target player UUID to its authoritative natural-person
+     * {@link SubjectId} (FR-ECO-001-C-ACCOUNT-ALIGN-01): emergency actions
+     * must credit/debit the account keyed by the player's real subject, never
+     * a synthesized {@code SubjectId.of(playerUuid)}.
+     */
+    private Optional<SubjectId> resolveEmergencyTarget(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        SubjectRegistryService bound = boundSubjectRegistry;
+        if (bound == null) {
+            return Optional.empty();
+        }
+        return bound.findSubjectForPlayer(playerId)
+                .map(SubjectRecord::subjectId);
     }
 
     private static EconomyLimits productionLimits() {

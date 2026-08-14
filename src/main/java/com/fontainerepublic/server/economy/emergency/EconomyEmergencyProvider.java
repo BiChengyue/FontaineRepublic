@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * Economy-owned emergency action provider for exactly {@code economy.issue}
@@ -59,13 +60,19 @@ public final class EconomyEmergencyProvider implements EmergencyActionProvider {
 
     private final EconomyRepository repository;
     private final String providerIdentity;
+    private final Function<UUID, Optional<SubjectId>> targetResolver;
 
     public EconomyEmergencyProvider(
-            EconomyRepository repository, String providerIdentity
+            EconomyRepository repository,
+            String providerIdentity,
+            Function<UUID, Optional<SubjectId>> targetResolver
     ) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.providerIdentity = Objects.requireNonNull(
                 providerIdentity, "providerIdentity"
+        );
+        this.targetResolver = Objects.requireNonNull(
+                targetResolver, "targetResolver"
         );
     }
 
@@ -85,7 +92,14 @@ public final class EconomyEmergencyProvider implements EmergencyActionProvider {
         try {
             validateAction(envelope);
             long amount = parseAmount(envelope.parameters());
-            SubjectId target = subjectId(envelope);
+            Optional<SubjectId> resolved = resolveTarget(envelope);
+            if (resolved.isEmpty()) {
+                return EmergencyPlan.rejected(
+                        "PLAYER_NOT_PROVISIONED",
+                        storeLabel()
+                );
+            }
+            SubjectId target = resolved.get();
             Optional<EconomyAccount> account = repository.findAccount(target);
             String revisionLabel = revisionLabel(target, account);
             long balanceBefore = account.isEmpty() ? 0L : account.get().balance();
@@ -153,7 +167,14 @@ public final class EconomyEmergencyProvider implements EmergencyActionProvider {
         try {
             validateAction(envelope);
             long amount = parseAmount(envelope.parameters());
-            SubjectId target = subjectId(envelope);
+            Optional<SubjectId> resolved = resolveTarget(envelope);
+            if (resolved.isEmpty()) {
+                return EmergencyMutationResult.failed(
+                        "PLAYER_NOT_PROVISIONED",
+                        plan.revisionLabel()
+                );
+            }
+            SubjectId target = resolved.get();
             long storeRevision = repository.storeRevision();
             String digest = envelopeDigest(envelope);
             if (ACTION_ISSUE.equals(envelope.actionId())) {
@@ -247,7 +268,7 @@ public final class EconomyEmergencyProvider implements EmergencyActionProvider {
         return amount;
     }
 
-    private static SubjectId subjectId(EmergencyMutationEnvelope envelope) {
+    private Optional<SubjectId> resolveTarget(EmergencyMutationEnvelope envelope) {
         UUID uuid;
         try {
             uuid = UUID.fromString(envelope.targetId());
@@ -256,7 +277,7 @@ public final class EconomyEmergencyProvider implements EmergencyActionProvider {
                     "Player target must be a canonical UUID"
             );
         }
-        return SubjectId.of(uuid);
+        return targetResolver.apply(uuid);
     }
 
     private String revisionLabel(SubjectId target, Optional<EconomyAccount> account) {

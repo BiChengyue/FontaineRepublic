@@ -91,9 +91,13 @@ carry no authority).
    FR-NET-001-A §6.4）；`serverAccepts`/`clientAccepts` 同步使用新版本；
 3. 移除 `NetworkBootstrap` 的“必须为空”强制（该约束是 FR-NET-001 基线占位；
    架构 §7.1 已预期首个生产消息获得 ID 0）；保留 freeze 与重复/越界校验；
-4. S2C handler 采用 `DistExecutor.safeRunWhenOn(Dist.CLIENT, ...)` 侧隔离：
-   专用服务器永不求值该 supplier，从而不加载 `client/` 类（FR-NET-001-A
-   §9.3）；handler 本体留在 common 包，仅以 lambda 引用客户端执行器；
+4. S2C handler 采用 `DistExecutor.unsafeRunWhenOn(Dist.CLIENT, ...)` 侧隔离：
+   handler 仅在接收侧（客户端收到 PLAY_TO_CLIENT 包）执行，专用服务器永不
+   执行该路径，从而不加载 `client/` 类（FR-NET-001-A §9.3）；handler 本体
+   留在 common 包，仅以 lambda 引用客户端执行器。**必须用 unsafe 变体**：
+   Forge 的 `safeRunWhenOn` 会校验 referent 且只接受 Minecraft/client 包，
+   引用 mod 自有客户端类会在客户端真实收包时抛 "Unsafe Referent usage"
+   （2026-08-14 真机连服发现并修复）；
 5. 服务端发送钩子由功能模块持有：economy 模块声明 `network` 运行时依赖，
    通过运行时解析的 `NetworkSendService` 发送；发送前 presence 过滤，absent
    客户端零影响（no-client parity）。
@@ -113,13 +117,14 @@ carry no authority).
 
 - 消息类与 handler 位于 `common/` 或 `server/`，不得 import `net.minecraft.client.*`
   或 `com.fontainerepublic.client.*`；
-- S2C handler 内 `DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> () ->
-  ClientNetworkExecutor.accept(msg, ctx))`；专用服务器上 supplier 不求值，
-  client 类不加载；
+- S2C handler 内 `DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
+  ClientNetworkExecutor.accept(msg, ctx))`；handler 仅接收侧执行，专用服务器
+  不加载 client/ 类（unsafe 变体绕过 Forge safe-referent 校验——该校验只接受
+  Minecraft/client 包，会拒绝 mod 自有类）；
 - **Forge 限制（v1.1 修正）：** `DistExecutor.safeRunWhenOn` 的 safe-referent
   校验只接受 Minecraft/client 包作为 referent，mod 自有客户端类会触发
   "Unsafe Referent usage" 并导致加载失败。因此：
-  - S2C 展示 handler（common 包，服务端永不执行该路径）仍可用 safe 变体；
+  - S2C 展示 handler（common 包，仅接收侧执行）用 **unsafeRunWhenOn**；
   - 主入口客户端初始化改用 `FMLClientSetupEvent` 监听器（仅物理客户端触发），
     监听器方法体引用 `ClientManager` 惰性解析，专用服务器不加载 client/ 类；
 - 发送端每次 `trySendToPlayer`；`REMOTE_CHANNEL_ABSENT`/`CONNECTION_NOT_LIVE`
@@ -152,7 +157,8 @@ carry no authority).
 ### Stage A — 网络展示面（FR-CLIENT-001-IMPL-A）
 
 - 协议 v2 + 消息账本（ID 0-2）+ 空表约束替换；
-- S2C handler 侧隔离（DistExecutor.safe）+ ClientNetworkExecutor 骨架与
+- S2C handler 侧隔离（DistExecutor.unsafeRunWhenOn）+ ClientNetworkExecutor
+  骨架与
   非权威展示缓存；
 - economy 模块 `network` 依赖 + 运行时发送接线（登录余额/待读通知、转账
   成功双向通知）；

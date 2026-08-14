@@ -218,19 +218,22 @@ public final class ClientPresentationFoundationTestMain {
                         "common display must not import client classes: " + file);
                 if (file.getFileName().toString().equals("DisplayMessageHandlers.java")) {
                     int references = count(source, "com.fontainerepublic.client.net");
-                    int safeCalls = count(source, "DistExecutor.safeRunWhenOn");
-                    check(references == 9 && safeCalls == 9,
+                    int unsafeCalls = count(source, "DistExecutor.unsafeRunWhenOn");
+                    check(references == 9 && unsafeCalls == 9,
                             "client executor referenced exactly nine times, "
-                                    + "each inside a DistExecutor.safeRunWhenOn supplier");
-                    int lastSafeCall = -1;
+                                    + "each inside a DistExecutor.unsafeRunWhenOn supplier");
+                    check(!source.contains("DistExecutor.safeRunWhenOn"),
+                            "handlers use unsafeRunWhenOn (Forge safe-referent "
+                                    + "validation rejects mod-owned client classes)");
+                    int lastUnsafeCall = -1;
                     String[] lines = source.split("\\R");
                     for (int index = 0; index < lines.length; index++) {
-                        if (lines[index].contains("safeRunWhenOn")) {
-                            lastSafeCall = index;
+                        if (lines[index].contains("unsafeRunWhenOn")) {
+                            lastUnsafeCall = index;
                         }
                         if (lines[index].contains("com.fontainerepublic.client.net")) {
-                            check(lastSafeCall >= 0 && index > lastSafeCall,
-                                    "client reference only inside the safe supplier: "
+                            check(lastUnsafeCall >= 0 && index > lastUnsafeCall,
+                                    "client reference only inside the unsafe supplier: "
                                             + lines[index].trim());
                         }
                     }
