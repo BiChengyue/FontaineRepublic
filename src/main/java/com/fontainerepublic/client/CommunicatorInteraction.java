@@ -6,8 +6,10 @@ import com.fontainerepublic.client.gui.FrMainScreen;
 import com.fontainerepublic.client.trade.ClientTradeSender;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.HitResult;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 
 /**
@@ -85,6 +87,45 @@ public final class CommunicatorInteraction {
                 event.getPos(),
                 player.level().dimension().location().toString()
         ));
+    }
+
+    /** Right-click on empty air while holding the communicator in the main
+     * hand opens the FR client main menu (no command needed).
+     *
+     * <p>FR-ITEM-002-A §8 / Level-3 offhand-conflict fix: vanilla fires
+     * {@code RightClickEmpty} only while the clicked hand's stack is empty.
+     * Because the communicator is a non-empty vanilla {@code minecraft:clock}
+     * (no vanilla {@code use} action), a pure air right-click with it in the
+     * main hand instead fires {@code RightClickItem}, and when a usable item
+     * (shield / torch) sits in the offhand the offhand {@code use} would
+     * otherwise consume the click and silently suppress the communicator. This
+     * handler claims the <em>main-hand</em> communicator's air use first (the
+     * hand loop visits MAIN_HAND before OFF_HAND) and reports
+     * {@link InteractionResult#SUCCESS} so the unrelated offhand item never
+     * gets a chance to act. Entity clicks go through {@link #onEntityInteract}
+     * and block clicks through {@link #onRightClickBlock} (which consumes the
+     * block activation), so this path only ever sees the air/miss case.</p> */
+    public static void onRightClickItem(PlayerInteractEvent.RightClickItem event) {
+        if (!isLocalClientInteract(event)) {
+            return;
+        }
+        if (event.getHand() != InteractionHand.MAIN_HAND) {
+            return;
+        }
+        LocalPlayer player = (LocalPlayer) event.getEntity();
+        if (!CommunicatorGate.isCommunicator(player.getMainHandItem())) {
+            return;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.hitResult != null
+                && minecraft.hitResult.getType() != HitResult.Type.MISS) {
+            return;
+        }
+        // Consume the main-hand air use with SUCCESS so the offhand item's use
+        // (e.g. raising a shield) is never reached this click.
+        event.setCancellationResult(InteractionResult.SUCCESS);
+        event.setCanceled(true);
+        minecraft.setScreen(new FrMainScreen());
     }
 
     /** Right-click on empty air while holding the communicator opens the FR

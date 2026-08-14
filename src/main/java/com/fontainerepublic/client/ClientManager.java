@@ -56,6 +56,7 @@ public final class ClientManager {
             // CommunicatorInteraction.
             MinecraftForge.EVENT_BUS.addListener(CommunicatorInteraction::onEntityInteract);
             MinecraftForge.EVENT_BUS.addListener(CommunicatorInteraction::onRightClickBlock);
+            MinecraftForge.EVENT_BUS.addListener(CommunicatorInteraction::onRightClickItem);
             MinecraftForge.EVENT_BUS.addListener(CommunicatorInteraction::onRightClickEmpty);
             initialized = true;
             LOGGER.debug("[FR Client] ClientManager initialized (/frclient + HUD)");

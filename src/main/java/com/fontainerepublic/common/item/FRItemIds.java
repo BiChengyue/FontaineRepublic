@@ -28,7 +28,8 @@ public final class FRItemIds {
     public static final String CARRIER_ITEM_REGISTRY_NAME = "minecraft:" + CARRIER_ITEM_ID;
 
     /** {@link ResourceLocation} of the vanilla carrier item. */
-    public static final ResourceLocation CARRIER_ITEM = new ResourceLocation("minecraft", CARRIER_ITEM_ID);
+    public static final ResourceLocation CARRIER_ITEM =
+            ResourceLocation.fromNamespaceAndPath("minecraft", CARRIER_ITEM_ID);
 
     /** Top-level namespaced NBT compound key carrying the device fields. */
     public static final String DEVICE_TAG = "FontaineRepublicDevice";

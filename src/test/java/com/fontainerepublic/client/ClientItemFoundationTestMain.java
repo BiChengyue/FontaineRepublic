@@ -28,6 +28,7 @@ public final class ClientItemFoundationTestMain {
         testNoCustomItemRemains();
         testPrefillTargetName();
         testLandRightClickCancelsBlockInteraction();
+        testMainHandAirRightClickClaimsItemUse();
         testSideIsolationSourceScan();
         System.out.println(
                 "[FR-ITEM-002] Vanilla-clock carrier + UI gate foundation validation passed");
@@ -143,15 +144,15 @@ public final class ClientItemFoundationTestMain {
         long cancelCount = lines.stream()
                 .filter(line -> line.contains("event.setCanceled(true)"))
                 .count();
-        check(cancelCount == 1,
-                "exactly one setCanceled(true) must exist on the client handler "
-                        + "(got " + cancelCount + ")");
+        check(cancelCount == 2,
+                "exactly two setCanceled(true) must exist on the client handler "
+                        + "(block + main-hand air item; got " + cancelCount + ")");
         long resultCount = lines.stream()
                 .filter(line -> line.contains("event.setCancellationResult("))
                 .count();
-        check(resultCount == 1,
-                "exactly one setCancellationResult(...) must exist on the client "
-                        + "handler (got " + resultCount + ")");
+        check(resultCount == 2,
+                "exactly two setCancellationResult(...) must exist on the client "
+                        + "handler (block + main-hand air item; got " + resultCount + ")");
 
         int screenOpen = indexOf(lines, "new LandLocationScreen(");
         check(screenOpen >= 0, "the block handler must open the land location screen");
@@ -159,8 +160,42 @@ public final class ClientItemFoundationTestMain {
                 "the screen must open after the event is cancelled");
     }
 
+    // ------------------------------------------------------------------
+    // 6. FR-ITEM-002 offhand-conflict fix: the main-hand communicator's air
+    //    right-click must cancel RightClickItem with SUCCESS (so a usable
+    //    offhand item cannot steal priority) and open the FR main menu.
+    // ------------------------------------------------------------------
+
+    private static void testMainHandAirRightClickClaimsItemUse() throws Exception {
+        Path root = Path.of(System.getProperty("fontainerepublic.projectDir", "."))
+                .toAbsolutePath().normalize();
+        Path interaction = root.resolve(
+                "src/main/java/com/fontainerepublic/client/CommunicatorInteraction.java");
+        List<String> lines = Files.readAllLines(interaction, StandardCharsets.UTF_8);
+
+        int itemStart = indexOf(lines, "onRightClickItem(");
+        check(itemStart >= 0, "CommunicatorInteraction must define onRightClickItem");
+        check(indexOf(lines, "InteractionHand.MAIN_HAND") > itemStart,
+                "the air/item handler must gate on the main hand");
+
+        int itemCancel = indexOfFrom(lines, "event.setCanceled(true)", itemStart);
+        check(itemCancel >= 0,
+                "the air/item handler must cancel the RightClickItem Forge event");
+        int itemResult = indexOfFrom(lines, "event.setCancellationResult(", itemStart);
+        check(itemResult >= 0 && itemResult < itemCancel,
+                "the air/item handler must report SUCCESS before cancelling");
+
+        int itemScreen = indexOfFrom(lines, "new FrMainScreen(", itemStart);
+        check(itemScreen > itemCancel,
+                "the air/item handler must open the FR main menu after cancelling");
+    }
+
     private static int indexOf(List<String> lines, String needle) {
-        for (int index = 0; index < lines.size(); index++) {
+        return indexOfFrom(lines, needle, 0);
+    }
+
+    private static int indexOfFrom(List<String> lines, String needle, int start) {
+        for (int index = start; index < lines.size(); index++) {
             if (lines.get(index).contains(needle)) {
                 return index;
             }
