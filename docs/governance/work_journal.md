@@ -789,3 +789,16 @@
 - 候选提交 `2a2354d` 快进并入 `develop`；原有无关 dirty/untracked 文件全部保留，
   未 push。待 Human 可用时进行 Level 3 真机：水镜右键无主/有主地块、命令对等、
   重启持久化与相邻重叠反馈。
+
+## 2026-08-14（下午）| FR-LAND-002 个人用地权益视图完成并入 develop
+
+- Human 确认范围：仅安装客户端并手持传讯水镜时，可查看“我持有使用权的地块”；
+  只显示当前有效权益并支持分页/刷新；无客户端命令不提供该个人列表。既有
+  `/fr land inspect|claim` 不受影响。
+- 实现将只读投影生命周期接入既有 Land 模块，没有新增第 16 个运行时模块；协议
+  升至 v9，生产消息账本 29 条。候选提交 `ecc0edd`，合并提交 `046bfb6`。
+- 独立审查通过；`gradlew build` 全绿（38 tasks）；有效 Dedicated Server 冒烟证据
+  位于 `tmp/fr-land-002-runtime-02/evidence`，15 模块可用、Ready、干净关停、
+  ExitCode=0。
+- 尚未声称完成 Human 真机 UI 验证；待 Human 可用时验证传讯水镜入口、有效权益
+  列表、分页与刷新。

@@ -109,13 +109,12 @@ final phase per Human directive.
 1. **早间真机核验**（Level 3 清单 §4.6 服务器面 + §4.7 客户端面）：紧急权限
    链路、央行现场、崩溃窗口；十个 /frclient 视图、转账实时刷新、无 FR 模组
    平行。
-2. **政策确认**：紧急发钞/回收是否允许作用于冻结账户（当前按设计允许，
-   break-glass）。
-3. **"我的地块"权益视图**：FR-LAND-002-A 设计候选已备，是否进入实现。
 
 已解决（2026-08-13/14）：旧档=新世界；推送完成；央行默认值四项确认；
 议会扩展、FR-EMG 系列、紧急目录、紧急命令、区域制、客户端 A/B-1/B-2/B-3a/
-B-3b 全部实现、审查、合并、冒烟通过。
+B-3b 全部实现、审查、合并、冒烟通过；Human 确认紧急发钞/回收允许绕过
+冻结账户（用于 break-glass 救灾、修正与补偿）；FR-LAND-002 限定为手机端
+个人有效用地权益视图并已实现，无客户端命令不提供该个人列表。
 
 ## Next Task
 
@@ -207,6 +206,18 @@ closed them, REVIEW-02 returned APPROVE, and the Coordinator additionally
 verified Forge cancellation semantics (`InteractionResult.SUCCESS`). Final
 post-merge `gradlew build` passed all 37 tasks. Level 3 real-machine land-claim
 verification remains for Human when available; no remote push was performed.
+
+2026-08-14: FR-LAND-002 (mobile "my usage rights" view) implemented in
+`ecc0edd` and merged into `develop` as `046bfb6`. The existing Land module owns
+the projection lifecycle; the production module count remains 15. Network
+protocol v9 freezes 29 production messages. The view is self-only, shows only
+currently active usage rights, and supports bounded paging and refresh while
+the player holds the communicator. Per Human decision, no no-client command
+exposes this personal list; existing land inspect/claim commands are unchanged.
+Independent review approved the candidate; the full build passed all 38 tasks,
+and the valid dedicated-server smoke at `tmp/fr-land-002-runtime-02/evidence`
+reached Ready and stopped with ExitCode=0. Human real-machine UI verification
+remains pending.
 
 ## Phase 2 Design Candidates (added 2026-08-02)
 
