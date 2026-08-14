@@ -14,6 +14,7 @@ import com.fontainerepublic.server.command.CommunicatorCommand;
 import com.fontainerepublic.server.command.CommandRuntimeResolver;
 import com.fontainerepublic.server.command.MoneyCommand;
 import com.fontainerepublic.server.command.LandCommand;
+import com.fontainerepublic.server.command.TradeCommand;
 import com.fontainerepublic.server.command.registration.CommandContributionRegistry;
 import com.fontainerepublic.server.command.registration.CommandContributionSpec;
 import com.fontainerepublic.server.audit.AuditModule;
@@ -183,6 +184,10 @@ public class FontaineRepublic {
         commandContributionRegistry.register(new CommandContributionSpec(
                 "communicator",
                 CommunicatorCommand::create
+        ));
+        commandContributionRegistry.register(new CommandContributionSpec(
+                "trade",
+                TradeCommand::create
         ));
         event.enqueueWork(() -> {
             commandContributionRegistry.freeze();

@@ -55,8 +55,13 @@ public final class DefaultTradeService implements TradeService {
     private final LongSupplier tickSource;
     private final LongSupplier clock;
     private final int taxRatePercent;
+    private final long requestTimeoutTicks;
+    private final long requestCooldownTicks;
 
     private final Map<Long, TradeSession> sessions = new LinkedHashMap<>();
+    /** Key -> earliest tick a repeated request between the two players is
+     *  allowed again (FR-TRADE-002-A §7 request cooldown). */
+    private final Map<Long, Long> requestCooldownUntil = new LinkedHashMap<>();
     private long nextSessionId = 1L;
 
     public DefaultTradeService(
@@ -66,6 +71,24 @@ public final class DefaultTradeService implements TradeService {
             LongSupplier tickSource,
             LongSupplier clock,
             int taxRatePercent
+    ) {
+        this(
+                economy, playerAccess, sendService, tickSource, clock,
+                taxRatePercent,
+                com.fontainerepublic.core.ConfigManager.tradeRequestTimeoutSeconds() * 20L,
+                com.fontainerepublic.core.ConfigManager.tradeRequestCooldownSeconds() * 20L
+        );
+    }
+
+    DefaultTradeService(
+            EconomyService economy,
+            ServerTradePlayerAccess playerAccess,
+            NetworkSendService sendService,
+            LongSupplier tickSource,
+            LongSupplier clock,
+            int taxRatePercent,
+            long requestTimeoutTicks,
+            long requestCooldownTicks
     ) {
         this.economy = Objects.requireNonNull(economy, "economy");
         this.playerAccess = Objects.requireNonNull(playerAccess, "playerAccess");
@@ -78,6 +101,10 @@ public final class DefaultTradeService implements TradeService {
             );
         }
         this.taxRatePercent = taxRatePercent;
+        this.requestTimeoutTicks = Math.max(20L,
+                Objects.requireNonNull(requestTimeoutTicks, "requestTimeoutTicks"));
+        this.requestCooldownTicks = Math.max(0L,
+                Objects.requireNonNull(requestCooldownTicks, "requestCooldownTicks"));
     }
 
     // ------------------------------------------------------------------
@@ -109,6 +136,16 @@ public final class DefaultTradeService implements TradeService {
             return;
         }
         long now = tickSource.getAsLong();
+        if (requestCooldownTicks > 0L) {
+            long cooldownKey = pairKey(actor, target);
+            Long until = requestCooldownUntil.get(cooldownKey);
+            if (until != null && now < until) {
+                long remainingSeconds = Math.max(1L, (until - now + 19L) / 20L);
+                message(actor, "You must wait " + remainingSeconds
+                        + "s before requesting trade with that player again.");
+                return;
+            }
+        }
         TradeSession session = new TradeSession(
                 nextSessionId++,
                 actor,
@@ -125,6 +162,9 @@ public final class DefaultTradeService implements TradeService {
                 0L
         );
         sessions.put(session.sessionId(), session);
+        if (requestCooldownTicks > 0L) {
+            requestCooldownUntil.put(pairKey(actor, target), now + requestCooldownTicks);
+        }
         pushToBoth(session);
     }
 
@@ -278,6 +318,13 @@ public final class DefaultTradeService implements TradeService {
                 disposeCancelled(session, "A trade party went offline; the trade was cancelled.");
                 continue;
             }
+            // FR-TRADE-002-A §7: a pending REQUESTED session expires after
+            // the configured timeout (no acceptance).
+            if (session.phase() == TradePhase.REQUESTED
+                    && now - session.requestTick() >= requestTimeoutTicks) {
+                disposeCancelled(session, "The trade request expired without a reply.");
+                continue;
+            }
             if (session.phase() == TradePhase.LOCKED
                     && now - session.lockTick() >= TradeSession.LOCKED_TICKS) {
                 execute(session);
@@ -325,45 +372,56 @@ public final class DefaultTradeService implements TradeService {
             disposeCancelled(session, rejection);
             return;
         }
-        try {
-            SubjectId a = economy.ensureAccountForPlayer(session.initiator()).subjectId();
-            SubjectId b = economy.ensureAccountForPlayer(session.partner()).subjectId();
-            TradeSettlementReceipt receipt = economy.executeTradeSettlement(
-                    a,
-                    b,
-                    session.initiatorMoney(),
-                    session.partnerMoney(),
-                    taxRatePercent,
-                    SETTLEMENT_MEMO
-            );
+        // FR-TRADE-002-A §9: a pure item trade has no money legs and must
+        // NOT call a zero-leg economy settlement (which previously failed
+        // with CODE_AMOUNT_INVALID / capacity_exceeded). Items move through
+        // the inventory exchange below; the economy is untouched.
+        if (session.initiatorMoney() != 0L || session.partnerMoney() != 0L) {
+            try {
+                SubjectId a = economy.ensureAccountForPlayer(session.initiator()).subjectId();
+                SubjectId b = economy.ensureAccountForPlayer(session.partner()).subjectId();
+                TradeSettlementReceipt receipt = economy.executeTradeSettlement(
+                        a,
+                        b,
+                        session.initiatorMoney(),
+                        session.partnerMoney(),
+                        taxRatePercent,
+                        SETTLEMENT_MEMO
+                );
+                LOGGER.debug(
+                        "[Trade] Session {} settled: aOffered={}, bOffered={}, "
+                                + "aTax={}, bTax={}, ids={}",
+                        sessionId,
+                        receipt.aOffered(),
+                        receipt.bOffered(),
+                        receipt.aTax(),
+                        receipt.bTax(),
+                        receipt.transactionIds()
+                );
+            } catch (EconomyUnavailableException failure) {
+                LOGGER.debug(
+                        "[Trade] Session {} settlement rejected ({}): {}",
+                        sessionId,
+                        failure.failureCode(),
+                        failure.getMessage()
+                );
+                disposeCancelled(session, "The trade could not be settled ("
+                        + humanCode(failure.failureCode()) + ").");
+                return;
+            } catch (RuntimeException failure) {
+                LOGGER.warn(
+                        "[Trade] Session {} settlement failed unexpectedly: {}",
+                        sessionId,
+                        failure.getMessage()
+                );
+                disposeCancelled(session, "The trade could not be settled.");
+                return;
+            }
+        } else {
             LOGGER.debug(
-                    "[Trade] Session {} settled: aOffered={}, bOffered={}, "
-                            + "aTax={}, bTax={}, ids={}",
-                    sessionId,
-                    receipt.aOffered(),
-                    receipt.bOffered(),
-                    receipt.aTax(),
-                    receipt.bTax(),
-                    receipt.transactionIds()
+                    "[Trade] Session {} is a pure item trade; no economy settlement",
+                    sessionId
             );
-        } catch (EconomyUnavailableException failure) {
-            LOGGER.debug(
-                    "[Trade] Session {} settlement rejected ({}): {}",
-                    sessionId,
-                    failure.failureCode(),
-                    failure.getMessage()
-            );
-            disposeCancelled(session, "The trade could not be settled ("
-                    + humanCode(failure.failureCode()) + ").");
-            return;
-        } catch (RuntimeException failure) {
-            LOGGER.warn(
-                    "[Trade] Session {} settlement failed unexpectedly: {}",
-                    sessionId,
-                    failure.getMessage()
-            );
-            disposeCancelled(session, "The trade could not be settled.");
-            return;
         }
         moveItems(session);
         sessions.remove(sessionId);
@@ -417,6 +475,26 @@ public final class DefaultTradeService implements TradeService {
             }
         }
         return null;
+    }
+
+    /**
+     * Order-independent key for a pair of players (FR-TRADE-002-A §7 request
+     * cooldown): {@code (min << 32) ^ (max & 0xFFFFFFFF)} keeps the map
+     * bounded and does not bias a requester direction.
+     */
+    private static long pairKey(UUID a, UUID b) {
+        long hi = a.getMostSignificantBits();
+        long lo = a.getLeastSignificantBits();
+        long otherHi = b.getMostSignificantBits();
+        long otherLo = b.getLeastSignificantBits();
+        boolean aFirst = (hi < otherHi) || (hi == otherHi && lo < otherLo);
+        long firstHi = aFirst ? hi : otherHi;
+        long firstLo = aFirst ? lo : otherLo;
+        long secondHi = aFirst ? otherHi : hi;
+        long secondLo = aFirst ? otherLo : lo;
+        // A deterministic 64-bit mix is enough for the cooldown map; the
+        // exact hash is not security-relevant (server-internal only).
+        return (firstHi * 31L + firstLo) * 31L + (secondHi * 31L + secondLo);
     }
 
     /** Dupe-guard equality: same item, same tags, same count. */
