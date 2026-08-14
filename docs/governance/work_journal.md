@@ -682,3 +682,20 @@
 - 派发 FR-CLIENT-001-IMPL-B3b（wave fr-client-001-b3b-20260814，工作树
   fr-client-001-impl-b3b）。
 - 待交付后：独立审查 → 完整构建 → 并入 develop → 与早间真机核验一并验收。
+
+## 2026-08-14（早）| 真机核验三个 bug 修复 + 通讯器功能启动
+
+- 真机核验（Human 协助）发现：
+  1. 客户端收展示包时全部 S2C handler 崩（safeRunWhenOn 拒绝 mod 自有
+     referent，Render thread，消息 ID 5-8 复现）；
+  2. 紧急确认成功但日志终态记录因 DataManager RATE_GUARD（100ms 全局限流）
+     未落盘；
+  3. 紧急发钞账户键错位（provider 用 SubjectId.of(playerUuid)，主体登记册
+     生成独立 SubjectId）→ 玩家余额不可用。
+- 修复（d6192a7，合并 f869a50）：handler 改 unsafeRunWhenOn；provider 注入
+  主体解析器（未解析 → PLAYER_NOT_PROVISIONED）；EmergencyRepository
+  RATE_GUARD 短暂重试一次。审查 FR-MORNING-FIXES-REVIEW-01。
+- Human 新需求：新增"便携通讯器"物品；仅安装客户端且手持者可开可视化 UI；
+  右键玩家→便捷转账、右键方块→购地。撰写 FR-ITEM-001-A 设计并派发
+  FR-ITEM-001-IMPL（wave fr-item-001-20260814；购地留待 FR-LAND-CLAIM-001）。
+- 说明：Human 服务器（07:51 起）仍运行旧构建，需重建并重启以加载修复。
