@@ -699,3 +699,20 @@
   右键玩家→便捷转账、右键方块→购地。撰写 FR-ITEM-001-A 设计并派发
   FR-ITEM-001-IMPL（wave fr-item-001-20260814；购地留待 FR-LAND-CLAIM-001）。
 - 说明：Human 服务器（07:51 起）仍运行旧构建，需重建并重启以加载修复。
+
+## 2026-08-14（早）| 通讯器物品落地 + 交易子系统派发
+
+- FR-ITEM-001-IMPL（wave fr-item-001-20260814）：子进程完成物品注册
+  （communicator，stacksTo 1，vanilla clock 占位纹理）、UI 门禁、右键玩家→
+  转账表单/右键方块→土地视图；达上限退出。Reviewer 按 Human 新需求补
+  "右键空气→主菜单"、拆分 FRItemIds（plain JVM 可测）、裁剪 plain-JVM
+  不可测的 Forge 注册表部分、修正 prefill 断言；构建 34 tasks 全绿；
+  提交 fc4e8f1 合并 fde9e9f，审查 FR-ITEM-001-REVIEW-01。
+- Human 扩展需求：通讯器交易（双方持器、钱+物品实时、双同意 5s 执行、
+  可取消）；右键空气开 UI；右键玩家申请交易；右键无主方块申请创建地块；
+  提供符合世界观别称。
+- 撰写 FR-TRADE-001-A 设计（服务端权威会话、金额托管扣减/退还/互换、
+  物品托管槽防复制、状态机 REQUESTED→OPEN→LOCKED(5s)→EXECUTING、
+  断线全额退还、协议 v6 账本 ID 9-15、C2S 速率策略）并派发
+  FR-TRADE-001-IMPL（wave fr-trade-001-20260814）。
+- 购地（FR-LAND-CLAIM-001）与物品命名待 Human 反馈后定稿。
