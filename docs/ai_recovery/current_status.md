@@ -172,6 +172,15 @@ main menu). Remaining: personal land-usage rights view (future stage), Stage C
 (real-machine visual verification with Human), and the Level 3 server
 verification awaiting Human.
 
+2026-08-14: FR-TRADE-001 (communicator trade: server-authoritative intent
+model, no pre-escrow, atomic multi-leg settlement with 5% payer tax via
+executeTradeSettlement, item dupe guard, 5s LOCKED countdown, protocol v6
+ledger IDs 9-15, client TradeScreen/cache/sender) implemented by the dsh
+headless subprocess (CONT-03), independently re-verified (full build green,
+35 tasks including tradeFoundationTest), merged into develop (9872723).
+Remaining communicator features: mail (FR-MAIL-001) and land claim
+(FR-LAND-CLAIM-001); Level 3 real-machine verification still awaits Human.
+
 ## Phase 2 Design Candidates (added 2026-08-02)
 
 All are design candidates only — implementation is not authorized until
