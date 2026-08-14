@@ -752,3 +752,18 @@
   develop `9872723`。
 - dsh 子进程 DSH_HOME 增加 `permissionPresets: danger-full-access`
   （对应旧 reasonix `--permission-mode auto`），后续子进程可自行提交。
+
+## 2026-08-14（午）| 邮件子系统完成 + 阶段中止与交接
+
+- **FR-MAIL-001-IMPL**（dsh headless，wave fr-mail-001-20260814，约 53 分钟）：
+  传讯水镜邮箱子系统 v1.1 全量实现——个人/机构互寄（gov:government /
+  gov:ministry:<id> / parliament / court / bank）、邮费 10 + 附件费 100/个
+  （机构免费、入国库）、金额附件发送不扣款/领取时原子复核到账、物品附件
+  发送入附件槽/领取入背包（满则留待领）、机构一键广播（授权+冷却+单份存储
+  +按人已读）、HUD/聊天新邮件提醒（背包含水镜时）、协议 v7 账本 16-22
+  （EXPECTED_MESSAGE_COUNT=23）；`gradlew build` 全绿（36 tasks）。
+- 子进程 git 提交再次被 dsh 沙箱拒绝（danger-full-access 预设未对共享
+  `.git` 生效，headless 无审批通道）；root 独立复核（重跑 build 全绿）后代
+  为提交 `7118cf2`，合并 develop `c40c476`。
+- **Human 指示：本阶段结束后中止任务并交接**——不再派发 FR-LAND-CLAIM-001；
+  生成接任工单 `docs/ai_recovery/takeover_ticket_2026-08-14.md`。

@@ -181,6 +181,19 @@ headless subprocess (CONT-03), independently re-verified (full build green,
 Remaining communicator features: mail (FR-MAIL-001) and land claim
 (FR-LAND-CLAIM-001); Level 3 real-machine verification still awaits Human.
 
+2026-08-14: FR-MAIL-001 (communicator mailbox: person/institution mail,
+postage 10 + 100/attachment to treasury, institution free, money attachment
+claimed atomically on read, item attachments with pending-on-full, authorized
+institution broadcast with cooldown, HUD/chat unread alerts when holding the
+communicator, protocol v7 ledger IDs 16-22) implemented by the dsh headless
+subprocess, independently re-verified (full build green, 36 tasks including
+mailFoundationTest), merged into develop (c40c476).
+
+**STOPPED per Human directive (2026-08-14): phase ended, task transferred to
+another AI.** No further dispatch (FR-LAND-CLAIM-001 prompt is ready but NOT
+dispatched). Takeover ticket: docs/ai_recovery/takeover_ticket_2026-08-14.md.
+Level 3 real-machine verification still awaits Human.
+
 ## Phase 2 Design Candidates (added 2026-08-02)
 
 All are design candidates only — implementation is not authorized until
