@@ -1,13 +1,13 @@
 package com.fontainerepublic.server.trade.service;
 
-import com.fontainerepublic.common.item.FRItemIds;
+import com.fontainerepublic.common.item.CommunicatorAuthenticator;
+import com.fontainerepublic.server.communicator.CommunicatorAuthority;
 import com.fontainerepublic.server.trade.api.ServerTradePlayerAccess;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
 import java.util.Objects;
@@ -15,13 +15,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Production server player surface of the trade module
- * (FR-TRADE-001-A §4/§5): resolves players through the live server,
- * enforces the server-side communicator gate by registry key (main or off
- * hand — the same predicate as the client UX gate, but authoritative and
- * independent of any {@code client/} class), touches the real inventories,
- * and sends server chat feedback. Inventory indices are the 36 main slots
- * ({@code 0..35}); armor and off-hand slots are never offered.
+ * Production server player surface of the trade module (FR-TRADE-001-A
+ * §4/§5): resolves players through the live server, enforces the server-side
+ * Water Mirror gate (main or off hand carries a signed vanilla clock carrier —
+ * the authoritative HMAC + owner check, independent of any {@code client/}
+ * class), touches the real inventories, and sends server chat feedback.
+ * Inventory indices are the 36 main slots ({@code 0..35}); armor and off-hand
+ * slots are never offered.
  */
 public final class ServerPlayerAccess implements ServerTradePlayerAccess {
 
@@ -46,18 +46,12 @@ public final class ServerPlayerAccess implements ServerTradePlayerAccess {
         if (player.isEmpty()) {
             return false;
         }
-        return isCommunicator(player.get().getMainHandItem())
-                || isCommunicator(player.get().getOffhandItem());
-    }
-
-    /** Registry-key predicate identical to the client UX gate's pure
-     *  decision, evaluated server-side. */
-    private static boolean isCommunicator(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) {
+        CommunicatorAuthenticator authenticator = CommunicatorAuthority.authenticator();
+        if (authenticator == null) {
             return false;
         }
-        var key = ForgeRegistries.ITEMS.getKey(stack.getItem());
-        return key != null && FRItemIds.ITEM_REGISTRY_NAME.equals(key.toString());
+        return authenticator.authenticate(player.get().getMainHandItem(), playerId)
+                || authenticator.authenticate(player.get().getOffhandItem(), playerId);
     }
 
     @Override

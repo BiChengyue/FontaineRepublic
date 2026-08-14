@@ -1,7 +1,6 @@
 {
     "mod.fontainerepublic.name": "枫丹共和国",
     "mod.fontainerepublic.description": "国家模拟/RPG服务器核心Mod",
-    "item.fontainerepublic.communicator": "传讯水镜",
     "fontainerepublic.help.index.title": "枫丹共和国帮助：各模块如下，使用 /fr help <模块> 查看详情。",
     "fontainerepublic.help.index.line.money": "  money：个人货币命令",
     "fontainerepublic.help.index.line.bank": "  bank：中央银行现场职责",

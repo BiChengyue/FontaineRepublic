@@ -1,13 +1,13 @@
 package com.fontainerepublic.server.mail.service;
 
-import com.fontainerepublic.common.item.FRItemIds;
+import com.fontainerepublic.common.item.CommunicatorAuthenticator;
+import com.fontainerepublic.server.communicator.CommunicatorAuthority;
 import com.fontainerepublic.server.mail.api.ServerMailPlayerAccess;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
 import java.util.Objects;
@@ -16,10 +16,10 @@ import java.util.UUID;
 
 /**
  * Production server player surface of the mail module (FR-MAIL-001-A §3):
- * resolves players through the live server, enforces the communicator gate by
- * registry key (held for sending, in-inventory for the new-mail alert), touches
- * the real inventories, and sends server chat feedback. Main-inventory indices
- * are 0..35.
+ * resolves players through the live server, enforces the Water Mirror gate
+ * (a signed vanilla clock carrier — held for sending, in-inventory for the
+ * new-mail alert), touches the real inventories, and sends server chat
+ * feedback. Main-inventory indices are 0..35.
  */
 public final class MailServerPlayerAccess implements ServerMailPlayerAccess {
 
@@ -41,8 +41,12 @@ public final class MailServerPlayerAccess implements ServerMailPlayerAccess {
         if (player.isEmpty()) {
             return false;
         }
-        return isCommunicator(player.get().getMainHandItem())
-                || isCommunicator(player.get().getOffhandItem());
+        CommunicatorAuthenticator authenticator = CommunicatorAuthority.authenticator();
+        if (authenticator == null) {
+            return false;
+        }
+        return authenticator.authenticate(player.get().getMainHandItem(), playerId)
+                || authenticator.authenticate(player.get().getOffhandItem(), playerId);
     }
 
     @Override
@@ -51,9 +55,13 @@ public final class MailServerPlayerAccess implements ServerMailPlayerAccess {
         if (player.isEmpty()) {
             return false;
         }
+        CommunicatorAuthenticator authenticator = CommunicatorAuthority.authenticator();
+        if (authenticator == null) {
+            return false;
+        }
         Inventory inventory = player.get().getInventory();
         for (int index = 0; index < inventory.getContainerSize(); index++) {
-            if (isCommunicator(inventory.getItem(index))) {
+            if (authenticator.authenticate(inventory.getItem(index), playerId)) {
                 return true;
             }
         }
@@ -107,7 +115,6 @@ public final class MailServerPlayerAccess implements ServerMailPlayerAccess {
         }
         ItemStack remaining = stack.copy();
         Inventory inventory = requirePlayer(playerId).getInventory();
-        // Inventory.add places as much as fits and reduces remaining.
         inventory.add(remaining);
         return remaining;
     }
@@ -120,15 +127,6 @@ public final class MailServerPlayerAccess implements ServerMailPlayerAccess {
                 Component.literal(message),
                 false
         ));
-    }
-
-    /** Registry-key predicate for the communicator item. */
-    private static boolean isCommunicator(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) {
-            return false;
-        }
-        var key = ForgeRegistries.ITEMS.getKey(stack.getItem());
-        return key != null && FRItemIds.ITEM_REGISTRY_NAME.equals(key.toString());
     }
 
     private ServerPlayer requirePlayer(UUID playerId) {

@@ -1,6 +1,7 @@
 package com.fontainerepublic.server.landclaim.service;
 
-import com.fontainerepublic.common.item.FRItemIds;
+import com.fontainerepublic.common.item.CommunicatorAuthenticator;
+import com.fontainerepublic.server.communicator.CommunicatorAuthority;
 import com.fontainerepublic.server.landclaim.api.ServerLandClaimPlayerAccess;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -9,7 +10,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
 import java.util.Objects;
@@ -47,8 +47,12 @@ public final class LandClaimServerPlayerAccess implements ServerLandClaimPlayerA
         if (player.isEmpty()) {
             return false;
         }
-        return isCommunicator(player.get().getMainHandItem())
-                || isCommunicator(player.get().getOffhandItem());
+        CommunicatorAuthenticator authenticator = CommunicatorAuthority.authenticator();
+        if (authenticator == null) {
+            return false;
+        }
+        return authenticator.authenticate(player.get().getMainHandItem(), playerId)
+                || authenticator.authenticate(player.get().getOffhandItem(), playerId);
     }
 
     @Override
@@ -121,14 +125,5 @@ public final class LandClaimServerPlayerAccess implements ServerLandClaimPlayerA
                 Component.literal(text),
                 false
         ));
-    }
-
-    /** Registry-key predicate for the communicator item (main/off hand). */
-    private static boolean isCommunicator(net.minecraft.world.item.ItemStack stack) {
-        if (stack == null || stack.isEmpty()) {
-            return false;
-        }
-        var key = ForgeRegistries.ITEMS.getKey(stack.getItem());
-        return key != null && FRItemIds.ITEM_REGISTRY_NAME.equals(key.toString());
     }
 }
