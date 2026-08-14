@@ -1,7 +1,16 @@
 # Current Status
 
-> Last updated: 2026-08-13
+> Last updated: 2026-08-14（深夜，中枢推进）
 > Source of truth: CLAUDE.md, git history, codebase state
+
+## 2026-08-14 深夜（中枢推进后最新状态）
+
+两个发布阻断缺陷已修复、构建、冒烟、合入、推送（develop=origin，HEAD 6d841cc）：
+1. 邮件持久化丢失（DataManager 100ms 全局速率门 → 邮件层有界重试，merge c845898）；
+2. 无 FR 客户端注册表不兼容（FR-ITEM-002-A 原版时钟载体 + HMAC 密钥持久化，merge dc211d0）。
+另完成：副手右键冲突修复（5c9e12a）、交易 Stage A/C 核心（纯物品交易 bug + 冷却/超时 +
+命令面 + 上游归档，6d841cc）。未完成（非阻断）：交易 Stage B 菜单/XP 腿/tax 报价/TradeJournal。
+详见 work_journal.md 最新条目与 CLAUDE.md Current Progress。
 
 ## Phase
 

@@ -872,3 +872,22 @@
   加入、水镜发放+重启持久化、崩溃窗口/RCON/旧协议拒绝）。
 - 明日交付给用户：真机测试清单（含无 FR 客户端加入、/fr communicator issue、
   邮件重启持久化、副手右键空气）。
+## 2026-08-14（深夜）| 第二批完成：副手修复 + 交易 Stage A/C 合入，今晚收官
+
+- 副手冲突修复（fix/offhand-conflict，子代理 741f479c，commit e7f1977）：根因=非空
+  clock 载体走 RightClickItem 而非 RightClickEmpty，副手盾牌 use 抢占；修复=新增
+  onRightClickItem（仅主手+仅空气+SUCCESS 取消抢占开主菜单）+ 2 处 deprecation 清理。
+  审查通过，合入 develop（merge 5c9e12a）。
+- 交易 FR-TRADE-002-A Stage A/C 核心（feat/trade-002-a，子代理 6a438e26，commit
+  db4b5d1）：上游更正为 Navielon/SecureTrade（设计文档写的 florensie/SecureTrade 404
+  不存在），MIT 归档（docs/third_party/）；修复纯物品交易 bug（双金钱腿为 0 时跳过
+  经济结算）；请求超时/冷却；ExperiencePointMath + 单测；tradeTaxRateBps 等配置；
+  无客户端 /fr trade 命令面。审查通过，合入 develop（merge 6d841cc）。
+  未完成（诚实记录，非阻断）：Stage B vanilla 54 格菜单 + FR 屏、XP 腿接协议、
+  tax BPS 报价持久化（bps 与 percent 并行未统一，结算仍用 percent）、Stage D 持久化
+  TradeJournal（history 返回占位）。
+- 合并后 develop 全量构建通过（40 tasks）+ 最终专用服务器冒烟通过
+  （tmp/smoke-final-20260814：Ready=True、ExitCode=0）。
+- develop 与 origin 已同步（HEAD 6d841cc）。
+- 剩余（后续）：Stage B 菜单/XP 腿/tax 报价/TradeJournal、Level 3 真机回归。
+- 明日交付给用户：docs/guide/next-morning-test-sheet.md（真机测试清单）。
