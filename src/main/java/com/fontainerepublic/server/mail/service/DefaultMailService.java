@@ -598,6 +598,33 @@ public final class DefaultMailService implements MailService {
         Objects.requireNonNull(actor, "actor");
         MailboxView view = mailbox(actor);
         pushSync(actor, view);
+        // FR-MAIL-001-FIX-01: also push the new-mail alert at sync time (login /
+        // list request), gated on the communicator in the inventory, so the
+        // unread badge and the optional chat reminder surface even when the
+        // mail arrived while the recipient was offline. The mailbox sync alone
+        // seeds the HUD badge, but the design's chat reminder (§2.3) requires
+        // the alert path to fire; without this, an offline recipient never
+        // receives a {@link MailAlertPacket} and sees no reminder.
+        if (view.unreadCount() > 0
+                && playerAccess.inventoryContainsCommunicator(actor)) {
+            playerAccess.onlinePlayer(actor).ifPresent(player ->
+                    sendService.trySendToPlayer(player,
+                            new MailAlertPacket(view.unreadCount(),
+                                    buildAlertSummary(view))));
+        }
+    }
+
+    /** Short, bounded latest-mail summary for the new-mail reminder. */
+    private String buildAlertSummary(MailboxView view) {
+        if (view.entries().isEmpty()) {
+            return "You have new mail.";
+        }
+        MailboxView.MailEntryView latest = view.entries().get(0);
+        String subject = latest.subject() == null ? "" : latest.subject();
+        if (subject.length() > 40) {
+            subject = subject.substring(0, 40) + "…";
+        }
+        return "New mail: " + subject;
     }
 
     private void pushSync(UUID actor, MailboxView view) {
