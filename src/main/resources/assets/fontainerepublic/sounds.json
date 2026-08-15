@@ -1,0 +1,32 @@
+{
+  "trade_item_add": {
+    "sounds": [
+      "fontainerepublic:trade_item_add"
+    ]
+  },
+  "trade_item_blocked": {
+    "sounds": [
+      "fontainerepublic:trade_item_blocked"
+    ]
+  },
+  "trade_cancel": {
+    "sounds": [
+      "fontainerepublic:trade_cancel"
+    ]
+  },
+  "trade_countdown_tick": {
+    "sounds": [
+      "fontainerepublic:trade_countdown_tick"
+    ]
+  },
+  "trade_request_sent": {
+    "sounds": [
+      "fontainerepublic:trade_request_sent"
+    ]
+  },
+  "trade_success": {
+    "sounds": [
+      "fontainerepublic:trade_success"
+    ]
+  }
+}

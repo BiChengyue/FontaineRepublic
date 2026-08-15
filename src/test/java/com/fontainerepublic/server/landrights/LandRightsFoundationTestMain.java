@@ -60,7 +60,6 @@ import com.fontainerepublic.server.parliament.ParliamentModule;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
 import com.fontainerepublic.server.registry.model.OwnerReference;
-import com.fontainerepublic.server.trade.TradeModule;
 import com.mojang.brigadier.CommandDispatcher;
 import io.netty.buffer.Unpooled;
 import net.minecraft.commands.CommandBuildContext;
@@ -1006,12 +1005,13 @@ public final class LandRightsFoundationTestMain {
         ParliamentModule.register(registry);
         JusticeModule.register(registry);
         EmergencyModule.register(registry);
-        TradeModule.register(registry);
+        // FR-TRADE-004: the intent-model TradeModule was removed; trade is now
+        // the copied Secure Trade escrow surface (not an FR module).
         MailModule.register(registry);
         LandClaimModule.register(registry);
 
-        require(registry.size() == 15,
-                "production module count is exactly 15, got " + registry.size());
+        require(registry.size() == 14,
+                "production module count is exactly 14, got " + registry.size());
         ModuleId landId = new ModuleId("land");
         ModuleId landRightsId = new ModuleId("landrights");
         require(registry.hasModule(landId),

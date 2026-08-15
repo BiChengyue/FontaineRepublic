@@ -1,4 +1,4 @@
-package com.fontainerepublic.common.trade;
+package com.fontainerepublic.trade.securetrade;
 
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
@@ -6,20 +6,13 @@ import net.minecraft.sounds.SoundEvent;
 import java.util.function.BiConsumer;
 
 /**
- * Trade sound events (FR-TRADE-003-B container presentation).
- *
- * <p>Adapted from Secure Trade's {@code SecureTradeSounds} (MIT, Copyright
- * (c) 2026 Secure Trade Mod Authors; upstream commit
- * {@code add98b377ffc39e5d73789a874a08c5e369790ce}). Registered under the
- * {@code fontainerepublic} namespace via the mod's
- * {@code DeferredRegister&lt;SoundEvent&gt;}; the registration is authorized by
- * FR-TRADE-003-A &sect;3 (Human decision 2026-08-15 to allow a custom
- * {@code MenuType} + {@code SoundEvent} so the 54-slot container UI can be
- * reused). The event identity + the {@code register} hook mirror upstream;
- * the namespace is the only change.</p>
+ * Verbatim port of Navielon/SecureTrade's {@code SecureTradeSounds} (MIT,
+ * Copyright (c) 2026 Secure Trade Mod Authors; upstream commit
+ * {@code add98b377ffc39e5d73789a874a08c5e369790ce}, archived at
+ * {@code docs/third_party/securetrade/}). Only the namespace changed: sounds
+ * are registered under {@code fontainerepublic} because FR owns the registry.
  */
-public final class TradeSounds {
-
+public final class SecureTradeSounds {
     public static final ResourceLocation TRADE_ITEM_ADD_ID = id("trade_item_add");
     public static final ResourceLocation TRADE_ITEM_BLOCKED_ID = id("trade_item_blocked");
     public static final ResourceLocation TRADE_CANCEL_ID = id("trade_cancel");
@@ -34,7 +27,7 @@ public final class TradeSounds {
     public static final SoundEvent TRADE_REQUEST_SENT = SoundEvent.createVariableRangeEvent(TRADE_REQUEST_SENT_ID);
     public static final SoundEvent TRADE_SUCCESS = SoundEvent.createVariableRangeEvent(TRADE_SUCCESS_ID);
 
-    private TradeSounds() {
+    private SecureTradeSounds() {
     }
 
     public static void register(BiConsumer<ResourceLocation, SoundEvent> registrar) {
@@ -46,7 +39,6 @@ public final class TradeSounds {
         registrar.accept(TRADE_SUCCESS_ID, TRADE_SUCCESS);
     }
 
-    @SuppressWarnings("removal") // Forge 1.20.1 API surface (deprecated for removal on newer JDKs)
     private static ResourceLocation id(String path) {
         return new ResourceLocation("fontainerepublic", path);
     }

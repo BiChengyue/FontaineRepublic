@@ -8,9 +8,17 @@ import com.fontainerepublic.core.module.runtime.ModuleState;
 import com.fontainerepublic.core.module.test.TestModule;
 import com.fontainerepublic.common.item.FRItems;
 import com.fontainerepublic.common.network.NetworkBootstrap;
-import com.fontainerepublic.common.trade.TradeMenu;
-import com.fontainerepublic.common.trade.TradeMenuType;
-import com.fontainerepublic.common.trade.TradeSounds;
+import com.fontainerepublic.trade.securetrade.SecureTradeSounds;
+import com.fontainerepublic.trade.securetrade.command.TradeCommand;
+import com.fontainerepublic.trade.securetrade.forge.ForgePlatformHelper;
+import com.fontainerepublic.trade.securetrade.forge.TradeConfig;
+import com.fontainerepublic.trade.securetrade.menu.TradeMenu;
+import com.fontainerepublic.trade.securetrade.menu.TradeMenuType;
+import com.fontainerepublic.trade.securetrade.menu.TradeSessionManager;
+import com.fontainerepublic.trade.securetrade.network.TradeNetwork;
+import com.fontainerepublic.trade.securetrade.TradeLogger;
+import com.fontainerepublic.trade.securetrade.FRSettlementBridge;
+import com.fontainerepublic.trade.securetrade.platform.Services;
 import com.fontainerepublic.server.command.BankCommand;
 import com.fontainerepublic.server.command.CitizenCommand;
 import com.fontainerepublic.server.command.CommandBootstrap;
@@ -18,7 +26,7 @@ import com.fontainerepublic.server.command.CommunicatorCommand;
 import com.fontainerepublic.server.command.CommandRuntimeResolver;
 import com.fontainerepublic.server.command.MoneyCommand;
 import com.fontainerepublic.server.command.LandCommand;
-import com.fontainerepublic.server.command.TradeCommand;
+import com.fontainerepublic.server.command.SecureTradeCommand;
 import com.fontainerepublic.server.command.registration.CommandContributionRegistry;
 import com.fontainerepublic.server.command.registration.CommandContributionSpec;
 import com.fontainerepublic.server.audit.AuditModule;
@@ -51,8 +59,6 @@ import com.fontainerepublic.server.parliament.api.ParliamentService;
 import com.fontainerepublic.server.playerdata.PlayerDataModule;
 import com.fontainerepublic.server.playerdata.api.PlayerDataService;
 import com.fontainerepublic.server.registry.SubjectRegistryModule;
-import com.fontainerepublic.server.trade.TradeModule;
-import com.fontainerepublic.server.trade.api.TradeService;
 import com.fontainerepublic.server.registry.api.SubjectRegistryService;
 import com.mojang.logging.LogUtils;
 import net.minecraft.server.MinecraftServer;
@@ -69,7 +75,9 @@ import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -98,10 +106,10 @@ public class FontaineRepublic {
     private final boolean runtimeValidationEnabled =
             Boolean.getBoolean(RUNTIME_VALIDATION_PROPERTY);
 
-    // FR-TRADE-003-B: custom trade container + sound events (Human-authorized
-    // by FR-TRADE-003-A §3 — the FR client is now required, so a custom
-    // MenuType/SoundEvent no longer breaks a no-FR join). The item carrier
-    // stays a vanilla clock (FR-ITEM-002-A, untouched).
+    // FR-TRADE-004: custom trade container + sound events from the copied
+    // Navielon/SecureTrade (MIT) escrow UI. The FR client is required
+    // (FR-TRADE-003-A §3, Human 2026-08-15), so a custom MenuType/SoundEvent
+    // is authorized. The item carrier stays the standalone communicator item.
     private static final DeferredRegister<MenuType<?>> MENUS =
             DeferredRegister.create(ForgeRegistries.MENU_TYPES, MOD_ID);
     private static final DeferredRegister<SoundEvent> SOUNDS =
@@ -117,7 +125,7 @@ public class FontaineRepublic {
             });
 
     static {
-        TradeSounds.register((id, sound) -> SOUNDS.register(id.getPath(), () -> sound));
+        SecureTradeSounds.register((id, sound) -> SOUNDS.register(id.getPath(), () -> sound));
     }
     private final LoginProvisioningHook loginProvisioningHook =
             new LoginProvisioningHook(this::citizenService, this::economyService);
@@ -143,6 +151,16 @@ public class FontaineRepublic {
         MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggedIn);
         MinecraftForge.EVENT_BUS.addListener(this::onPlayerLoggedOut);
         MinecraftForge.EVENT_BUS.addListener(commandBootstrap::onRegisterCommands);
+        // FR-TRADE-004: Secure Trade (ESCROW) wiring — config, channel, /trade
+        // command, server tick + stop cleanup. Kept in the mod bootstrap (not a
+        // module) because the copied Secure Trade surface is a self-contained
+        // escrow authority, not an FR module-runtime service.
+        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, TradeConfig.SPEC);
+        TradeNetwork.register();
+        Services.bind(new ForgePlatformHelper());
+        MinecraftForge.EVENT_BUS.addListener(FRTradeEvents::onRegisterCommands);
+        MinecraftForge.EVENT_BUS.addListener(FRTradeEvents::onServerTick);
+        MinecraftForge.EVENT_BUS.addListener(FRTradeEvents::onServerStopping);
         // Client-only surface (GUI/HUD/forms): FMLClientSetupEvent fires only
         // on the physical client, so the handler below — and therefore
         // ClientManager and every client/ class it references — is never
@@ -165,7 +183,7 @@ public class FontaineRepublic {
         // dedicated server never loads the screen class.
         event.enqueueWork(() -> net.minecraft.client.gui.screens.MenuScreens.register(
                 TRADE_MENU.get(),
-                com.fontainerepublic.client.gui.trade.TradeScreen::new
+                com.fontainerepublic.trade.securetrade.client.TradeScreen::new
         ));
         com.fontainerepublic.client.ClientManager.init();
     }
@@ -184,7 +202,6 @@ public class FontaineRepublic {
         ParliamentModule.register(coreManager.moduleRegistry());
         JusticeModule.register(coreManager.moduleRegistry());
         EmergencyModule.register(coreManager.moduleRegistry());
-        TradeModule.register(coreManager.moduleRegistry());
         MailModule.register(coreManager.moduleRegistry());
         LandClaimModule.register(coreManager.moduleRegistry());
         if (runtimeValidationEnabled) {
@@ -228,7 +245,7 @@ public class FontaineRepublic {
         ));
         commandContributionRegistry.register(new CommandContributionSpec(
                 "trade",
-                TradeCommand::create
+                SecureTradeCommand::create
         ));
         event.enqueueWork(() -> {
             commandContributionRegistry.freeze();
@@ -254,7 +271,7 @@ public class FontaineRepublic {
         bindGovernmentServices();
         bindParliamentServices();
         bindJusticeServices();
-        bindTradeServices();
+        bindSecureTradeServices();
         bindMailServices();
         bindLandClaimServices();
         if (runtimeValidationEnabled) {
@@ -503,10 +520,6 @@ public class FontaineRepublic {
     }
 
     private void onServerStopping(ServerStoppingEvent event) {
-        // FR-TRADE-001: drop every live trade session before the durable
-        // data manager shuts down — the intent model escrows nothing, so
-        // cancelling is a pure in-memory discard (no refunds needed).
-        tradeService().ifPresent(TradeService::shutdown);
         DataManager.beginShutdown();
         DataManager.saveAll();
         coreManager.stopRuntime();
@@ -580,19 +593,10 @@ public class FontaineRepublic {
                         player.getUUID()
                 )
         );
-        // FR-TRADE-001: cancel every trade session of the departing player.
-        tradeService().ifPresent(service -> {
-            try {
-                service.playerDisconnected(player.getUUID());
-            } catch (RuntimeException failed) {
-                LOGGER.warn(
-                        "[FontaineRepublic] Trade logout cancellation failed for {} ({}): {}",
-                        player.getGameProfile().getName(),
-                        player.getUUID(),
-                        failed.getMessage()
-                );
-            }
-        });
+        // FR-TRADE-004: the copied Secure Trade escrow session cancels on its
+        // next server tick when a party is offline (verified by
+        // TradeSession.tick); nothing is pre-escrowed that needs an explicit
+        // logout hook here.
     }
 
     private java.util.Optional<PlayerDataService> playerDataService() {
@@ -650,34 +654,24 @@ public class FontaineRepublic {
     }
 
     /**
-     * Binds the authoritative economy and network send services to the trade
-     * module after the runtime start (dependency order is guaranteed by
-     * module resolution, but the service references are only resolvable once
-     * containers exist).
+     * FR-TRADE-004: binds the authoritative FR economy / subject-registry /
+     * audit services into the copied Secure Trade escrow settlement bridge.
+     * The services are only resolvable after the module runtime starts, so the
+     * bridge is bound here (dependency order guaranteed by module resolution).
      */
-    private void bindTradeServices() {
+    private void bindSecureTradeServices() {
         EconomyService economy = economyService().orElse(null);
         SubjectRegistryService subjectRegistry = subjectRegistryService().orElse(null);
         AuditService audit = auditService().orElse(null);
-        coreManager.getRuntimeContainer(TradeModule.MODULE_ID)
-                .flatMap(container -> container.instance())
-                .filter(TradeModule.class::isInstance)
-                .map(TradeModule.class::cast)
-                .ifPresent(module -> module.bindServices(
-                        economy,
-                        subjectRegistry,
-                        audit,
-                        networkBootstrap.sendService()
-                ));
-    }
-
-    private java.util.Optional<TradeService> tradeService() {
-        return coreManager.getRuntimeContainer(TradeModule.MODULE_ID)
-                .filter(container -> container.state() == ModuleState.ACTIVE)
-                .flatMap(container -> container.instance())
-                .filter(TradeModule.class::isInstance)
-                .map(TradeModule.class::cast)
-                .map(TradeModule::service);
+        if (economy == null) {
+            LOGGER.warn("[Trade] Economy service unavailable; Secure Trade money settlement will fail closed");
+        }
+        FRSettlementBridge.bind(
+                economy,
+                subjectRegistry,
+                audit,
+                com.fontainerepublic.core.ConfigManager.tradeTaxRatePercent()
+        );
     }
 
     /**
