@@ -20,6 +20,8 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
 
@@ -83,7 +85,11 @@ public class DataManager {
     private static volatile BooleanSupplier ownerThreadCheck;
     private static volatile LongSupplier clock;
     private static volatile DurableCommitPolicy commitPolicy;
-    private static volatile long lastCommitMillis;
+    /** Per-namespace last commit wall-clock, for the FR-CORE-002 rate
+     *  guard. Keyed by module namespace so back-to-back commits across
+     *  different namespaces (e.g. login provisioning writing subject-registry
+     *  then citizen then economy) are not falsely rate-guarded. */
+    private static final Map<String, Long> lastCommitByNamespace = new ConcurrentHashMap<>();
 
     private DataManager() {
     }
@@ -196,7 +202,8 @@ public class DataManager {
         }
 
         long now = clock != null ? clock.getAsLong() : System.currentTimeMillis();
-        if (now - lastCommitMillis < policy.minIntervalMillis()) {
+        Long lastCommit = lastCommitByNamespace.get(name);
+        if (lastCommit != null && now - lastCommit < policy.minIntervalMillis()) {
             return result(DurableCommitStatus.FAILED, name, 0L, startedNanos, CODE_RATE_GUARD);
         }
 
@@ -240,7 +247,7 @@ public class DataManager {
         }
 
         savedData.putModuleData(name, snapshot.copy());
-        lastCommitMillis = now;
+        lastCommitByNamespace.put(name, now);
         return result(DurableCommitStatus.COMMITTED, name, write.bytesWritten(), startedNanos, "");
     }
 
@@ -263,7 +270,7 @@ public class DataManager {
         ownerThreadCheck = resolvedOwnerThreadCheck;
         clock = resolvedClock;
         commitPolicy = resolvedPolicy;
-        lastCommitMillis = 0L;
+        lastCommitByNamespace.clear();
 
         try {
             Files.createDirectories(dataDir);
@@ -518,6 +525,6 @@ public class DataManager {
         ownerThreadCheck = null;
         clock = null;
         commitPolicy = null;
-        lastCommitMillis = 0L;
+        lastCommitByNamespace.clear();
     }
 }

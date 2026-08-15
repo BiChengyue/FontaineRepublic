@@ -415,22 +415,31 @@ public final class DurableCommitTestMain {
                             == DurableCommitStatus.COMMITTED,
                     "first commit within interval passes"
             );
-            DurableCommitResult tooSoon = DataManager.commitModuleData("b", snapshot("v2"));
+            // FR-CORE-002 per-namespace rate guard: a DIFFERENT namespace may
+            // commit back-to-back (e.g. login provisioning writing
+            // subject-registry, then citizen, then economy).
+            require(
+                    DataManager.commitModuleData("b", snapshot("v2")).status()
+                            == DurableCommitStatus.COMMITTED,
+                    "a different namespace may commit within the interval"
+            );
+            // The SAME namespace is still rate-guarded within the interval.
+            DurableCommitResult tooSoon = DataManager.commitModuleData("a", snapshot("v3"));
             require(
                     tooSoon.status() == DurableCommitStatus.FAILED
                             && tooSoon.failureCode().equals(DataManager.CODE_RATE_GUARD),
-                    "second commit within the interval fails with RATE_GUARD"
+                    "same-namespace commit within the interval fails with RATE_GUARD"
             );
             require(
-                    DataManager.getModuleData("b").getAllKeys().isEmpty(),
+                    "v1".equals(DataManager.getModuleData("a").getString("k")),
                     "rate-guarded commit has no side effects"
             );
 
             clock.advance(1_000);
             require(
-                    DataManager.commitModuleData("b", snapshot("v2")).status()
+                    DataManager.commitModuleData("a", snapshot("v3")).status()
                             == DurableCommitStatus.COMMITTED,
-                    "commit passes after the minimum interval elapses"
+                    "same-namespace commit passes after the minimum interval elapses"
             );
         } finally {
             cleanup(dir);
