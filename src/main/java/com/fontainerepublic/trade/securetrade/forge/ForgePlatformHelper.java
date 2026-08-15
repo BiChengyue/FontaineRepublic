@@ -1,5 +1,6 @@
 package com.fontainerepublic.trade.securetrade.forge;
 
+import com.fontainerepublic.core.ConfigManager;
 import com.fontainerepublic.trade.securetrade.platform.IPlatformHelper;
 import com.fontainerepublic.trade.securetrade.TradeItemValidator;
 import com.fontainerepublic.trade.securetrade.network.TradeBlacklistWarningPacket;
@@ -70,46 +71,46 @@ public class ForgePlatformHelper implements IPlatformHelper {
 
     @Override
     public double getMaxTradeDistance() {
-        return TradeConfig.MAX_TRADE_DISTANCE.get();
+        return ConfigManager.secureTradeMaxDistance();
     }
 
     @Override
     public int getRequestTimeoutSeconds() {
-        return TradeConfig.REQUEST_TIMEOUT_SECONDS.get();
+        return ConfigManager.secureTradeRequestTimeoutSeconds();
     }
 
     @Override
     public int getTradeCooldownSeconds() {
-        return TradeConfig.TRADE_COOLDOWN_SECONDS.get();
+        return ConfigManager.secureTradeCooldownSeconds();
     }
 
     @Override
     public int getCountdownSeconds() {
-        return TradeConfig.COUNTDOWN_SECONDS.get();
+        return ConfigManager.secureTradeCountdownSeconds();
     }
 
     @Override
     public boolean isLoggingEnabled() {
-        return TradeConfig.ENABLE_TRADE_LOGGING.get();
+        return ConfigManager.secureTradeEnableLogging();
     }
 
     @Override
     public java.util.List<String> getBlacklistedItems() {
-        return (java.util.List<String>) TradeConfig.BLACKLISTED_ITEMS.get();
+        return ConfigManager.secureTradeBlacklistedItems();
     }
 
     @Override
     public java.util.List<String> getAllowedDimensions() {
-        return (java.util.List<String>) TradeConfig.ALLOWED_DIMENSIONS.get();
+        return ConfigManager.secureTradeAllowedDimensions();
     }
 
     @Override
     public java.util.List<String> getBlockedDimensions() {
-        return (java.util.List<String>) TradeConfig.BLOCKED_DIMENSIONS.get();
+        return ConfigManager.secureTradeBlockedDimensions();
     }
 
     @Override
     public int getMaxHistoryEntries() {
-        return TradeConfig.MAX_HISTORY_ENTRIES.get();
+        return ConfigManager.secureTradeMaxHistoryEntries();
     }
 }

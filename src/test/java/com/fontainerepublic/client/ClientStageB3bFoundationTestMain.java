@@ -53,11 +53,11 @@ public final class ClientStageB3bFoundationTestMain {
     // ------------------------------------------------------------------
 
     private static void testProtocolV5Contract() {
-        check(NetworkProtocol.VERSION.equals("10"), "Protocol version is 10");
-        check(NetworkProtocol.clientAccepts("10"), "Client accepts exact v10");
-        check(!NetworkProtocol.clientAccepts("9"), "Client rejects old v9");
-        check(NetworkProtocol.serverAccepts("10"), "Server accepts exact v10");
-        check(!NetworkProtocol.serverAccepts("9"), "Server rejects old v9");
+        check(NetworkProtocol.VERSION.equals("11"), "Protocol version is 11");
+        check(NetworkProtocol.clientAccepts("11"), "Client accepts exact v11");
+        check(!NetworkProtocol.clientAccepts("10"), "Client rejects old v10");
+        check(NetworkProtocol.serverAccepts("11"), "Server accepts exact v11");
+        check(!NetworkProtocol.serverAccepts("10"), "Server rejects old v10");
     }
 
     // ------------------------------------------------------------------

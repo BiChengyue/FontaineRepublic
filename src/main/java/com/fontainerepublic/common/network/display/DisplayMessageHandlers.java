@@ -102,14 +102,6 @@ public final class DisplayMessageHandlers {
         );
     }
 
-    public static NetworkMessageHandler<TradeStateSyncPacket> tradeStateSync() {
-        return (message, context) -> DistExecutor.unsafeRunWhenOn(
-                Dist.CLIENT,
-                () -> () -> com.fontainerepublic.client.net.ClientNetworkExecutor
-                        .acceptTradeStateSync(message)
-        );
-    }
-
     public static NetworkMessageHandler<MailboxSyncPacket> mailboxSync() {
         return (message, context) -> DistExecutor.unsafeRunWhenOn(
                 Dist.CLIENT,

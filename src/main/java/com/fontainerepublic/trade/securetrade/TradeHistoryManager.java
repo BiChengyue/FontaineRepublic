@@ -181,11 +181,13 @@ public class TradeHistoryManager {
                 List<ItemInfo> receivedItems = playerUuid.equals(entry.senderUuid) ? entry.targetItems : entry.senderItems;
                 long gaveXP = playerUuid.equals(entry.senderUuid) ? entry.senderXP : entry.targetXP;
                 long receivedXP = playerUuid.equals(entry.senderUuid) ? entry.targetXP : entry.senderXP;
+                long gaveMoney = playerUuid.equals(entry.senderUuid) ? entry.senderMoney : entry.targetMoney;
+                long receivedMoney = playerUuid.equals(entry.senderUuid) ? entry.targetMoney : entry.senderMoney;
 
-                Component gaveComponent = formatItemsAndXP(gaveItems, gaveXP, server.registryAccess());
+                Component gaveComponent = formatItemsXpMoney(gaveItems, gaveXP, gaveMoney, server.registryAccess());
                 player.sendSystemMessage(Component.translatable("securetrade.history.gave", gaveComponent).withStyle(ChatFormatting.RED));
 
-                Component receivedComponent = formatItemsAndXP(receivedItems, receivedXP, server.registryAccess());
+                Component receivedComponent = formatItemsXpMoney(receivedItems, receivedXP, receivedMoney, server.registryAccess());
                 player.sendSystemMessage(Component.translatable("securetrade.history.received", receivedComponent).withStyle(ChatFormatting.GREEN));
             }
         } catch (Exception e) {
@@ -193,9 +195,9 @@ public class TradeHistoryManager {
         }
     }
 
-    private static Component formatItemsAndXP(List<ItemInfo> items, long xp, HolderLookup.Provider registries) {
+    private static Component formatItemsXpMoney(List<ItemInfo> items, long xp, long money, HolderLookup.Provider registries) {
         boolean hasItems = items != null && !items.isEmpty();
-        if (!hasItems && xp <= 0) {
+        if (!hasItems && xp <= 0 && money <= 0) {
             return Component.translatable("securetrade.history.nothing").withStyle(ChatFormatting.GRAY);
         }
 
@@ -217,6 +219,14 @@ public class TradeHistoryManager {
                 result.append(Component.literal(", ").withStyle(ChatFormatting.GRAY));
             }
             result.append(Component.translatable("securetrade.history.xp_amount", xp).withStyle(ChatFormatting.AQUA));
+            hasContent = true;
+        }
+
+        if (money > 0) {
+            if (hasContent) {
+                result.append(Component.literal(", ").withStyle(ChatFormatting.GRAY));
+            }
+            result.append(Component.translatable("securetrade.history.money_amount", money).withStyle(ChatFormatting.GOLD));
         }
 
         return result;

@@ -819,52 +819,51 @@ public final class LandRightsFoundationTestMain {
     // ------------------------------------------------------------------
 
     private static void testProtocolV9Ledger() {
-        require(NetworkProtocol.VERSION.equals("10"), "protocol is now v10");
-        require(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 30,
-                "the production ledger expects 30 messages");
+        require(NetworkProtocol.VERSION.equals("11"), "protocol is now v11");
+        require(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 22,
+                "the production ledger expects 22 messages");
 
         LedgerCollector collector = new LedgerCollector();
         NetworkProductionMessageTable.registerAll(collector);
-        require(collector.byId.size() == 30,
-                "registerAll registers exactly 30 messages");
+        require(collector.byId.size() == 22,
+                "registerAll registers exactly 22 messages");
 
-        NetworkMessageSpec<?> req = collector.byId.get(27);
+        NetworkMessageSpec<?> req = collector.byId.get(20);
         require(req != null
                         && req.messageClass() == MyLandRightsRequestPacket.class
                         && req.direction() == NetworkDirection.PLAY_TO_SERVER,
-                "ID 27 registers the C2S my-usage-rights request");
+                "ID 20 registers the C2S my-usage-rights request");
         require(req.rateLimitPolicy().isPresent(),
-                "ID 27 carries an explicit C2S rate policy");
+                "ID 20 carries an explicit C2S rate policy");
         RateLimitPolicy policy = req.rateLimitPolicy().orElseThrow();
-        // ID 27 must be exactly burst capacity 2 and sustained 10 req/s
+        // ID 20 must be exactly burst capacity 2 and sustained 10 req/s
         // (one token refill per 100ms: 1 / 100_000_000 ns = 10 per second).
         require(policy.capacity() == 2,
-                "ID 27 rate policy is exactly burst capacity 2");
+                "ID 20 rate policy is exactly burst capacity 2");
         require(policy.refillTokens() == 1 && policy.refillIntervalNanos() == 100_000_000L,
-                "ID 27 rate policy refills one token per 100ms");
+                "ID 20 rate policy refills one token per 100ms");
         long sustainedPerSecond =
                 policy.refillTokens() * 1_000_000_000L / policy.refillIntervalNanos();
         require(sustainedPerSecond == 10,
-                "ID 27 rate policy sustains exactly 10 requests/second");
+                "ID 20 rate policy sustains exactly 10 requests/second");
         require(policy.minimumSpacingNanos() >= 0,
-                "ID 27 rate policy minimum spacing is non-negative");
+                "ID 20 rate policy minimum spacing is non-negative");
 
-        NetworkMessageSpec<?> resp = collector.byId.get(28);
+        NetworkMessageSpec<?> resp = collector.byId.get(21);
         require(resp != null
                         && resp.messageClass() == MyLandRightsPagePacket.class
                         && resp.direction() == NetworkDirection.PLAY_TO_CLIENT,
-                "ID 28 registers the S2C my-usage-rights page");
+                "ID 21 registers the S2C my-usage-rights page");
         require(resp.rateLimitPolicy().isEmpty(),
-                "S2C ID 28 carries no C2S rate policy");
+                "S2C ID 21 carries no C2S rate policy");
 
         List<Integer> ids = new ArrayList<>(collector.byId.keySet());
         require(ids.equals(List.of(
                         0, 1, 2, 3, 4, 5, 6, 7, 8,
                         9, 10, 11, 12, 13, 14, 15,
-                        16, 17, 18, 19, 20, 21, 22,
-                        23, 24, 25, 26, 27, 28, 29
+                        16, 17, 18, 19, 20, 21
                 )),
-                "ledger IDs are exactly 0..29 in ascending order, append-only");
+                "ledger IDs are exactly 0..21 in ascending order, append-only");
     }
 
     // ------------------------------------------------------------------

@@ -244,30 +244,30 @@ public final class MailFoundationTestMain {
     // ------------------------------------------------------------------
 
     private static void testProtocolLedgerRegistration() {
-        check(NetworkProtocol.VERSION.equals("10"), "the protocol version is v10");
-        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 30,
-                "the production ledger expects 30 messages (IDs 0-29)");
+        check(NetworkProtocol.VERSION.equals("11"), "the protocol version is v11");
+        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 22,
+                "the production ledger expects 22 messages (IDs 0-21)");
 
         Map<Integer, NetworkMessageSpec<?>> byId = collectLedger();
         check(byId.size() == NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT,
                 "registerAll exposes every expected ledger message");
 
-        assertC2s(byId, 16, MailSendPacket.class);
-        assertC2s(byId, 17, MailListRequestPacket.class);
-        assertC2s(byId, 18, MailReadPacket.class);
-        assertC2s(byId, 19, MailDeletePacket.class);
-        assertC2s(byId, 22, MailBroadcastPacket.class);
+        assertC2s(byId, 9, MailSendPacket.class);
+        assertC2s(byId, 10, MailListRequestPacket.class);
+        assertC2s(byId, 11, MailReadPacket.class);
+        assertC2s(byId, 12, MailDeletePacket.class);
+        assertC2s(byId, 15, MailBroadcastPacket.class);
 
-        NetworkMessageSpec<?> sync = byId.get(20);
+        NetworkMessageSpec<?> sync = byId.get(13);
         check(sync != null && sync.messageClass() == MailboxSyncPacket.class
                         && sync.direction() == NetworkDirection.PLAY_TO_CLIENT,
-                "ID 20 is the S2C mailbox sync");
+                "ID 13 is the S2C mailbox sync");
         check(sync.rateLimitPolicy().isEmpty(), "S2C sync carries no C2S rate policy");
 
-        NetworkMessageSpec<?> alert = byId.get(21);
+        NetworkMessageSpec<?> alert = byId.get(14);
         check(alert != null && alert.messageClass() == MailAlertPacket.class
                         && alert.direction() == NetworkDirection.PLAY_TO_CLIENT,
-                "ID 21 is the S2C mail alert");
+                "ID 14 is the S2C mail alert");
     }
 
     private static void assertC2s(

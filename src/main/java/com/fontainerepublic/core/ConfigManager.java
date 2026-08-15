@@ -79,20 +79,23 @@ public class ConfigManager {
     /** Default trade settlement tax rate in percent (FR-TRADE-001-A §6.1). */
     public static final int DEFAULT_TRADE_TAX_RATE_PERCENT = 5;
 
-    /** Default trade tax rate in basis points (FR-TRADE-002-A §9: 500 = 5%). */
-    public static final int DEFAULT_TRADE_TAX_RATE_BPS = 500;
+    /** Secure Trade pending trade-request timeout in seconds (upstream 60). */
+    public static final int DEFAULT_SECURE_TRADE_REQUEST_TIMEOUT_SECONDS = 60;
 
-    /** Default pending trade-request timeout in seconds (FR-TRADE-002-A §7). */
-    public static final int DEFAULT_TRADE_REQUEST_TIMEOUT_SECONDS = 30;
+    /** Secure Trade maximum trade distance in blocks (-1 = infinite). */
+    public static final double DEFAULT_SECURE_TRADE_MAX_DISTANCE = -1.0;
 
-    /** Default repeated-request cooldown in seconds (FR-TRADE-002-A §7). */
-    public static final int DEFAULT_TRADE_REQUEST_COOLDOWN_SECONDS = 5;
+    /** Secure Trade detailed transaction logging (logs/securetrade.log). */
+    public static final boolean DEFAULT_SECURE_TRADE_ENABLE_LOGGING = true;
 
-    /** Default both-ready locked countdown in seconds (FR-TRADE-002-A §7). */
-    public static final int DEFAULT_TRADE_LOCKED_COUNTDOWN_SECONDS = 5;
+    /** Secure Trade both-ready confirmation countdown in seconds (upstream 3). */
+    public static final int DEFAULT_SECURE_TRADE_COUNTDOWN_SECONDS = 3;
 
-    /** Default maximum XP points one player may offer (FR-TRADE-002-A §8.2). */
-    public static final long DEFAULT_TRADE_MAX_OFFER_XP = 1_000_000_000L;
+    /** Secure Trade repeated-request cooldown in seconds (upstream 10). */
+    public static final int DEFAULT_SECURE_TRADE_COOLDOWN_SECONDS = 10;
+
+    /** Secure Trade max trade-history entries shown per player (upstream 5). */
+    public static final int DEFAULT_SECURE_TRADE_MAX_HISTORY_ENTRIES = 5;
 
     /** Default mail postage fee per letter (FR-MAIL-001-A §6.3). */
     public static final long DEFAULT_MAIL_POSTAGE_FEE = 10;
@@ -132,11 +135,15 @@ public class ConfigManager {
     private static final ForgeConfigSpec.IntValue INSTITUTION_PRESENCE_CHECK_INTERVAL_TICKS;
     private static final ForgeConfigSpec.ConfigValue<String> EMERGENCY_HYDRO_ARCHON_UUID;
     private static final ForgeConfigSpec.IntValue TRADE_TAX_RATE_PERCENT;
-    private static final ForgeConfigSpec.IntValue TRADE_TAX_RATE_BPS;
-    private static final ForgeConfigSpec.IntValue TRADE_REQUEST_TIMEOUT_SECONDS;
-    private static final ForgeConfigSpec.IntValue TRADE_REQUEST_COOLDOWN_SECONDS;
-    private static final ForgeConfigSpec.IntValue TRADE_LOCKED_COUNTDOWN_SECONDS;
-    private static final ForgeConfigSpec.LongValue TRADE_MAX_OFFER_XP;
+    private static final ForgeConfigSpec.IntValue SECURE_TRADE_REQUEST_TIMEOUT_SECONDS;
+    private static final ForgeConfigSpec.DoubleValue SECURE_TRADE_MAX_DISTANCE;
+    private static final ForgeConfigSpec.BooleanValue SECURE_TRADE_ENABLE_LOGGING;
+    private static final ForgeConfigSpec.IntValue SECURE_TRADE_COUNTDOWN_SECONDS;
+    private static final ForgeConfigSpec.IntValue SECURE_TRADE_COOLDOWN_SECONDS;
+    private static final ForgeConfigSpec.ConfigValue<java.util.List<? extends String>> SECURE_TRADE_BLACKLISTED_ITEMS;
+    private static final ForgeConfigSpec.ConfigValue<java.util.List<? extends String>> SECURE_TRADE_ALLOWED_DIMENSIONS;
+    private static final ForgeConfigSpec.ConfigValue<java.util.List<? extends String>> SECURE_TRADE_BLOCKED_DIMENSIONS;
+    private static final ForgeConfigSpec.IntValue SECURE_TRADE_MAX_HISTORY_ENTRIES;
     private static final ForgeConfigSpec.LongValue MAIL_POSTAGE_FEE;
     private static final ForgeConfigSpec.LongValue MAIL_ATTACHMENT_FEE;
     private static final ForgeConfigSpec.LongValue MAIL_BROADCAST_FEE;
@@ -415,63 +422,77 @@ public class ConfigManager {
                         0,
                         100
                 );
-        TRADE_TAX_RATE_BPS = builder
-                .comment(
-                        "FR-TRADE-002-A trade tax quote rate in basis points "
-                                + "(500 = 5%; tax = floor(offer * rateBps / 10000)). "
-                                + "Range [0, 10000]; 0 disables the tax. This is the "
-                                + "server-authoritative quote authority of the trade "
-                                + "module; completed settlements are never recalculated."
-                )
-                .defineInRange(
-                        "tradeTaxRateBps",
-                        DEFAULT_TRADE_TAX_RATE_BPS,
-                        0,
-                        10_000
-                );
-        TRADE_REQUEST_TIMEOUT_SECONDS = builder
-                .comment(
-                        "FR-TRADE-002-A pending trade-request timeout in seconds. "
-                                + "Range [1, 3600]."
-                )
+        builder.pop();
+
+        builder.comment(
+                "Secure Trade escrow surface (verbatim MIT port; FR-TRADE-004). "
+                        + "These mirror the upstream Secure Trade config so the "
+                        + "ported surface stays configurable from FR's single "
+                        + "server config file."
+        ).push("securetrade");
+        SECURE_TRADE_REQUEST_TIMEOUT_SECONDS = builder
+                .comment("Pending trade-request timeout in seconds. Range [10, 300].")
                 .defineInRange(
                         "requestTimeoutSeconds",
-                        DEFAULT_TRADE_REQUEST_TIMEOUT_SECONDS,
-                        1,
-                        3_600
+                        DEFAULT_SECURE_TRADE_REQUEST_TIMEOUT_SECONDS,
+                        10,
+                        300
                 );
-        TRADE_REQUEST_COOLDOWN_SECONDS = builder
-                .comment(
-                        "FR-TRADE-002-A repeated-request cooldown between the same "
-                                + "two players in seconds. Range [0, 3600]; 0 disables."
-                )
+        SECURE_TRADE_MAX_DISTANCE = builder
+                .comment("Maximum trade distance in blocks (-1 = infinite). Range [-1, 10000].")
                 .defineInRange(
-                        "requestCooldownSeconds",
-                        DEFAULT_TRADE_REQUEST_COOLDOWN_SECONDS,
+                        "maxTradeDistance",
+                        DEFAULT_SECURE_TRADE_MAX_DISTANCE,
+                        -1.0,
+                        10000.0
+                );
+        SECURE_TRADE_ENABLE_LOGGING = builder
+                .comment("Enable detailed transaction logging in logs/securetrade.log.")
+                .define("enableTradeLogging", DEFAULT_SECURE_TRADE_ENABLE_LOGGING);
+        SECURE_TRADE_COUNTDOWN_SECONDS = builder
+                .comment("Seconds to wait before executing after both players are ready. Range [1, 10].")
+                .defineInRange(
+                        "countdownSeconds",
+                        DEFAULT_SECURE_TRADE_COUNTDOWN_SECONDS,
+                        1,
+                        10
+                );
+        SECURE_TRADE_COOLDOWN_SECONDS = builder
+                .comment("Cooldown before another request to the same player. Range [0, 3600].")
+                .defineInRange(
+                        "tradeCooldownSeconds",
+                        DEFAULT_SECURE_TRADE_COOLDOWN_SECONDS,
                         0,
-                        3_600
+                        3600
                 );
-        TRADE_LOCKED_COUNTDOWN_SECONDS = builder
-                .comment(
-                        "FR-TRADE-002-A both-ready confirmation countdown in seconds. "
-                                + "Range [1, 60]."
-                )
+        SECURE_TRADE_BLACKLISTED_ITEMS = builder
+                .comment("List of item IDs that cannot be traded.")
+                .defineListAllowEmpty(
+                        "blacklistedItems",
+                        java.util.List.of("minecraft:bedrock"),
+                        o -> o instanceof String
+                );
+        SECURE_TRADE_ALLOWED_DIMENSIONS = builder
+                .comment("Dimension IDs where trading is allowed (empty = allow all).")
+                .defineListAllowEmpty(
+                        "allowedDimensions",
+                        java.util.List.of(),
+                        o -> o instanceof String
+                );
+        SECURE_TRADE_BLOCKED_DIMENSIONS = builder
+                .comment("Dimension IDs where trading is blocked (empty = block none).")
+                .defineListAllowEmpty(
+                        "blockedDimensions",
+                        java.util.List.of(),
+                        o -> o instanceof String
+                );
+        SECURE_TRADE_MAX_HISTORY_ENTRIES = builder
+                .comment("Maximum trade-history entries shown per player. Range [1, 100].")
                 .defineInRange(
-                        "lockedCountdownSeconds",
-                        DEFAULT_TRADE_LOCKED_COUNTDOWN_SECONDS,
+                        "maxHistoryEntries",
+                        DEFAULT_SECURE_TRADE_MAX_HISTORY_ENTRIES,
                         1,
-                        60
-                );
-        TRADE_MAX_OFFER_XP = builder
-                .comment(
-                        "FR-TRADE-002-A maximum XP points one player may offer. "
-                                + "Range [1, 10000000000]."
-                )
-                .defineInRange(
-                        "maxOfferXp",
-                        DEFAULT_TRADE_MAX_OFFER_XP,
-                        1L,
-                        10_000_000_000L
+                        100
                 );
         builder.pop();
 
@@ -820,52 +841,84 @@ public class ConfigManager {
         }
     }
 
-    /**
-     * Configured trade tax quote rate in basis points; falls back to the
-     * default (500 = 5%) when the config is not loaded yet (FR-TRADE-002-A
-     * §9).
-     */
-    public static int tradeTaxRateBps() {
+    /** Secure Trade pending request timeout in seconds; falls back. */
+    public static int secureTradeRequestTimeoutSeconds() {
         try {
-            return TRADE_TAX_RATE_BPS.get();
+            return SECURE_TRADE_REQUEST_TIMEOUT_SECONDS.get();
         } catch (IllegalStateException notLoaded) {
-            return DEFAULT_TRADE_TAX_RATE_BPS;
+            return DEFAULT_SECURE_TRADE_REQUEST_TIMEOUT_SECONDS;
         }
     }
 
-    /** Configured pending trade-request timeout in seconds; falls back. */
-    public static int tradeRequestTimeoutSeconds() {
+    /** Secure Trade max trade distance in blocks (-1 = infinite); falls back. */
+    public static double secureTradeMaxDistance() {
         try {
-            return TRADE_REQUEST_TIMEOUT_SECONDS.get();
+            return SECURE_TRADE_MAX_DISTANCE.get();
         } catch (IllegalStateException notLoaded) {
-            return DEFAULT_TRADE_REQUEST_TIMEOUT_SECONDS;
+            return DEFAULT_SECURE_TRADE_MAX_DISTANCE;
         }
     }
 
-    /** Configured repeated-request cooldown in seconds; falls back. */
-    public static int tradeRequestCooldownSeconds() {
+    /** Secure Trade detailed transaction logging switch; falls back. */
+    public static boolean secureTradeEnableLogging() {
         try {
-            return TRADE_REQUEST_COOLDOWN_SECONDS.get();
+            return SECURE_TRADE_ENABLE_LOGGING.get();
         } catch (IllegalStateException notLoaded) {
-            return DEFAULT_TRADE_REQUEST_COOLDOWN_SECONDS;
+            return DEFAULT_SECURE_TRADE_ENABLE_LOGGING;
         }
     }
 
-    /** Configured both-ready locked countdown in seconds; falls back. */
-    public static int tradeLockedCountdownSeconds() {
+    /** Secure Trade both-ready confirmation countdown in seconds; falls back. */
+    public static int secureTradeCountdownSeconds() {
         try {
-            return TRADE_LOCKED_COUNTDOWN_SECONDS.get();
+            return SECURE_TRADE_COUNTDOWN_SECONDS.get();
         } catch (IllegalStateException notLoaded) {
-            return DEFAULT_TRADE_LOCKED_COUNTDOWN_SECONDS;
+            return DEFAULT_SECURE_TRADE_COUNTDOWN_SECONDS;
         }
     }
 
-    /** Configured maximum XP points one player may offer; falls back. */
-    public static long tradeMaxOfferXp() {
+    /** Secure Trade repeated-request cooldown in seconds; falls back. */
+    public static int secureTradeCooldownSeconds() {
         try {
-            return TRADE_MAX_OFFER_XP.get();
+            return SECURE_TRADE_COOLDOWN_SECONDS.get();
         } catch (IllegalStateException notLoaded) {
-            return DEFAULT_TRADE_MAX_OFFER_XP;
+            return DEFAULT_SECURE_TRADE_COOLDOWN_SECONDS;
+        }
+    }
+
+    /** Secure Trade blacklisted item IDs; falls back to the default. */
+    public static java.util.List<String> secureTradeBlacklistedItems() {
+        try {
+            return java.util.List.copyOf(SECURE_TRADE_BLACKLISTED_ITEMS.get());
+        } catch (IllegalStateException notLoaded) {
+            return java.util.List.of("minecraft:bedrock");
+        }
+    }
+
+    /** Secure Trade allowed dimension IDs (empty = allow all); falls back. */
+    public static java.util.List<String> secureTradeAllowedDimensions() {
+        try {
+            return java.util.List.copyOf(SECURE_TRADE_ALLOWED_DIMENSIONS.get());
+        } catch (IllegalStateException notLoaded) {
+            return java.util.List.of();
+        }
+    }
+
+    /** Secure Trade blocked dimension IDs (empty = block none); falls back. */
+    public static java.util.List<String> secureTradeBlockedDimensions() {
+        try {
+            return java.util.List.copyOf(SECURE_TRADE_BLOCKED_DIMENSIONS.get());
+        } catch (IllegalStateException notLoaded) {
+            return java.util.List.of();
+        }
+    }
+
+    /** Secure Trade max trade-history entries shown per player; falls back. */
+    public static int secureTradeMaxHistoryEntries() {
+        try {
+            return SECURE_TRADE_MAX_HISTORY_ENTRIES.get();
+        } catch (IllegalStateException notLoaded) {
+            return DEFAULT_SECURE_TRADE_MAX_HISTORY_ENTRIES;
         }
     }
 

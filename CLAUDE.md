@@ -113,9 +113,11 @@ Completed:
 
 Current:
 
-Current protocol is v10 with 30 production messages and 15 runtime
-modules (FR-TRADE-003-A added the trade XP offer message ID 29 and experience
-fields to the trade snapshot ID 15).
+Current protocol is v11 with 22 production messages and 14 runtime
+modules. FR-TRADE-004 replaced the self-built intent-model trade with a
+verbatim Secure Trade escrow port (money/tax/identity/audit added on the
+Secure Trade `fontainerepublic:trade` sub-channel); the retired intent-model
+trade slots (former IDs 9-15 and 29) were removed in one protocol renumber.
 The full client feature set (all ten `/frclient` views plus the communicator
 water mirror, trade, mail, land claim, and personal land-rights view) is
 implemented, reviewed, merged into `develop`, and smoke-verified.
@@ -134,8 +136,8 @@ blockers were fixed, reviewed, built, smoke-verified, merged, and pushed:
    the Water Mirror reverted to a standalone custom item (FR-ITEM-003, merge
    `b961aaf`) and trade gained a custom MenuType + SoundEvents (FR-TRADE-003-B,
    merge `730cf77`). The FR client is now REQUIRED on both server and client.
-A dedicated-server smoke (tmp/smoke-item-trade-ui-20260815) reached Ready with
-ExitCode=0, protocol v10/30 frozen.
+A dedicated-server smoke (tmp/smoke-v11-trade-cleanup-20260815) reached Ready
+with ExitCode=0, protocol v11/22 frozen, 14/14 modules available.
 
 Next:
 
@@ -144,7 +146,9 @@ Remaining before the next release candidate:
    FR client join, /fr communicator issue, water mirror as a standalone item,
    offhand right-click, XP trade, the 54-slot container trade UI,
    crash-window/RCON/old-protocol rejection).
-2. durable trade journal (/fr trade history) — still a placeholder.
+2. durable trade journal — /fr trade history now renders money alongside
+   items/XP and persists to securetrade-history.json (real-machine confirmation
+   pending).
 
 Always read this section before starting work.
 

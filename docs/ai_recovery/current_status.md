@@ -1,7 +1,19 @@
 # Current Status
 
-> Last updated: 2026-08-14（深夜，中枢推进）
+> Last updated: 2026-08-15（FR-TRADE-004 照搬纠偏批，构建+冒烟通过，待提交）
 > Source of truth: CLAUDE.md, git history, codebase state
+
+## 2026-08-15（FR-TRADE-004 照搬纠偏批，最新状态）
+
+工作区包含 FR-TRADE-004 合入后的「照搬纠偏」未提交改动（32 个本批文件 +
+work_journal/CLAUDE.md 状态更新，另有一个无关文件
+`deepseek-worktrees-v2/FR-MAIL-001-IMPL-PROMPT.md` 需排除）。
+本批已通过 `./gradlew build`（37 tasks 全绿）与专用服务器冒烟
+`tmp/smoke-v11-trade-cleanup-20260815`（Ready、ExitCode=0、协议 v11/22、
+14/14 模块可用）。改动内容：交易历史补金钱显示；删除自研 XP 与旧交易协议槽位；
+TradeConfig 并入 ConfigManager（securetrade 段 9 项）；主协议 v10/30 → v11/22；
+相关测试断言同步（含 client executor 引用数 15→14）。下一步：提交（排除无关
+文件）并推送 develop。
 
 ## 2026-08-14 深夜（中枢推进后最新状态）
 

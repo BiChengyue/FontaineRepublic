@@ -1,7 +1,8 @@
 # Level 3 真机运行时验证清单（Dedicated Server）
 
 > 适用：全部已实现模块（网络/玩家数据/审计/主体登记/公民/土地/经济/机构访问/
-> 政府/议会/司法/紧急/通信交易/通信信函/土地认领），共 **15 个运行时模块**。
+> 政府/议会/司法/紧急/通信信函/土地认领），共 **14 个运行时模块**；
+> 通信交易为 Secure Trade 独立子信道（fontainerepublic:trade），不计入模块运行时。
 > 用途：Human 协助运行时验证（Level 3）。
 > 说明：以下为最小验证集；每条给出"看什么、怎么算通过"。部分需要 FR 客户端
 > 连服、部分需要两个在线玩家，逐条标注。
@@ -36,7 +37,7 @@
 
 （或用你之前验证时的直接启动方式。）日志中必须出现以下事实。Forge 1.20.1
 可能先记录 `Done`，再触发本模组的 `ServerStartingEvent` 运行时初始化，因此不得仅按
-日志的先后位置误判；执行任何业务命令前，15 个模块必须全部进入 ACTIVE：
+日志的先后位置误判；执行任何业务命令前，14 个模块必须全部进入 ACTIVE：
 
 ```text
 [FontaineRepublic] Core initialized
@@ -55,16 +56,15 @@
 [CoreManager] Module initialized: government
 [CoreManager] Module initialized: parliament
 [CoreManager] Module initialized: justice
-[CoreManager] Module initialized: trade
 [CoreManager] Module initialized: mail
 Done (X.XXXs)! For help, type "help"
 ```
 
-**通过条件：** 上述 **15 个模块**初始化日志全部出现（模块 ID `network` →
-`landclaim`/`mail` 的依赖拓扑共 15 行，不要求与 `Done` 严格先后）；后续出现
-`[Trade] Runtime initialized (taxRatePercent=…)`、
+**通过条件：** 上述 **14 个模块**初始化日志全部出现（模块 ID `network` →
+`landclaim`/`mail` 的依赖拓扑共 14 行，不要求与 `Done` 严格先后）；后续出现
 `[Mail] …`、`[LandClaim] Runtime initialized (halfWidth=…, height=…, zone=…)`
-等已绑定服务日志；无 ERROR/Exception；`Done ...` 出现。
+等已绑定服务日志；Secure Trade 子信道 `fontainerepublic:trade` 注册成功；
+无 ERROR/Exception；`Done ...` 出现。
 
 ## 2. 存档落盘核验
 
@@ -79,7 +79,6 @@ stop
 ```text
 [DataManager] Saved
 [Mail] Runtime closed
-[Trade] Runtime closed
 [Justice] Runtime closed
 [Parliament] Runtime closed
 [Government] Runtime closed
@@ -123,7 +122,7 @@ Saving players / Saving worlds / All chunks are saved (主世界/DIM-1/DIM1)
 ```text
 /fr help
 /fr admin status        -> modules: 15; active: 15; unavailable: 0
-/fr admin modules       -> 15 个模块均 available
+/fr admin modules       -> 14 个模块均 available
 /fr money balance       -> 本人余额反馈
 /fr citizen info        -> 本人公民状态
 /fr bank balance        -> 国库总额（只读公开）
@@ -322,7 +321,7 @@ receipt/watermark 持久化且可 inspect。
 > 每条可注明所需器具：`单玩家` / `双玩家` / `OP或控制台` / `FR客户端` / `无模组客户端`。
 
 ```text
-启动日志：通过/不通过（附关键行；15 个模块全启动）
+启动日志：通过/不通过（附关键行；14 个模块全启动）
 落盘：通过/不通过（附文件大小与退出码）
 重启恢复：通过/不通过
 命令输出：通过/不通过（modules=15; active=15; unavailable=0）

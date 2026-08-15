@@ -26,15 +26,6 @@ import com.fontainerepublic.common.network.display.NotificationPacket;
 import com.fontainerepublic.common.network.display.ParliamentInfoPacket;
 import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
 import com.fontainerepublic.common.network.display.TransactionNotifyPacket;
-import com.fontainerepublic.common.network.display.TradeStateSyncPacket;
-import com.fontainerepublic.common.trade.TradeAgreePacket;
-import com.fontainerepublic.common.trade.TradeCancelPacket;
-import com.fontainerepublic.common.trade.TradeMessageHandlers;
-import com.fontainerepublic.common.trade.TradeOfferItemPacket;
-import com.fontainerepublic.common.trade.TradeOfferMoneyPacket;
-import com.fontainerepublic.common.trade.TradeOfferXpPacket;
-import com.fontainerepublic.common.trade.TradeRequestPacket;
-import com.fontainerepublic.common.trade.TradeRespondPacket;
 import net.minecraftforge.network.NetworkDirection;
 
 import java.util.Objects;
@@ -43,30 +34,23 @@ import java.util.Optional;
 /**
  * Complete compiled production ledger for the current protocol
  * (FR-CLIENT-001-A §4.2). The ledger is append-only: message IDs start at 0
- * and are never reused or reordered; later stages append further display
- * messages (citizen card and transaction history after ID 2, institution
- * summaries after ID 4, court/land summaries after ID 6, per
- * FR-CLIENT-001-IMPL-B2 / FR-CLIENT-001-IMPL-B3a / FR-CLIENT-001-IMPL-B3b).
- * FR-TRADE-001-A appends the first C2S entries (IDs 9-14) and the trade
- * snapshot (ID 15); every C2S entry carries an explicit rate policy.
+ * and are never reused or reordered within a released protocol; later stages
+ * append further display messages.
+ *
+ * <p>FR-TRADE-004 (verbatim Secure Trade port) removed the retired
+ * intent-model trade C2S/S2C ledger (former IDs 9-15 and 29). Because the FR
+ * client is now required and version-matched, the protocol was renumbered in
+ * a single release (protocol v11): mail (9-15), land-claim (16-19) and
+ * land-rights (20-21) shifted down to close the gap left by the removed trade
+ * slots. The trade surface now lives on its own
+ * {@code fontainerepublic:trade} sub-channel (Secure Trade network), outside
+ * this ledger.</p>
  */
 public final class NetworkProductionMessageTable {
 
     /** Total number of messages expected by the current protocol revision. */
-    public static final int EXPECTED_MESSAGE_COUNT = 30;
+    public static final int EXPECTED_MESSAGE_COUNT = 22;
 
-    // Per-message C2S rate policies (FR-NET-001 rate limiting; bounded
-    // interactive abuse control, not business authority).
-    private static final RateLimitPolicy TRADE_REQUEST_POLICY =
-            new RateLimitPolicy(5, 1, 2_000_000_000L, 500_000_000L);
-    private static final RateLimitPolicy TRADE_RESPOND_POLICY =
-            new RateLimitPolicy(5, 1, 2_000_000_000L, 500_000_000L);
-    private static final RateLimitPolicy TRADE_OFFER_POLICY =
-            new RateLimitPolicy(10, 2, 1_000_000_000L, 200_000_000L);
-    private static final RateLimitPolicy TRADE_AGREE_POLICY =
-            new RateLimitPolicy(10, 2, 1_000_000_000L, 200_000_000L);
-    private static final RateLimitPolicy TRADE_CANCEL_POLICY =
-            new RateLimitPolicy(10, 2, 1_000_000_000L, 200_000_000L);
     // FR-MAIL-001-A: mail C2S rate policies (bounded interactive abuse
     // control; never business authority).
     private static final RateLimitPolicy MAIL_SEND_POLICY =
@@ -159,68 +143,11 @@ public final class NetworkProductionMessageTable {
                 LandInfoPacket::decode,
                 DisplayMessageHandlers.landInfo()
         ));
-        // FR-TRADE-001-A: C2S trade ledger (IDs 9-14, each with a rate
-        // policy) and the per-viewer S2C snapshot (ID 15).
+        // FR-MAIL-001-A: mail ledger (IDs 9-15). C2S send/list/read/delete/
+        // broadcast carry explicit rate policies; sync/alert are S2C (ID 13,
+        // 14).
         registration.register(c2sSpec(
                 9,
-                TradeRequestPacket.class,
-                TradeRequestPacket::encode,
-                TradeRequestPacket::decode,
-                TradeMessageHandlers.request(),
-                TRADE_REQUEST_POLICY
-        ));
-        registration.register(c2sSpec(
-                10,
-                TradeRespondPacket.class,
-                TradeRespondPacket::encode,
-                TradeRespondPacket::decode,
-                TradeMessageHandlers.respond(),
-                TRADE_RESPOND_POLICY
-        ));
-        registration.register(c2sSpec(
-                11,
-                TradeOfferMoneyPacket.class,
-                TradeOfferMoneyPacket::encode,
-                TradeOfferMoneyPacket::decode,
-                TradeMessageHandlers.offerMoney(),
-                TRADE_OFFER_POLICY
-        ));
-        registration.register(c2sSpec(
-                12,
-                TradeOfferItemPacket.class,
-                TradeOfferItemPacket::encode,
-                TradeOfferItemPacket::decode,
-                TradeMessageHandlers.offerItem(),
-                TRADE_OFFER_POLICY
-        ));
-        registration.register(c2sSpec(
-                13,
-                TradeAgreePacket.class,
-                TradeAgreePacket::encode,
-                TradeAgreePacket::decode,
-                TradeMessageHandlers.agree(),
-                TRADE_AGREE_POLICY
-        ));
-        registration.register(c2sSpec(
-                14,
-                TradeCancelPacket.class,
-                TradeCancelPacket::encode,
-                TradeCancelPacket::decode,
-                TradeMessageHandlers.cancel(),
-                TRADE_CANCEL_POLICY
-        ));
-        registration.register(displaySpec(
-                15,
-                TradeStateSyncPacket.class,
-                TradeStateSyncPacket::encode,
-                TradeStateSyncPacket::decode,
-                DisplayMessageHandlers.tradeStateSync()
-        ));
-        // FR-MAIL-001-A: mail ledger (IDs 16-22). C2S send/list/read/delete/
-        // broadcast carry explicit rate policies; sync/alert are S2C (ID 20,
-        // 21).
-        registration.register(c2sSpec(
-                16,
                 MailSendPacket.class,
                 MailSendPacket::encode,
                 MailSendPacket::decode,
@@ -228,7 +155,7 @@ public final class NetworkProductionMessageTable {
                 MAIL_SEND_POLICY
         ));
         registration.register(c2sSpec(
-                17,
+                10,
                 MailListRequestPacket.class,
                 MailListRequestPacket::encode,
                 MailListRequestPacket::decode,
@@ -236,7 +163,7 @@ public final class NetworkProductionMessageTable {
                 MAIL_LIST_POLICY
         ));
         registration.register(c2sSpec(
-                18,
+                11,
                 MailReadPacket.class,
                 MailReadPacket::encode,
                 MailReadPacket::decode,
@@ -244,7 +171,7 @@ public final class NetworkProductionMessageTable {
                 MAIL_READ_POLICY
         ));
         registration.register(c2sSpec(
-                19,
+                12,
                 MailDeletePacket.class,
                 MailDeletePacket::encode,
                 MailDeletePacket::decode,
@@ -252,32 +179,32 @@ public final class NetworkProductionMessageTable {
                 MAIL_DELETE_POLICY
         ));
         registration.register(displaySpec(
-                20,
+                13,
                 MailboxSyncPacket.class,
                 MailboxSyncPacket::encode,
                 MailboxSyncPacket::decode,
                 DisplayMessageHandlers.mailboxSync()
         ));
         registration.register(displaySpec(
-                21,
+                14,
                 MailAlertPacket.class,
                 MailAlertPacket::encode,
                 MailAlertPacket::decode,
                 DisplayMessageHandlers.mailAlert()
         ));
         registration.register(c2sSpec(
-                22,
+                15,
                 MailBroadcastPacket.class,
                 MailBroadcastPacket::encode,
                 MailBroadcastPacket::decode,
                 MailMessageHandlers.broadcast(),
                 MAIL_BROADCAST_POLICY
         ));
-        // FR-LAND-CLAIM-001-A: land-claim ledger (IDs 23-26). C2S
-        // inspect/claim carry explicit rate policies; S2C results (24, 26)
+        // FR-LAND-CLAIM-001-A: land-claim ledger (IDs 16-19). C2S
+        // inspect/claim carry explicit rate policies; S2C results (17, 19)
         // are display-only.
         registration.register(c2sSpec(
-                23,
+                16,
                 LandInspectPacket.class,
                 LandInspectPacket::encode,
                 LandInspectPacket::decode,
@@ -285,14 +212,14 @@ public final class NetworkProductionMessageTable {
                 LAND_INSPECT_POLICY
         ));
         registration.register(displaySpec(
-                24,
+                17,
                 LandInspectResultPacket.class,
                 LandInspectResultPacket::encode,
                 LandInspectResultPacket::decode,
                 DisplayMessageHandlers.landInspectResult()
         ));
         registration.register(c2sSpec(
-                25,
+                18,
                 LandClaimPacket.class,
                 LandClaimPacket::encode,
                 LandClaimPacket::decode,
@@ -300,16 +227,16 @@ public final class NetworkProductionMessageTable {
                 LAND_CLAIM_POLICY
         ));
         registration.register(displaySpec(
-                26,
+                19,
                 LandClaimResultPacket.class,
                 LandClaimResultPacket::encode,
                 LandClaimResultPacket::decode,
                 DisplayMessageHandlers.landClaimResult()
         ));
-        // FR-LAND-002-A: self-only my-usage-rights page (IDs 27/28). C2S query
+        // FR-LAND-002-A: self-only my-usage-rights page (IDs 20/21). C2S query
         // carries an explicit rate policy; the S2C page is display-only.
         registration.register(c2sSpec(
-                27,
+                20,
                 MyLandRightsRequestPacket.class,
                 MyLandRightsRequestPacket::encode,
                 MyLandRightsRequestPacket::decode,
@@ -317,23 +244,11 @@ public final class NetworkProductionMessageTable {
                 MY_LAND_QUERY_POLICY
         ));
         registration.register(displaySpec(
-                28,
+                21,
                 MyLandRightsPagePacket.class,
                 MyLandRightsPagePacket::encode,
                 MyLandRightsPagePacket::decode,
                 DisplayMessageHandlers.myLandRightsPage()
-        ));
-        // FR-TRADE-003-A: XP offer C2S (ID 29). The per-viewer snapshot
-        // (ID 15) gained own/other XP fields, so this and the snapshot
-        // change together bumped the protocol to v10. Registered last so the
-        // frozen ledger remains ascending 0..29.
-        registration.register(c2sSpec(
-                29,
-                TradeOfferXpPacket.class,
-                TradeOfferXpPacket::encode,
-                TradeOfferXpPacket::decode,
-                TradeMessageHandlers.offerXp(),
-                TRADE_OFFER_POLICY
         ));
     }
 

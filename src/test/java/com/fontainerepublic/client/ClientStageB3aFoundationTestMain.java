@@ -184,14 +184,12 @@ public final class ClientStageB3aFoundationTestMain {
     // ------------------------------------------------------------------
 
     private static void testProtocolV5Contract() {
-        check(NetworkProtocol.VERSION.equals("10"), "Protocol version is 10");
-        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 30,
-                "Protocol v10 expects exactly thirty ledger messages");
+        check(NetworkProtocol.VERSION.equals("11"), "Protocol version is 11");
+        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 22,
+                "Protocol v11 expects exactly twenty-two ledger messages");
         check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT
-                        == 23 + 4 + 2 + 1,
-                "Ledger grows by the four FR-LAND-CLAIM messages (23-26), "
-                        + "the two FR-LAND-002 messages (27-28) and the one "
-                        + "FR-TRADE-003-A XP-offer message (29)");
+                        == 9 + 7 + 4 + 2,
+                "Ledger is 9 display + 7 mail + 4 land-claim + 2 land-rights");
     }
 
     // ------------------------------------------------------------------

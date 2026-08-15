@@ -9,7 +9,6 @@ import com.fontainerepublic.common.network.display.NotificationPacket;
 import com.fontainerepublic.common.network.display.ParliamentInfoPacket;
 import com.fontainerepublic.common.network.display.TransactionHistorySyncPacket;
 import com.fontainerepublic.common.network.display.TransactionNotifyPacket;
-import com.fontainerepublic.common.network.display.TradeStateSyncPacket;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
 import org.slf4j.Logger;
@@ -141,16 +140,6 @@ public final class ClientNetworkExecutor {
         ensureLogoutCleanup();
         com.fontainerepublic.client.landclaim.ClientLandClaimCache.instance()
                 .setClaimResult(message);
-    }
-
-    /**
-     * FR-TRADE-004: the retired intent-model trade snapshot (protocol ID 15)
-     * is no longer driven by any server authority — Secure Trade runs its own
-     * state sync on the {@code fontainerepublic:trade} sub-channel. This S2C
-     * sink is now a no-op kept only to satisfy the frozen protocol-v10 ledger.
-     */
-    public static void acceptTradeStateSync(TradeStateSyncPacket message) {
-        // Intentionally empty: retired display channel (see FR-TRADE-004).
     }
 
     /**

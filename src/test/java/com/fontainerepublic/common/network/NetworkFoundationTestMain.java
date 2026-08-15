@@ -117,18 +117,18 @@ public final class NetworkFoundationTestMain {
     }
 
     private static void testProtocolPredicates() {
-        check(NetworkProtocol.clientAccepts("10"), "Client must accept exact protocol");
-        check(!NetworkProtocol.clientAccepts("9"), "Client must reject the previous protocol");
-        check(!NetworkProtocol.clientAccepts("8"), "Client must reject the old protocol");
+        check(NetworkProtocol.clientAccepts("11"), "Client must accept exact protocol");
+        check(!NetworkProtocol.clientAccepts("10"), "Client must reject the previous protocol");
+        check(!NetworkProtocol.clientAccepts("9"), "Client must reject the old protocol");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ABSENT.version()),
                 "Client must reject an absent server channel");
         check(!NetworkProtocol.clientAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Client must reject ACCEPTVANILLA");
 
-        check(NetworkProtocol.serverAccepts("10"), "Server must accept exact protocol");
+        check(NetworkProtocol.serverAccepts("11"), "Server must accept exact protocol");
         check(NetworkProtocol.serverAccepts(NetworkRegistry.ABSENT.version()),
                 "Server must accept ABSENT.version()");
-        check(!NetworkProtocol.serverAccepts("9"),
+        check(!NetworkProtocol.serverAccepts("10"),
                 "Server must reject the previous protocol");
         check(!NetworkProtocol.serverAccepts(NetworkRegistry.ACCEPTVANILLA),
                 "Server must reject ACCEPTVANILLA");
@@ -290,8 +290,8 @@ public final class NetworkFoundationTestMain {
         int count = registrar.freeze();
         check(count == NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT,
                 "Production message table must register the expected ledger count");
-        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 30,
-                "Protocol v10 expects exactly thirty ledger messages");
+        check(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 22,
+                "Protocol v11 expects exactly twenty-two ledger messages");
         check(registrar.isFrozen(), "Production message table must be frozen");
 
         List<NetworkMessageRegistrar.LedgerEntry> ledger = registrar.ledger();
@@ -299,25 +299,21 @@ public final class NetworkFoundationTestMain {
                         .equals(List.of(
                                 0, 1, 2, 3, 4, 5, 6, 7, 8,
                                 9, 10, 11, 12, 13, 14, 15,
-                                16, 17, 18, 19, 20, 21, 22,
-                                23, 24, 25, 26, 27, 28, 29
+                                16, 17, 18, 19, 20, 21
                         )),
-                "Ledger IDs are exactly 0..29 in ascending order");
+                "Ledger IDs are exactly 0..21 in ascending order");
         check(ledger.stream().map(NetworkMessageRegistrar.LedgerEntry::messageClassName)
-                        .distinct().count() == 30,
+                        .distinct().count() == 22,
                 "Ledger message classes are unique");
         for (NetworkMessageRegistrar.LedgerEntry entry : ledger) {
             int id = entry.id();
-            if ((id >= 9 && id <= 14)
-                    || (id >= 16 && id <= 19)
-                    || id == 22
-                    || id == 23
-                    || id == 25
-                    || id == 27
-                    || id == 29) {
-                // FR-TRADE-001-A (9-14), FR-MAIL-001-A (16-19, 22),
-                // FR-LAND-CLAIM-001-A (23, 25), FR-LAND-002-A (27) and
-                // FR-TRADE-003-A (29): C2S entries, each registered with an
+            if ((id >= 9 && id <= 12)
+                    || id == 15
+                    || id == 16
+                    || id == 18
+                    || id == 20) {
+                // FR-MAIL-001-A (9-12, 15), FR-LAND-CLAIM-001-A (16, 18) and
+                // FR-LAND-002-A (20): C2S entries, each registered with an
                 // explicit rate policy.
                 check(entry.direction() == NetworkDirection.PLAY_TO_SERVER,
                         "C2S messages are PLAY_TO_SERVER: ID " + entry.id());

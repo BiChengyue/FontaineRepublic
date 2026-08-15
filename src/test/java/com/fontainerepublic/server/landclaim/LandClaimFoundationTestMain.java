@@ -655,28 +655,28 @@ public final class LandClaimFoundationTestMain {
         LedgerCollector collector = new LedgerCollector();
         NetworkProductionMessageTable.registerAll(collector);
 
-        assertC2s(collector.byId, 23, LandInspectPacket.class);
-        assertC2s(collector.byId, 25, LandClaimPacket.class);
+        assertC2s(collector.byId, 16, LandInspectPacket.class);
+        assertC2s(collector.byId, 18, LandClaimPacket.class);
 
-        NetworkMessageSpec<?> inspectResult = collector.byId.get(24);
+        NetworkMessageSpec<?> inspectResult = collector.byId.get(17);
         require(inspectResult != null
                         && inspectResult.messageClass() == LandInspectResultPacket.class
                         && inspectResult.direction() == NetworkDirection.PLAY_TO_CLIENT,
-                "ID 24 is the S2C land inspect result");
+                "ID 17 is the S2C land inspect result");
         require(inspectResult.rateLimitPolicy().isEmpty(),
-                "S2C ID 24 carries no C2S rate policy");
+                "S2C ID 17 carries no C2S rate policy");
 
-        NetworkMessageSpec<?> claimResult = collector.byId.get(26);
+        NetworkMessageSpec<?> claimResult = collector.byId.get(19);
         require(claimResult != null
                         && claimResult.messageClass() == LandClaimResultPacket.class
                         && claimResult.direction() == NetworkDirection.PLAY_TO_CLIENT,
-                "ID 26 is the S2C land claim result");
+                "ID 19 is the S2C land claim result");
         require(claimResult.rateLimitPolicy().isEmpty(),
-                "S2C ID 26 carries no C2S rate policy");
+                "S2C ID 19 carries no C2S rate policy");
 
-        require(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 30,
-                "the protocol expects thirty ledger messages");
-        require(NetworkProtocol.VERSION.equals("10"), "the protocol version is v10");
+        require(NetworkProductionMessageTable.EXPECTED_MESSAGE_COUNT == 22,
+                "the protocol expects twenty-two ledger messages");
+        require(NetworkProtocol.VERSION.equals("11"), "the protocol version is v11");
     }
 
     private static void assertC2s(

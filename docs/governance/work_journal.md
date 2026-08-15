@@ -948,3 +948,89 @@
 - 说明：FR 客户端现已变为必需（放弃无模组进服）。真机测试清单已更新
   （docs/guide/next-morning-test-sheet.md）。
 - develop=origin，HEAD 730cf77。剩余：Level 3 真机回归（待 Human）。
+## 2026-08-15（真机测试反馈）| 交易改「直接照搬 Secure Trade」+ 修邮件写信
+
+- Human 真机反馈：水镜发成「钟」（实为占位贴图像钟面，代码已是独立物品，仅外观问题）；
+  开菜单/副手 OK；邮件「写信」按钮点了没反应（bug）；交易只有钱能用、物品/XP 不行。
+- Human 明确指令：放弃自研交易，直接照搬 Secure Trade（escrow 托管 + 54 格 + XP）+ 加 FR 金钱/税。
+- 已派发（并行）：
+  1. feat/trade-004-securetrade（子代理 b216b7ac，隔离 worktree hub-worktrees/securetrade-copy）：
+     照搬 Secure Trade 全部 forge+common 代码 + 加金钱腿/5% 税/身份/审计，删除旧意图模型交易。
+  2. fix/mail-compose（子代理 50d021da，隔离 worktree hub-worktrees/mail-compose-fix）：
+     修邮件「写信」按钮无反应。
+- 待子代理完成后：审查 → 返修 → 合入 → 推送 → 更新文档/测试清单。
+## 2026-08-15 | 交易照搬 Secure Trade 完成 + 配置冲突修复
+
+- FR-TRADE-004（feat/trade-004-securetrade，子代理 b216b7ac，commit 2806af7）：直接照搬
+  Navielon/SecureTrade（MIT）的 escrow 托管模型 + 54 格真实拖拽界面 + XP，加 FR 金钱腿
+  （FRSettlementBridge 走 EconomyService.executeTradeSettlement + 5% 税）+ 身份 + 审计；
+  删除旧意图模型交易（server/trade 全删、TradeModule 删除，模块数 15→14）；SecureTrade
+  网络走独立子信道 fontainerepublic:trade（protocol 1），FR 主协议保持 v10/30。合入 develop
+  （merge 9eb4ea4）。
+- 冒烟发现配置冲突：TradeConfig.SPEC 与 ConfigManager.SPEC 都是 SERVER 配置同名冲突
+  （Config conflict detected!），移除 TradeConfig 单独注册（用其默认值）修复，合入
+  develop（83edb13），冒烟通过（Ready、ExitCode=0）。
+- 邮件「写信」按钮修复（fix/mail-compose，87fac90）已合入（378b023）。
+- 水镜「像钟」=占位贴图问题（代码已是独立物品），待换贴图。
+- develop=origin，HEAD 83edb13。剩余：真机回归（54 格交易+金钱+XP、邮件写信）。
+
+## 2026-08-15 | FR-TRADE-004 照搬纠偏（"全部修复"）——进行中，重启后从这里续
+
+> 续接状态：所有代码/测试改动已完成，但构建尚未重跑。下一步 = 重新 `./gradlew build`。
+
+### 已完成的修复（P0/P1/P2 全部落地，未提交、未 build）
+
+1. P0 交易历史显示金钱：TradeHistoryManager.showHistory 补算 gave/receivedMoney，formatItemsAndXP → formatItemsXpMoney（加 money 渲染 + hasContent 修复）；lang 加 securetrade.history.money_amount（en "%s Mora" / zh "%s 摩拉"）。
+2. P1 删自研 XP：删 server/trade/xp/ExperiencePointMath.java、src/test/.../ExperiencePointMathTestMain.java、build.gradle experiencePointMathTest 任务及其 check 依赖。
+3. P1 TradeConfig 合并进 ConfigManager：新增 securetrade 段 9 项（requestTimeout/maxDistance/enableLogging/countdown/cooldown/blacklistedItems/allowed/blocked/maxHistory），删 5 个旧自研交易配置（taxRateBps/requestTimeout/requestCooldown/lockedCountdown/maxOfferXp）及其 getter，保留 tradeTaxRatePercent；ForgePlatformHelper 改读 ConfigManager；删 forge/TradeConfig.java。
+4. P2 移除旧自研交易协议 8 槽 + 重排：NetworkProductionMessageTable 30→22 条（删旧 ID 9-15、29；mail 16-22→9-15、landclaim 23-26→16-19、landrights 27-28→20-21）；NetworkProtocol.VERSION "10"→"11"；删 8 个旧 common/trade 包 + 旧 display/TradeStateSyncPacket + DisplayMessageHandlers.tradeStateSync + ClientNetworkExecutor.acceptTradeStateSync。
+5. P2 一致性：CLAUDE.md 更新 v11/22/14；删 FontaineRepublic 3 个未用 import（TradeCommand/TradeConfig/TradeLogger）。
+6. 附带：zh_cn.json 补齐全部 securetrade 翻译键（原缺失，中文端会落回英文），删 2 个旧交易死键。
+
+### 测试同步（协议重排 -7 偏移，已全部改完）
+
+- ClientPresentationFoundationTestMain（v11 断言）
+- NetworkFoundationTestMain（v11、22、ID 列表 0..21、C2S 范围 {9-12,15,16,18,20}）
+- MailFoundationTestMain（ID 16-22 → 9-15）
+- LandClaimFoundationTestMain（ID 23-26 → 16-19）
+- LandRightsFoundationTestMain（ID 27-28 → 20-21、列表 0..21）
+- ClientStageB3a / ClientStageB3b（v11、22、公式 9+7+4+2）
+
+### 待办（重启后按序执行）
+
+1. ./gradlew build（上次 build 在 clientPresentationFoundationTest 因"Protocol version is 10"失败，该断言已改；其余测试断言也已同步，但未重跑验证）。
+2. 若还有测试失败：按失败信息继续同步（重点查硬编码 v10/30/旧 ID 16-28）。
+3. 全绿后：可选跑 dedicated-server smoke（tmp 下 smoke 控制器）。
+4. 提交 + 推送 develop（改动清单见 git status，共 31 文件，净 -795 行）。
+
+### 关键记忆点
+
+- 协议现为 v11 / 22 条 / 14 模块；交易走 Secure Trade 子通道 fontainerepublic:trade（协议 "1"）。
+- 旧自研交易已全部清除：common/trade/ 目录空、server/trade/ 目录空、display/TradeStateSyncPacket 已删。
+- 交易历史金钱展示已补，但金钱已写入 securetrade-history.json（此前只写不显示）。
+
+
+
+## 2026-08-15 | FR-TRADE-004 照搬纠偏——完成（本批收尾）
+
+
+
+- 重跑 `./gradlew build`：首次失败在 clientPresentationFoundationTest 的
+
+  side-isolation 源码扫描（ClientNetworkExecutor 引用数硬编码 15，实际已删
+
+  acceptTradeStateSync 后为 14）；已修正断言为 14/14。
+
+- 再次 `./gradlew build`：BUILD SUCCESSFUL（37 tasks，28 个 foundation 验证全绿）。
+
+- 专用服务器冒烟 `tmp/smoke-v11-trade-cleanup-20260815`：Ready=True、
+
+  ExitCode=0、协议 v11/22、14/14 模块可用。
+
+- 文档同步：CLAUDE.md、current_status.md、feature-summary.md、
+
+  next-morning-test-sheet.md、LEVEL3-RUNTIME-VERIFICATION-CHECKLIST.md 更新到
+
+  v11/22/14 模块状态。
+
+- 待提交（本批文件；排除无关文件 deepseek-worktrees-v2/FR-MAIL-001-IMPL-PROMPT.md）。
