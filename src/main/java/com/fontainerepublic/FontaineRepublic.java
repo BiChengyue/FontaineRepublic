@@ -155,7 +155,8 @@ public class FontaineRepublic {
         // command, server tick + stop cleanup. Kept in the mod bootstrap (not a
         // module) because the copied Secure Trade surface is a self-contained
         // escrow authority, not an FR module-runtime service.
-        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, TradeConfig.SPEC);
+        // (TradeConfig is no longer registered separately — its defaults are
+        // used; FR's ConfigManager owns the single SERVER config file.)
         TradeNetwork.register();
         Services.bind(new ForgePlatformHelper());
         MinecraftForge.EVENT_BUS.addListener(FRTradeEvents::onRegisterCommands);
