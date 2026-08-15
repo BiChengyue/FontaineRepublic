@@ -39,5 +39,7 @@
     "fontainerepublic.help.court.verdict": "  /fr court verdict issue <案件ID> <结果> <区域ID> <理由> | show <裁判ID> - 裁判",
     "fontainerepublic.help.court.review": "  /fr court review request <案件ID> <区域ID> | decide <案件ID> <区域ID> - 复核",
     "fontainerepublic.help.institution.title": "institution：机构管理（仅管理员）。",
-    "fontainerepublic.help.institution.restricted": "  该模块仅限服务器管理员访问；此处不列出命令详情。"
+    "fontainerepublic.help.institution.restricted": "  该模块仅限服务器管理员访问；此处不列出命令详情。",
+    "fontainerepublic.gui.trade_with": "与 %s 交易",
+    "fontainerepublic.gui.partner_offers": "%s 的报价"
 }

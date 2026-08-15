@@ -4,447 +4,263 @@ import com.fontainerepublic.client.gui.FrGuiUtil;
 import com.fontainerepublic.client.trade.ClientTradeCache;
 import com.fontainerepublic.client.trade.ClientTradeSender;
 import com.fontainerepublic.common.network.display.TradeStateSyncPacket;
+import com.fontainerepublic.common.trade.TradeMenu;
 import com.fontainerepublic.common.trade.TradeOfferItemPacket;
 import com.fontainerepublic.common.trade.TradeOfferMoneyPacket;
 import com.fontainerepublic.common.trade.TradeOfferXpPacket;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
 /**
- * Communicator trade screen (FR-TRADE-001-A §5).
+ * Container-backed trade screen (FR-TRADE-003-B).
  *
- * <p>A thin, read-only projection of the latest server snapshot plus
- * intention submission: the own and counterparty offer slots (4 + 4), money
- * offers, agreement flags, the LOCKED countdown, the local main inventory
- * for picking items, and agree / cancel controls. Every action sends the
- * bounded C2S intention packet (ledger IDs 9-14); the server re-runs every
- * authority rule, and a REQUESTED snapshot opens this screen so the invited
- * player can accept or refuse. No optimistic state is ever applied.</p>
+ * <p>Adapted from Secure Trade's {@code TradeScreen} (MIT, Copyright (c) 2026
+ * Secure Trade Mod Authors; upstream commit
+ * {@code add98b377ffc39e5d73789a874a08c5e369790ce}). It is an
+ * {@link AbstractContainerScreen} over the shared 54-slot {@link TradeMenu}
+ * container so the custom {@code MenuType} (registered per FR-TRADE-003-A
+ * &sect;3) drives screen opening through Forge's {@code MenuScreens}. The two
+ * 27-slot offer regions keep the Secure Trade layout; the FR intent model
+ * carries {@link TradeOfferItemPacket#SLOT_COUNT} (4) live offer slots per
+ * side, so the first four cells of each region show the authoritative
+ * projection and the rest are inert.</p>
+ *
+ * <p><b>Authority:</b> every displayed value (phase, money, XP, agreement,
+ * countdown, offer stacks) is read from the non-authoritative
+ * {@link ClientTradeCache}, which only ever receives the server's per-viewer
+ * {@link TradeStateSyncPacket}. Every action sends the bounded C2S intent;
+ * the {@code TradeService} stays the single authority. The Secure Trade
+ * texture is unavailable in FR, so the background and panels use
+ * {@link FrGuiUtil} drawing instead.</p>
  */
-public final class TradeScreen extends Screen {
+public final class TradeScreen extends AbstractContainerScreen<TradeMenu> {
 
-    private static final int PANEL_WIDTH = 180;
-    private static final int PANEL_HEIGHT = 118;
-    private static final int OWN_X = 12;
-    private static final int OTHER_X = 210;
-    private static final int PANEL_Y = 30;
-    private static final int SLOT_SIZE = 36;
-    private static final int SLOT_GAP = 6;
+    private static final int IMAGE_WIDTH = 356;
+    private static final int IMAGE_HEIGHT = 205;
 
-    private static final int INV_X = 12;
-    private static final int INV_Y = 196;
-    private static final int INV_SLOT = 18;
-    private static final int INV_ROWS = 4;
-    private static final int INV_COLS = 9;
+    // Offer panel geometry (mirrors the container slot coordinates).
+    private static final int LEFT_PANEL_X = 8;
+    private static final int LEFT_PANEL_Y = 17;
+    private static final int RIGHT_PANEL_X = 188;
+    private static final int SLOT_COL = 18;
+    private static final int SLOT_ROW = 18;
 
-    private EditBox amountBox;
+    private static final int LEFT_READY_X = 48;
+    private static final int LEFT_READY_Y = 96;
+    private static final int READY_W = 74;
+    private static final int READY_H = 18;
+
+    private EditBox moneyBox;
     private EditBox xpBox;
-    private Button agreeButton;
-    private Button cancelAgreeButton;
-    private Button cancelTradeButton;
+    private Button readyButton;
+    private Button cancelButton;
     private Button acceptButton;
-    private Button refuseButton;
-    private Button closeButton;
 
     private String statusMessage = "";
     private int statusColor = FrGuiUtil.COLOR_MUTED;
 
-    public TradeScreen() {
-        super(Component.literal("Trade"));
+    public TradeScreen(TradeMenu menu, Inventory playerInventory, Component title) {
+        super(menu, playerInventory, title);
+        this.imageWidth = IMAGE_WIDTH;
+        this.imageHeight = IMAGE_HEIGHT;
     }
 
     @Override
     protected void init() {
-        amountBox = addRenderableWidget(new EditBox(
-                this.font,
-                OWN_X + 4,
-                158,
-                110,
-                16,
-                Component.literal("Money offer")
-        ));
-        amountBox.setMaxLength(19);
+        super.init();
+        int x = leftPos;
+        int y = topPos;
+
+        moneyBox = addRenderableWidget(new EditBox(
+                this.font, x + 12, y + 150, 100, 14, Component.literal("Money offer")));
+        moneyBox.setMaxLength(19);
         addRenderableWidget(Button.builder(
-                        Component.literal("Offer money"),
-                        button -> offerMoney()
-                )
-                .bounds(OWN_X + 120, 157, 72, 18)
+                        Component.literal("Money"),
+                        button -> offerMoney())
+                .bounds(x + 116, y + 149, 56, 16)
                 .build());
 
         xpBox = addRenderableWidget(new EditBox(
-                this.font,
-                OWN_X + 4,
-                178,
-                110,
-                16,
-                Component.literal("XP offer")
-        ));
+                this.font, x + 212, y + 150, 100, 14, Component.literal("XP offer")));
         xpBox.setMaxLength(19);
         addRenderableWidget(Button.builder(
-                        Component.literal("Offer XP"),
-                        button -> offerXp()
-                )
-                .bounds(OWN_X + 120, 178, 72, 18)
-                .build());
-        addRenderableWidget(Button.builder(
-                        Component.literal("Clear XP"),
-                        button -> ClientTradeSender.sendOfferXp(currentSessionId(), 0L)
-                )
-                .bounds(OWN_X + 4, 198, 88, 16)
-                .build());
-        addRenderableWidget(Button.builder(
-                        Component.literal("Back"),
-                        button -> this.onClose()
-                )
-                .bounds(OTHER_X + 110, 157, 60, 18)
+                        Component.literal("XP"),
+                        button -> offerXp())
+                .bounds(x + 316, y + 149, 40, 16)
                 .build());
 
-        agreeButton = addRenderableWidget(Button.builder(
-                        Component.literal("Agree"),
-                        button -> ClientTradeSender.sendAgree(currentSessionId(), true)
-                )
-                .bounds(OWN_X, 292, 90, 20)
+        readyButton = addRenderableWidget(Button.builder(
+                        Component.literal("Ready"),
+                        button -> toggleReady())
+                .bounds(x + LEFT_READY_X, y + LEFT_READY_Y, READY_W, READY_H)
                 .build());
-        cancelAgreeButton = addRenderableWidget(Button.builder(
-                        Component.literal("Cancel agree"),
-                        button -> ClientTradeSender.sendAgree(currentSessionId(), false)
-                )
-                .bounds(OWN_X + 96, 292, 96, 20)
-                .build());
-        cancelTradeButton = addRenderableWidget(Button.builder(
-                        Component.literal("Cancel trade"),
-                        button -> ClientTradeSender.sendCancel(currentSessionId())
-                )
-                .bounds(OTHER_X, 292, 90, 20)
+        cancelButton = addRenderableWidget(Button.builder(
+                        Component.literal("Cancel"),
+                        button -> ClientTradeSender.sendCancel(sessionId()))
+                .bounds(x + 284, y + LEFT_READY_Y, READY_W, READY_H)
                 .build());
         acceptButton = addRenderableWidget(Button.builder(
-                        Component.literal("Accept invitation"),
-                        button -> ClientTradeSender.sendRespond(currentSessionId(), true)
-                )
-                .bounds(OWN_X, 292, 120, 20)
-                .build());
-        refuseButton = addRenderableWidget(Button.builder(
-                        Component.literal("Refuse"),
-                        button -> ClientTradeSender.sendRespond(currentSessionId(), false)
-                )
-                .bounds(OWN_X + 126, 292, 70, 20)
-                .build());
-        closeButton = addRenderableWidget(Button.builder(
-                        Component.literal("Close"),
-                        button -> this.onClose()
-                )
-                .bounds(OWN_X + 96, 292, 80, 20)
+                        Component.literal("Accept"),
+                        button -> ClientTradeSender.sendRespond(sessionId(), true))
+                .bounds(x + 130, y + LEFT_READY_Y, READY_W, READY_H)
                 .build());
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics);
-        TradeStateSyncPacket snapshot = ClientTradeCache.instance().snapshot();
-        if (snapshot == null) {
-            graphics.drawString(
-                    this.font,
-                    "No trade session.",
-                    OWN_X,
-                    12,
-                    FrGuiUtil.COLOR_MUTED,
-                    false
-            );
-            updateControls(snapshot);
-            super.render(graphics, mouseX, mouseY, partialTick);
-            return;
-        }
-
-        graphics.drawString(
-                this.font,
-                phaseTitle(snapshot),
-                OWN_X,
-                10,
-                FrGuiUtil.COLOR_TITLE,
-                false
-        );
-        graphics.drawString(
-                this.font,
-                "Your offer",
-                OWN_X,
-                24,
-                FrGuiUtil.COLOR_MUTED,
-                false
-        );
-        graphics.drawString(
-                this.font,
-                "Their offer",
-                OTHER_X,
-                24,
-                FrGuiUtil.COLOR_MUTED,
-                false
-        );
-
-        drawPanel(graphics, OWN_X, "You");
-        drawSlots(graphics, OWN_X, snapshot.ownItems(), snapshot.ownAgree());
-        graphics.drawString(
-                this.font,
-                "Money: " + snapshot.ownMoney(),
-                OWN_X + 4,
-                PANEL_Y + PANEL_HEIGHT - 16,
-                FrGuiUtil.COLOR_BODY,
-                false
-        );
-
-        drawPanel(graphics, OTHER_X, "Other");
-        drawSlots(graphics, OTHER_X, snapshot.otherItems(), snapshot.otherAgree());
-        graphics.drawString(
-                this.font,
-                "Money: " + snapshot.otherMoney(),
-                OTHER_X + 4,
-                PANEL_Y + PANEL_HEIGHT - 16,
-                FrGuiUtil.COLOR_BODY,
-                false
-        );
-        graphics.drawString(
-                this.font,
-                "XP: " + snapshot.ownXp(),
-                OWN_X + 4,
-                178 + 20,
-                FrGuiUtil.COLOR_BODY,
-                false
-        );
-        graphics.drawString(
-                this.font,
-                "XP: " + snapshot.otherXp(),
-                OTHER_X + 4,
-                178 + 20,
-                FrGuiUtil.COLOR_BODY,
-                false
-        );
-
-        drawInventory(graphics);
-        graphics.drawString(
-                this.font,
-                statusMessage,
-                OWN_X,
-                276,
-                statusColor,
-                false
-        );
-        updateControls(snapshot);
-        super.render(graphics, mouseX, mouseY, partialTick);
-    }
-
-    private void drawPanel(GuiGraphics graphics, int x, String title) {
-        FrGuiUtil.drawCard(
-                graphics,
-                this.font,
-                x,
-                PANEL_Y,
-                PANEL_WIDTH,
-                PANEL_HEIGHT,
-                title,
-                List.of(),
-                0
-        );
-    }
-
-    private void drawSlots(
-            GuiGraphics graphics,
-            int x,
-            List<ItemStack> items,
-            boolean agree
-    ) {
-        for (int index = 0; index < TradeOfferItemPacket.SLOT_COUNT; index++) {
-            int slotX = x + 8 + index * (SLOT_SIZE + SLOT_GAP);
-            int slotY = PANEL_Y + 26;
-            graphics.fill(
-                    slotX - 1,
-                    slotY - 1,
-                    slotX + SLOT_SIZE + 1,
-                    slotY + SLOT_SIZE + 1,
-                    FrGuiUtil.PANEL_BORDER
-            );
-            graphics.fill(
-                    slotX,
-                    slotY,
-                    slotX + SLOT_SIZE,
-                    slotY + SLOT_SIZE,
-                    FrGuiUtil.PANEL_BACKGROUND
-            );
-            ItemStack stack = items.get(index);
-            if (!stack.isEmpty()) {
-                graphics.renderItem(stack, slotX + 10, slotY + 10);
-                graphics.renderItemDecorations(this.font, stack, slotX + 10, slotY + 10);
-            }
-            if (agree) {
-                graphics.drawString(
-                        this.font,
-                        "AGREED",
-                        x + 4,
-                        PANEL_Y + PANEL_HEIGHT - 36,
-                        FrGuiUtil.COLOR_ACCENT,
-                        false
-                );
-            }
-        }
-    }
-
-    private void drawInventory(GuiGraphics graphics) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null) {
-            return;
-        }
-        for (int row = 0; row < INV_ROWS; row++) {
-            for (int col = 0; col < INV_COLS; col++) {
-                int index = row * INV_COLS + col;
-                int slotX = INV_X + col * INV_SLOT;
-                int slotY = INV_Y + row * INV_SLOT;
-                ItemStack stack = minecraft.player.getInventory().getItem(index);
-                if (!stack.isEmpty()) {
-                    graphics.renderItem(stack, slotX, slotY);
-                    graphics.renderItemDecorations(this.font, stack, slotX, slotY);
-                }
-            }
-        }
+    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
+        int x = leftPos;
+        int y = topPos;
+        graphics.fill(x, y, x + IMAGE_WIDTH, y + IMAGE_HEIGHT, FrGuiUtil.PANEL_BACKGROUND);
+        graphics.fill(x, y, x + IMAGE_WIDTH, y + 1, FrGuiUtil.PANEL_BORDER);
+        graphics.fill(x, y + IMAGE_HEIGHT - 1, x + IMAGE_WIDTH, y + IMAGE_HEIGHT, FrGuiUtil.PANEL_BORDER);
+        graphics.fill(x, y, x + 1, y + IMAGE_HEIGHT, FrGuiUtil.PANEL_BORDER);
+        graphics.fill(x + IMAGE_WIDTH - 1, y, x + IMAGE_WIDTH, y + IMAGE_HEIGHT, FrGuiUtil.PANEL_BORDER);
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0 && handleSlotClick(mouseX, mouseY)) {
-            return true;
+    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
+        TradeStateSyncPacket snapshot = snapshot();
+        int x = leftPos;
+        int y = topPos;
+        graphics.drawString(this.font, phaseTitle(snapshot), x + 8, y + 4, FrGuiUtil.COLOR_TITLE, false);
+        graphics.drawString(this.font, "Your offer", x + LEFT_PANEL_X, y + 8, FrGuiUtil.COLOR_MUTED, false);
+        graphics.drawString(this.font, "Their offer", x + RIGHT_PANEL_X, y + 8, FrGuiUtil.COLOR_MUTED, false);
+        if (snapshot != null) {
+            graphics.drawString(this.font, "Money: " + snapshot.ownMoney(), x + 12, y + 137, FrGuiUtil.COLOR_BODY, false);
+            graphics.drawString(this.font, "Money: " + snapshot.otherMoney(), x + RIGHT_PANEL_X, y + 137, FrGuiUtil.COLOR_BODY, false);
+            graphics.drawString(this.font, "XP: " + snapshot.ownXp(), x + 212, y + 137, FrGuiUtil.COLOR_BODY, false);
+            graphics.drawString(this.font, "XP: " + snapshot.otherXp(), x + 304, y + 137, FrGuiUtil.COLOR_BODY, false);
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        graphics.drawString(this.font, statusMessage, x + 8, y + 118, statusColor, false);
     }
 
     /**
-     * Slot picking: clicking an own offer slot withdraws it; clicking a main
-     * inventory cell offers it into the first free own slot. Pure intention
-     * submission — the server re-validates the source slot and authority.
+     * Draws the authoritative offer projection over the container slot grid:
+     * the first {@link TradeOfferItemPacket#SLOT_COUNT} cells of each region.
+     * The container player-inventory/hotbar slots render via {@code super}
+     * (standard slot rendering); the offer regions are data-only here because
+     * the intent model keeps items in the player's inventory.
      */
-    private boolean handleSlotClick(double mouseX, double mouseY) {
-        TradeStateSyncPacket snapshot = ClientTradeCache.instance().snapshot();
-        if (snapshot == null) {
-            return false;
-        }
-        int phase = snapshot.phase();
-        for (int index = 0; index < TradeOfferItemPacket.SLOT_COUNT; index++) {
-            int slotX = OWN_X + 8 + index * (SLOT_SIZE + SLOT_GAP);
-            int slotY = PANEL_Y + 26;
-            if (within(mouseX, mouseY, slotX, slotY, SLOT_SIZE, SLOT_SIZE)) {
-                if (phase == TradeStateSyncPacket.PHASE_OPEN
-                        || phase == TradeStateSyncPacket.PHASE_LOCKED) {
-                    ClientTradeSender.sendWithdrawItem(currentSessionId(), index);
-                }
-                return true;
-            }
-        }
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null) {
-            return false;
-        }
-        for (int row = 0; row < INV_ROWS; row++) {
-            for (int col = 0; col < INV_COLS; col++) {
-                int index = row * INV_COLS + col;
-                int slotX = INV_X + col * INV_SLOT;
-                int slotY = INV_Y + row * INV_SLOT;
-                if (within(mouseX, mouseY, slotX, slotY, INV_SLOT, INV_SLOT)) {
-                    if ((phase == TradeStateSyncPacket.PHASE_OPEN
-                            || phase == TradeStateSyncPacket.PHASE_LOCKED)
-                            && !minecraft.player.getInventory().getItem(index).isEmpty()) {
-                        int targetSlot = firstFreeOwnSlot(snapshot.ownItems());
-                        if (targetSlot < 0) {
-                            statusMessage = "All four offer slots are full; "
-                                    + "withdraw one first.";
-                            statusColor = FrGuiUtil.COLOR_ERROR;
-                        } else {
-                            ClientTradeSender.sendOfferItem(
-                                    currentSessionId(),
-                                    targetSlot,
-                                    index
-                            );
-                        }
-                    }
-                    return true;
-                }
-            }
-        }
-        return false;
+    @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        renderBackground(graphics);
+        super.render(graphics, mouseX, mouseY, partialTick);
+        drawOfferProjection(graphics);
+        renderTooltip(graphics, mouseX, mouseY);
+        refreshControls(snapshot());
     }
 
-    private static int firstFreeOwnSlot(List<ItemStack> ownItems) {
-        for (int index = 0; index < ownItems.size(); index++) {
-            if (ownItems.get(index).isEmpty()) {
-                return index;
+    private void drawOfferProjection(GuiGraphics graphics) {
+        TradeStateSyncPacket snapshot = snapshot();
+        if (snapshot == null) {
+            return;
+        }
+        drawOfferStacks(graphics, snapshot.ownItems(), leftPos + LEFT_PANEL_X, topPos + LEFT_PANEL_Y, snapshot.ownAgree());
+        drawOfferStacks(graphics, snapshot.otherItems(), leftPos + RIGHT_PANEL_X, topPos + LEFT_PANEL_Y, snapshot.otherAgree());
+    }
+
+    private void drawOfferStacks(
+            GuiGraphics graphics,
+            List<ItemStack> items,
+            int originX,
+            int originY,
+            boolean agreed
+    ) {
+        for (int i = 0; i < items.size() && i < TradeOfferItemPacket.SLOT_COUNT; i++) {
+            int col = i % 9;
+            int row = i / 9;
+            int slotX = originX + col * SLOT_COL;
+            int slotY = originY + row * SLOT_ROW;
+            graphics.fill(slotX - 1, slotY - 1, slotX + 17, slotY + 17, FrGuiUtil.PANEL_BORDER);
+            graphics.fill(slotX, slotY, slotX + 16, slotY + 16, FrGuiUtil.PANEL_BACKGROUND);
+            ItemStack stack = items.get(i);
+            if (!stack.isEmpty()) {
+                graphics.renderItem(stack, slotX, slotY);
+                graphics.renderItemDecorations(this.font, stack, slotX, slotY);
             }
         }
-        return -1;
+        if (agreed) {
+            graphics.drawString(this.font, "READY", originX, originY + 3 * SLOT_ROW + 4, FrGuiUtil.COLOR_ACCENT, false);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // intent submission (server authoritative)
+    // ------------------------------------------------------------------
+
+    private TradeStateSyncPacket snapshot() {
+        return ClientTradeCache.instance().snapshot();
+    }
+
+    private long sessionId() {
+        TradeStateSyncPacket snapshot = snapshot();
+        return snapshot == null ? 0L : snapshot.sessionId();
+    }
+
+    private void toggleReady() {
+        TradeStateSyncPacket snapshot = snapshot();
+        if (snapshot != null
+                && (snapshot.phase() == TradeStateSyncPacket.PHASE_OPEN
+                || snapshot.phase() == TradeStateSyncPacket.PHASE_LOCKED)) {
+            ClientTradeSender.sendAgree(snapshot.sessionId(), !snapshot.ownAgree());
+        }
     }
 
     private void offerMoney() {
-        TradeStateSyncPacket snapshot = ClientTradeCache.instance().snapshot();
-        if (snapshot == null) {
-            return;
-        }
         long amount;
         try {
-            amount = Long.parseLong(amountBox.getValue().trim());
+            amount = Long.parseLong(moneyBox.getValue().trim());
         } catch (NumberFormatException invalid) {
-            statusMessage = "Enter a valid amount (0 clears the offer).";
-            statusColor = FrGuiUtil.COLOR_ERROR;
+            status("Enter a valid amount (0 clears).", FrGuiUtil.COLOR_ERROR);
             return;
         }
         if (amount < 0 || amount > TradeOfferMoneyPacket.MAX_OFFER_AMOUNT) {
-            statusMessage = "Amount out of range.";
-            statusColor = FrGuiUtil.COLOR_ERROR;
+            status("Amount out of range.", FrGuiUtil.COLOR_ERROR);
             return;
         }
-        ClientTradeSender.sendOfferMoney(currentSessionId(), amount);
-        amountBox.setValue("");
-        statusMessage = "Money offer sent.";
-        statusColor = FrGuiUtil.COLOR_ACCENT;
+        ClientTradeSender.sendOfferMoney(sessionId(), amount);
+        moneyBox.setValue("");
+        status("Money offer sent.", FrGuiUtil.COLOR_ACCENT);
     }
 
     private void offerXp() {
-        TradeStateSyncPacket snapshot = ClientTradeCache.instance().snapshot();
-        if (snapshot == null) {
-            return;
-        }
         long amount;
         try {
             amount = Long.parseLong(xpBox.getValue().trim());
         } catch (NumberFormatException invalid) {
-            statusMessage = "Enter a valid XP amount (0 clears the offer).";
-            statusColor = FrGuiUtil.COLOR_ERROR;
+            status("Enter a valid XP amount (0 clears).", FrGuiUtil.COLOR_ERROR);
             return;
         }
         if (amount < 0 || amount > TradeOfferXpPacket.MAX_OFFER_XP) {
-            statusMessage = "XP amount out of range.";
-            statusColor = FrGuiUtil.COLOR_ERROR;
+            status("XP amount out of range.", FrGuiUtil.COLOR_ERROR);
             return;
         }
-        ClientTradeSender.sendOfferXp(currentSessionId(), amount);
+        ClientTradeSender.sendOfferXp(sessionId(), amount);
         xpBox.setValue("");
-        statusMessage = "XP offer sent.";
-        statusColor = FrGuiUtil.COLOR_ACCENT;
+        status("XP offer sent.", FrGuiUtil.COLOR_ACCENT);
     }
 
-    /** Bounded session id from the latest snapshot (0 when absent — the C2S
-     *  packet validates positive ids, so a stale send is a server no-op). */
-    private static long currentSessionId() {
-        TradeStateSyncPacket snapshot = ClientTradeCache.instance().snapshot();
-        return snapshot == null ? 0L : snapshot.sessionId();
+    private void status(String message, int color) {
+        statusMessage = message;
+        statusColor = color;
     }
 
-    private void updateControls(TradeStateSyncPacket snapshot) {
+    private void refreshControls(TradeStateSyncPacket snapshot) {
         if (snapshot == null) {
-            setVisible(amountBox, false);
-            setVisible(xpBox, false);
-            hide(agreeButton, cancelAgreeButton, cancelTradeButton,
-                    acceptButton, refuseButton, closeButton);
+            moneyBox.visible = false;
+            moneyBox.setEditable(false);
+            xpBox.visible = false;
+            xpBox.setEditable(false);
+            readyButton.visible = false;
+            cancelButton.visible = false;
+            acceptButton.visible = false;
             return;
         }
         int phase = snapshot.phase();
@@ -454,73 +270,40 @@ public final class TradeScreen extends Screen {
         boolean terminal = phase == TradeStateSyncPacket.PHASE_COMPLETED
                 || phase == TradeStateSyncPacket.PHASE_CANCELLED;
 
-        setVisible(amountBox, interactive);
-        setVisible(xpBox, interactive);
-        setActive(agreeButton, interactive && !snapshot.ownAgree());
-        setActive(cancelAgreeButton, interactive && snapshot.ownAgree());
-        setActive(cancelTradeButton, interactive || requested);
-        setActive(acceptButton, requested);
-        setActive(refuseButton, requested);
-        setActive(closeButton, terminal);
+        moneyBox.visible = interactive;
+        moneyBox.setEditable(interactive);
+        xpBox.visible = interactive;
+        xpBox.setEditable(interactive);
+        readyButton.visible = interactive;
+        readyButton.active = interactive;
+        readyButton.setMessage(Component.literal(snapshot.ownAgree() ? "Cancel ready" : "Ready"));
+        cancelButton.visible = interactive || requested;
+        cancelButton.active = interactive || requested;
+        acceptButton.visible = requested;
+        acceptButton.active = requested;
+
         if (terminal) {
-            statusMessage = phase == TradeStateSyncPacket.PHASE_COMPLETED
-                    ? "Trade completed."
-                    : "Trade cancelled.";
-            statusColor = phase == TradeStateSyncPacket.PHASE_COMPLETED
-                    ? FrGuiUtil.COLOR_ACCENT
-                    : FrGuiUtil.COLOR_ERROR;
+            status(phase == TradeStateSyncPacket.PHASE_COMPLETED
+                    ? "Trade completed." : "Trade cancelled.",
+                    phase == TradeStateSyncPacket.PHASE_COMPLETED
+                            ? FrGuiUtil.COLOR_ACCENT : FrGuiUtil.COLOR_ERROR);
         }
     }
 
-    private static void setActive(Button button, boolean active) {
-        if (button != null) {
-            button.visible = true;
-            button.active = active;
+    private String phaseTitle(TradeStateSyncPacket snapshot) {
+        if (snapshot == null) {
+            return "No trade session.";
         }
-    }
-
-    private static void setVisible(EditBox box, boolean visible) {
-        if (box != null) {
-            box.visible = visible;
-            box.setEditable(visible);
-        }
-    }
-
-    private static void hide(Button... buttons) {
-        for (Button button : buttons) {
-            if (button != null) {
-                button.visible = false;
-            }
-        }
-    }
-
-    private static boolean within(
-            double mouseX,
-            double mouseY,
-            int x,
-            int y,
-            int width,
-            int height
-    ) {
-        return mouseX >= x && mouseX <= x + width
-                && mouseY >= y && mouseY <= y + height;
-    }
-
-    private static String phaseTitle(TradeStateSyncPacket snapshot) {
-        String base = switch (snapshot.phase()) {
-            case TradeStateSyncPacket.PHASE_REQUESTED -> "Trade request pending";
+        return switch (snapshot.phase()) {
+            case TradeStateSyncPacket.PHASE_REQUESTED -> "Trade request pending — accept or refuse";
             case TradeStateSyncPacket.PHASE_OPEN -> "Trade in progress";
             case TradeStateSyncPacket.PHASE_LOCKED ->
-                    "Both agreed — executing in " + snapshot.countdownSeconds() + "s";
+                    "Both ready — executing in " + snapshot.countdownSeconds() + "s";
             case TradeStateSyncPacket.PHASE_EXECUTING -> "Executing…";
             case TradeStateSyncPacket.PHASE_COMPLETED -> "Trade completed";
             case TradeStateSyncPacket.PHASE_CANCELLED -> "Trade cancelled";
             default -> "Trade";
         };
-        if (snapshot.phase() == TradeStateSyncPacket.PHASE_REQUESTED) {
-            base = base + " — accept or refuse";
-        }
-        return base;
     }
 
     @Override

@@ -153,9 +153,10 @@ public final class ClientNetworkExecutor {
         ensureLogoutCleanup();
         ClientTradeCache.instance().setSnapshot(message);
         ClientTradeCache.instance().clearOwnRequestInFlight();
-        if (message.phase() == TradeStateSyncPacket.PHASE_REQUESTED) {
-            openTradeScreen(message);
-        }
+        // FR-TRADE-003-B: screen opening is now driven by the server-opened
+        // custom MenuType container (see DefaultTradeService.openContainers),
+        // so the plain-Screen auto-open is gone; the cache still feeds the
+        // container screen's display projection.
     }
 
     /**
@@ -170,19 +171,6 @@ public final class ClientNetworkExecutor {
         ensureLogoutCleanup();
         com.fontainerepublic.client.landrights.ClientMyLandRightsCache.instance()
                 .accept(message);
-    }
-
-    private static void openTradeScreen(TradeStateSyncPacket message) {
-        net.minecraft.client.Minecraft minecraft =
-                net.minecraft.client.Minecraft.getInstance();
-        if (minecraft.player == null) {
-            return;
-        }
-        minecraft.execute(() -> {
-            if (minecraft.screen == null) {
-                minecraft.setScreen(new com.fontainerepublic.client.gui.trade.TradeScreen());
-            }
-        });
     }
 
     private static void ensureLogoutCleanup() {

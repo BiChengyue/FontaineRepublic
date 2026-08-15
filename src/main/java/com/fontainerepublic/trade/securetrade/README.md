@@ -19,13 +19,23 @@ server-authoritative state machine.
 - `TradeRules` — dimension/site policy predicate; lists are injected by the
   caller.
 - `TradeMessages` — chat formatting helpers; re-branded to FR.
+- **FR-TRADE-003-B** (container presentation, live in
+  `com.fontainerepublic.common.trade` + `com.fontainerepublic.client.gui.trade`):
+  - `TradeMenuType` / `TradeMenu` — the Secure Trade 54-slot container adapted
+    so the two 27-slot offer regions are <em>phantom display</em> surfaces over
+    the FR intent model (authorized by FR-TRADE-003-A §3, Human 2026-08-15).
+  - `TradeSounds` — the six Secure Trade sound events under the
+    `fontainerepublic` namespace (registered; no audio assets shipped).
+  - `TradeScreen` — the Secure Trade screen adapted to the FR cards + the FR
+    C2S intent surface (money / XP / ready / cancel).
 
 ## What was deliberately NOT copied
 
-- Secure Trade's custom `MenuType` (trade_menu) and `SoundEvent`
-  registrations — importing those synchronized registries would re-create the
-  optional-client (no-FR client join) failure. FR registers no custom menu or
-  sound; the GUI is an adapted `Screen` over the vanilla surface.
+- <del>Secure Trade's custom `MenuType` and `SoundEvent` registrations</del> —
+  this changed: FR-TRADE-003-A §3 (Human decision 2026-08-15) now authorizes a
+  custom `MenuType` + `SoundEvent` because the FR client is required. They are
+  registered in `com.fontainerepublic.common.trade.TradeMenuType` and
+  `TradeSounds`.
 - The independent `TradeSession`/`TradeSessionManager`/journal authority —
   FR keeps one trade authority (the existing `TradeService`).
 - Memory-only escrow / history-before-settlement ordering and overflow drops —
