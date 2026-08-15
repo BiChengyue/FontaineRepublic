@@ -20,18 +20,18 @@ Human 指示：交易功能**直接复用 Secure Trade 模组的 UI 与逻辑**�
 ## 3. 核心约束（不可违背）
 
 1. **服务端权威**：贸易状态、金额、物品、XP、税全由服务端决定；客户端只展示+输入。
-2. **可选客户端**（FR 核心原则，昨晚刚修复的发布阻断）：**不得注册任何自定义
-   Item / MenuType / SoundEvent**（这些是同步注册表，会让无 FR 客户端进不了服）。
-   Secure Trade 原样注册了自定义 MenuType（trade_menu）与 SoundEvent，集成时必须替换。
+2. ~~可选客户端~~ **已由 Human 决策放弃（2026-08-15）**：为复用 Secure Trade 的
+   54 格容器 UI，**允许注册自定义 MenuType + SoundEvent**。这意味着 **FR 客户端变为必需**
+   （服务器与客户端都须装 FR 才能进服）。Item 仍保留 vanilla clock 载体（FR-ITEM-002-A，
+   不动）；服务端权威原则不变。
 
 ## 4. 集成方案
 
 - 把 Secure Trade 的 common + forge 代码复制进 FR（改包名到
   com.fontainerepublic.trade.securetrade.* 或等价，保留 MIT 署名）。
-- **容器/MenuType**：改用原版 MenuType.GENERIC_9x6（54 格）作为贸易容器，
-  用共享的 SimpleContainer(54) 承载双方报价区；客户端拦截菜单打开事件，用
-  改编自 TradeScreen 的自定义屏幕渲染「双 27 格报价区 + 玩家背包」。
-- **去掉自定义 SoundEvent**（用原版音效或静默）。
+- **容器/MenuType**：直接复用 Secure Trade 的 TradeMenuType（自定义 MenuType）+ TradeMenu
+  （共享容器，双 27 格报价区）+ TradeScreen，注册自定义音效（照搬或最小化）。
+  不再走原版 GENERIC_9x6 变通。
 - **接入 FR**：货币腿走 FR EconomyService（含 5% 出钱方税，taxRateBps）；
   身份走 SubjectRegistry（交易双方主体）；审计走 AuditService（交易结算记录）；
   XP 腿用 Secure Trade 的 XPMath（FR 已有 ExperiencePointMath 可对齐）。

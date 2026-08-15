@@ -915,3 +915,36 @@
   （tmp/smoke-trade-003-20260815：协议 v10/30、Ready、ExitCode=0）。
 - 真机测试清单已更新：docs/guide/next-morning-test-sheet.md（新增 XP 交易第 8 条）。
 - develop=origin，HEAD b7e7027。剩余：Level 3 真机回归（待 Human）。
+## 2026-08-15（早）| Human 决策：为 54 格外观放弃无模组进服 + 派发容器 UI
+
+- Human 决策：很看重 Secure Trade 的 54 格容器外观，为此**放弃「无 FR 客户端进服」**
+  原则——允许注册自定义 MenuType + SoundEvent，FR 客户端变为必需。Item 仍保留
+  vanilla clock 载体（FR-ITEM-002-A 不动）。
+- 设计说明 fr-trade-003-a §3/§4 已更新。
+- 已派发：feat/trade-003-b（子代理 8082e1a2，隔离 worktree hub-worktrees/trade-ui），
+  直接照搬 Secure Trade 的 TradeMenuType/TradeMenu/TradeScreen + 音效，接上 FR 既有的
+  TradeService/TradeSession（物品+货币+税+XP+身份+审计）。
+- 待子代理完成后：审查 → 返修 → 合入 develop → 推送 → 更新文档/测试清单。
+- Human 追加：水镜也可设计外观并作为独立物品（放弃无模组进服后无需 clock+NBT+HMAC 变通）。
+- 已派发：feat/item-003-water-mirror（子代理 d64f15e7，隔离 worktree hub-worktrees/water-mirror-item），
+  撤销 FR-ITEM-002-A（时钟载体 + HMAC + MissingMappingsEvent），改为独立自定义物品 + 外观（纹理/模型/lang），
+  简化门禁为 stack.is(FRItems.COMMUNICATOR)。
+- 注意：两个子代理并行（交易 UI 8082e1a2 + 水镜物品 d64f15e7），都改 FontaineRepublic.java（不同区域），
+  合入时需先交易 UI 再水镜物品，注意 auto-merge。
+## 2026-08-15（早）| 两个子代理完成：水镜独立物品 + 交易容器 UI，均合入
+
+- 水镜独立物品（feat/item-003-water-mirror，子代理 d64f15e7，commit e56e26c）：
+  撤销 FR-ITEM-002-A 的「时钟+NBT+HMAC」，改回独立自定义物品 fontainerepublic:communicator
+  + 16x16 占位纹理 + 模型 + lang；删 4 个 HMAC 文件 + 1 个测试；门禁简化为
+  stack.is(FRItems.COMMUNICATOR)；净删约 1100 行。构建 39 任务全绿。审查通过，合入
+  develop（merge b961aaf）。
+- 交易容器 UI（feat/trade-003-b，子代理 8082e1a2，commit 9adaae7）：注册自定义
+  MenuType(fontainerepublic:trade_menu) + 6 个 SoundEvent；照搬 Secure Trade 的
+  TradeMenu(54 格/90 槽)/TradeScreen(AbstractContainerScreen)，报价区改为「幻影只读」
+  （FR 意图模型 vs Secure Trade 托管模型）；协议不 bump（v10/30）；音效已注册未配资产。
+  构建 40 任务全绿。审查通过，合入 develop（merge 730cf77）。
+- 合并后 develop 全量构建通过（39 tasks）+ 专用服务器冒烟通过
+  （tmp/smoke-item-trade-ui-20260815：Ready、ExitCode=0、协议 v10/30）。
+- 说明：FR 客户端现已变为必需（放弃无模组进服）。真机测试清单已更新
+  （docs/guide/next-morning-test-sheet.md）。
+- develop=origin，HEAD 730cf77。剩余：Level 3 真机回归（待 Human）。

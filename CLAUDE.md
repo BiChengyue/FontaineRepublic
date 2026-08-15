@@ -123,32 +123,28 @@ implemented, reviewed, merged into `develop`, and smoke-verified.
 Real-machine Level 3 verification was executed on 2026-08-14
 (docs/ai_recovery/evidence/FR-LEVEL3-FULL-RUNTIME-20260814-REPORT.md). It found
 two release-blocking defects plus several FAIL/PARTIAL items. Both release
-blockers are now fixed, reviewed, built, smoke-verified, merged into `develop`,
-and pushed to origin:
+blockers were fixed, reviewed, built, smoke-verified, merged, and pushed:
 1. mail data loss on clean stop/restart — root cause was the FR-CORE-002 100 ms
    shared durable-commit rate guard silently dropping the mail commit that
    immediately follows an economy commit; fixed with a bounded retry in the mail
    store (merge `c845898`).
-2. no-FR-client join — the custom `fontainerepublic:communicator` item broke
-   registry equality; fixed by FR-ITEM-002-A (vanilla clock carrier + bounded NBT
-   + HMAC-SHA-256 signature + owner binding, persisted HMAC key, legacy id
-   migration via MissingMappingsEvent; merge `dc211d0`).
-A dedicated-server smoke (tmp/smoke-registry-20260814) reached Ready with
-ExitCode=0, protocol v9/29 frozen, and the legacy id remapped cleanly.
+2. no-FR-client join — the custom item broke registry equality. Initially fixed
+   by FR-ITEM-002-A (vanilla clock carrier + HMAC). On 2026-08-15 Human decided
+   to ABANDON the no-FR-client principle to reuse Secure Trade's container UI:
+   the Water Mirror reverted to a standalone custom item (FR-ITEM-003, merge
+   `b961aaf`) and trade gained a custom MenuType + SoundEvents (FR-TRADE-003-B,
+   merge `730cf77`). The FR client is now REQUIRED on both server and client.
+A dedicated-server smoke (tmp/smoke-item-trade-ui-20260815) reached Ready with
+ExitCode=0, protocol v10/30 frozen.
 
 Next:
 
 Remaining before the next release candidate:
-1. (done) communicator right-click-air offhand conflict + deprecation warnings
-   (merge `5c9e12a`).
-2. trade: FR-TRADE-003-A Secure Trade direct integration merged (`808e1b9`) —
-   XP legs, identity, audit, protocol v10/30, SecureTrade MIT helpers. Deferred:
-   the container-backed 54-slot menu (needs a custom MenuType that would break
-   no-FR-client join, so the registry-safe plain TradeScreen + XP is used) and
-   the durable trade journal (/fr trade history placeholder).
-3. re-run real-machine Level 3 regression with Human (mail restart persistence,
-   no-FR client join, /fr communicator issue + restart persistence, offhand
-   right-click, XP trade, crash-window/RCON/old-protocol rejection).
+1. re-run real-machine Level 3 regression with Human (mail restart persistence,
+   FR client join, /fr communicator issue, water mirror as a standalone item,
+   offhand right-click, XP trade, the 54-slot container trade UI,
+   crash-window/RCON/old-protocol rejection).
+2. durable trade journal (/fr trade history) — still a placeholder.
 
 Always read this section before starting work.
 
