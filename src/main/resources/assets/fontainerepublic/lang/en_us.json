@@ -38,5 +38,7 @@
     "fontainerepublic.help.court.verdict": "  /fr court verdict issue <caseId> <outcome> <zoneId> <reasoning> | show <verdictId> - verdicts",
     "fontainerepublic.help.court.review": "  /fr court review request <caseId> <zoneId> | decide <caseId> <zoneId> - review",
     "fontainerepublic.help.institution.title": "institution: institution administration (operator only).",
-    "fontainerepublic.help.institution.restricted": "  Access is restricted to server operators; no command details are listed here."
+    "fontainerepublic.help.institution.restricted": "  Access is restricted to server operators; no command details are listed here.",
+    "fontainerepublic.gui.trade_with": "Trade with %s",
+    "fontainerepublic.gui.partner_offers": "%s offers"
 }

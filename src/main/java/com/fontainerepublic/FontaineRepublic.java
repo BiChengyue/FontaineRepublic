@@ -7,6 +7,9 @@ import com.fontainerepublic.core.module.ModuleRegistry;
 import com.fontainerepublic.core.module.runtime.ModuleState;
 import com.fontainerepublic.core.module.test.TestModule;
 import com.fontainerepublic.common.network.NetworkBootstrap;
+import com.fontainerepublic.common.trade.TradeMenu;
+import com.fontainerepublic.common.trade.TradeMenuType;
+import com.fontainerepublic.common.trade.TradeSounds;
 import com.fontainerepublic.server.command.BankCommand;
 import com.fontainerepublic.server.command.CitizenCommand;
 import com.fontainerepublic.server.command.CommandBootstrap;
@@ -54,7 +57,13 @@ import com.fontainerepublic.server.registry.api.SubjectRegistryService;
 import com.mojang.logging.LogUtils;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.world.flag.FeatureFlags;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.registries.DeferredRegister;
+import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraftforge.registries.RegistryObject;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
@@ -88,6 +97,28 @@ public class FontaineRepublic {
     );
     private final boolean runtimeValidationEnabled =
             Boolean.getBoolean(RUNTIME_VALIDATION_PROPERTY);
+
+    // FR-TRADE-003-B: custom trade container + sound events (Human-authorized
+    // by FR-TRADE-003-A §3 — the FR client is now required, so a custom
+    // MenuType/SoundEvent no longer breaks a no-FR join). The item carrier
+    // stays a vanilla clock (FR-ITEM-002-A, untouched).
+    private static final DeferredRegister<MenuType<?>> MENUS =
+            DeferredRegister.create(ForgeRegistries.MENU_TYPES, MOD_ID);
+    private static final DeferredRegister<SoundEvent> SOUNDS =
+            DeferredRegister.create(ForgeRegistries.SOUND_EVENTS, MOD_ID);
+
+    public static final RegistryObject<MenuType<TradeMenu>> TRADE_MENU =
+            MENUS.register("trade_menu", () -> {
+                MenuType<TradeMenu> type = new MenuType<>(
+                        TradeMenu::new, FeatureFlags.DEFAULT_FLAGS
+                );
+                TradeMenuType.set(type);
+                return type;
+            });
+
+    static {
+        TradeSounds.register((id, sound) -> SOUNDS.register(id.getPath(), () -> sound));
+    }
     private final LoginProvisioningHook loginProvisioningHook =
             new LoginProvisioningHook(this::citizenService, this::economyService);
     private volatile InstitutionPresentationSync institutionPresentationSync;
@@ -96,6 +127,9 @@ public class FontaineRepublic {
         LOGGER.info("[FontaineRepublic] Loading");
         @SuppressWarnings("removal") // Forge 1.20.1 API surface (deprecated for removal on newer JDKs)
         var modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+        // FR-TRADE-003-B: custom menu/sound registries (authorized §3).
+        MENUS.register(modEventBus);
+        SOUNDS.register(modEventBus);
         modEventBus.addListener(this::onCommonSetup);
         // FR-ITEM-002-A: no common DeferredRegister<Item> is registered. The
         // Water Mirror is a vanilla minecraft:clock carrier authenticated by
@@ -126,6 +160,13 @@ public class FontaineRepublic {
      * server never loads any {@code client/} class.
      */
     private void onClientSetup(FMLClientSetupEvent event) {
+        // FR-TRADE-003-B: bind the custom container type to the trade screen.
+        // Runs only on the physical client; the reference resolves lazily so a
+        // dedicated server never loads the screen class.
+        event.enqueueWork(() -> net.minecraft.client.gui.screens.MenuScreens.register(
+                TRADE_MENU.get(),
+                com.fontainerepublic.client.gui.trade.TradeScreen::new
+        ));
         com.fontainerepublic.client.ClientManager.init();
     }
 

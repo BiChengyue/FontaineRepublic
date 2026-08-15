@@ -1,6 +1,7 @@
 package com.fontainerepublic.server.trade.service;
 
 import com.fontainerepublic.common.network.display.TradeStateSyncPacket;
+import com.fontainerepublic.common.trade.TradeMenu;
 import com.fontainerepublic.common.trade.TradeOfferItemPacket;
 import com.fontainerepublic.common.trade.TradeOfferMoneyPacket;
 import com.fontainerepublic.server.audit.api.AuditDraft;
@@ -192,6 +193,9 @@ public final class DefaultTradeService implements TradeService {
             requestCooldownUntil.put(pairKey(actor, target), now + requestCooldownTicks);
         }
         pushToBoth(session);
+        // FR-TRADE-003-B: open the container at REQUESTED so both parties can
+        // accept/refuse (invited) or wait (initiator) in the GUI.
+        openContainers(session);
     }
 
     @Override
@@ -222,6 +226,10 @@ public final class DefaultTradeService implements TradeService {
             );
             sessions.put(sessionId, opened);
             pushToBoth(opened);
+            // FR-TRADE-003-B: open the shared 54-slot container for both
+            // parties once the session is OPEN. The container is display-only
+            // input (phantom offer regions); the service remains authoritative.
+            openContainers(opened);
         } else {
             disposeCancelled(session, "The invited player declined the trade request.");
         }
@@ -773,8 +781,39 @@ public final class DefaultTradeService implements TradeService {
                 clock.getAsLong()
         );
         playerAccess.onlinePlayer(viewer).ifPresent(
-                player -> sendService.trySendToPlayer(player, packet)
+                player -> {
+                    sendService.trySendToPlayer(player, packet);
+                    // Keep any already-open container in sync with the
+                    // authoritative snapshot (phantom offer regions repaint).
+                    if (player.containerMenu instanceof TradeMenu menu) {
+                        menu.applySnapshot(packet);
+                    }
+                }
         );
+    }
+
+    /**
+     * Opens the shared 54-slot container for both parties (FR-TRADE-003-B).
+     * The container is a presentation surface only: the two offer regions are
+     * phantom, and every authoritative value still flows through
+     * {@link TradeStateSyncPacket}. A player who is offline (or whose menu
+     * failed to open) is silently skipped; the command surface remains the
+     * parity path.
+     */
+    private void openContainers(TradeSession session) {
+        playerAccess.onlinePlayer(session.initiator()).ifPresent(initiator -> {
+            playerAccess.onlinePlayer(session.partner()).ifPresent(partner -> {
+                try {
+                    TradeMenu.openForPlayers(initiator, partner, 0, 0);
+                } catch (RuntimeException failure) {
+                    LOGGER.warn(
+                            "[Trade] Session {} container open failed: {}",
+                            session.sessionId(),
+                            failure.getMessage()
+                    );
+                }
+            });
+        });
     }
 
     private int countdownSeconds(TradeSession session) {
