@@ -1,7 +1,6 @@
 package com.fontainerepublic.server.landclaim.service;
 
-import com.fontainerepublic.common.item.CommunicatorAuthenticator;
-import com.fontainerepublic.server.communicator.CommunicatorAuthority;
+import com.fontainerepublic.common.item.FRItems;
 import com.fontainerepublic.server.landclaim.api.ServerLandClaimPlayerAccess;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -47,12 +46,8 @@ public final class LandClaimServerPlayerAccess implements ServerLandClaimPlayerA
         if (player.isEmpty()) {
             return false;
         }
-        CommunicatorAuthenticator authenticator = CommunicatorAuthority.authenticator();
-        if (authenticator == null) {
-            return false;
-        }
-        return authenticator.authenticate(player.get().getMainHandItem(), playerId)
-                || authenticator.authenticate(player.get().getOffhandItem(), playerId);
+        return player.get().getMainHandItem().is(FRItems.COMMUNICATOR.get())
+                || player.get().getOffhandItem().is(FRItems.COMMUNICATOR.get());
     }
 
     @Override

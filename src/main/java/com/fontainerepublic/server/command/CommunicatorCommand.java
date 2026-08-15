@@ -1,7 +1,6 @@
 package com.fontainerepublic.server.command;
 
-import com.fontainerepublic.common.item.CommunicatorAuthenticator;
-import com.fontainerepublic.common.item.CommunicatorIssuer;
+import com.fontainerepublic.common.item.FRItems;
 import com.fontainerepublic.server.communicator.CommunicatorAuthority;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -17,19 +16,17 @@ import org.slf4j.Logger;
 import java.util.UUID;
 
 /**
- * Scoped Water Mirror issuance adapter (FR-ITEM-002-A §5).
+ * Scoped Water Mirror issuance adapter (FR-ITEM-003).
  *
- * <p>{@code /fr communicator issue <target>} issues one signed vanilla
- * {@code minecraft:clock} Water Mirror carrier to a target player. The target
- * is a canonical UUID or the exact game name of an online player. Issuance is
- * restricted to the real local dedicated-server console or the configured
- * Hydro Archon player ({@link CommunicatorAuthority#isIssuanceAuthorized});
- * the {@code /give ... fontainerepublic:communicator} path is retired.</p>
- *
- * <p>The command generates a fresh {@code DeviceId}, signs the canonical
- * fields with the server-only key, writes presentation NBT and creates one
- * carrier. The signing key material is never exposed; only an SHA-256 key
- * digest is logged for diagnostics (FR-ITEM-002-A §10).</p>
+ * <p>{@code /fr communicator issue <target>} gives one Message Water Mirror to
+ * a target player. The target is a canonical UUID or the exact game name of an
+ * online player. Issuance is restricted to the real local dedicated-server
+ * console or the configured Hydro Archon player
+ * ({@link CommunicatorAuthority#isIssuanceAuthorized}); this is equivalent to
+ * {@code /give <target> fontainerepublic:communicator} but keeps the scoped
+ * authorization boundary. The Water Mirror is an ordinary unstackable item -
+ * no signature, device id or owner binding is written (the FR-ITEM-002-A
+ * carrier mechanism is removed).</p>
  */
 public final class CommunicatorCommand {
 
@@ -56,13 +53,6 @@ public final class CommunicatorCommand {
                             + "console or the configured Hydro Archon may issue one."
             );
         }
-        CommunicatorAuthenticator authenticator = CommunicatorAuthority.authenticator();
-        if (authenticator == null) {
-            return CommandFeedback.failure(
-                    source,
-                    "FontaineRepublic Water Mirror issuance is unavailable."
-            );
-        }
         String target = StringArgumentType.getString(context, "target");
         ServerPlayer targetPlayer = resolveTarget(source, target);
         if (targetPlayer == null) {
@@ -72,37 +62,25 @@ public final class CommunicatorCommand {
                             + "' is not a canonical UUID or an online player."
             );
         }
-        try {
-            ItemStack carrier = CommunicatorIssuer.issue(authenticator, targetPlayer.getUUID());
-            if (carrier.isEmpty()) {
-                return CommandFeedback.failure(source, "Water Mirror issuance failed.");
-            }
-            if (!targetPlayer.getInventory().add(carrier)) {
-                return CommandFeedback.failure(
-                        source,
-                        "Water Mirror issuance failed: " + targetPlayer.getName().getString()
-                                + " has no inventory space."
-                );
-            }
-            LOGGER.info(
-                    "[Communicator] Water Mirror issued to {} ({}) by {}; keyDigest={}",
-                    targetPlayer.getName().getString(),
-                    targetPlayer.getUUID(),
-                    source.getTextName(),
-                    authenticator.activeKeyDigest()
-            );
-            return CommandFeedback.success(
-                    source,
-                    "Issued one Message Water Mirror (传讯水镜) to "
-                            + targetPlayer.getName().getString() + "."
-            );
-        } catch (RuntimeException failure) {
-            LOGGER.error("[Communicator] Water Mirror issuance failed", failure);
+        ItemStack communicator = new ItemStack(FRItems.COMMUNICATOR.get());
+        if (!targetPlayer.getInventory().add(communicator)) {
             return CommandFeedback.failure(
                     source,
-                    "Water Mirror issuance failed; nothing was issued."
+                    "Water Mirror issuance failed: " + targetPlayer.getName().getString()
+                            + " has no inventory space."
             );
         }
+        LOGGER.info(
+                "[Communicator] Water Mirror issued to {} ({}) by {}",
+                targetPlayer.getName().getString(),
+                targetPlayer.getUUID(),
+                source.getTextName()
+        );
+        return CommandFeedback.success(
+                source,
+                "Issued one Message Water Mirror (传讯水镜) to "
+                        + targetPlayer.getName().getString() + "."
+        );
     }
 
     private static ServerPlayer resolveTarget(CommandSourceStack source, String target) {
