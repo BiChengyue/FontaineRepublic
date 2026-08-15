@@ -82,7 +82,7 @@ public final class MailScreen extends Screen {
                             ClientMailSender.requestList(); })
                 .bounds(PANEL_X, 8, 56, 18).build());
         composeButton = addRenderableWidget(Button.builder(Component.literal("Compose"),
-                        b -> { compose = true; reading = false; })
+                        b -> { compose = true; reading = false; renderWidgets(); })
                 .bounds(PANEL_X + 62, 8, 56, 18).build());
         readButton = addRenderableWidget(Button.builder(Component.literal("Read"),
                         b -> openRead())
