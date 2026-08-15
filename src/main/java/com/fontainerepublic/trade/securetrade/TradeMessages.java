@@ -6,12 +6,9 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
- * Trade chat formatting (FR-TRADE-003-A).
- *
- * <p>Adapted from Secure Trade's {@code TradeMessages} (MIT, Copyright (c)
- * 2026 Secure Trade Mod Authors). The prefix was changed to the FR
- * communicator branding; the send helpers and colour conventions are
- * preserved.</p>
+ * Verbatim port of Navielon/SecureTrade's {@code TradeMessages} (MIT,
+ * Copyright (c) 2026 Secure Trade Mod Authors; upstream commit
+ * {@code add98b377ffc39e5d73789a874a08c5e369790ce}).
  */
 public final class TradeMessages {
     private TradeMessages() {
@@ -39,7 +36,7 @@ public final class TradeMessages {
 
     public static MutableComponent format(Component message, ChatFormatting color) {
         return Component.empty()
-                .append(Component.literal("Trade").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
+                .append(Component.literal("Secure Trade").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
                 .append(Component.literal(" | ").withStyle(ChatFormatting.DARK_GRAY))
                 .append(message.copy().withStyle(color));
     }

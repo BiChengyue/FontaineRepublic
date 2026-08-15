@@ -417,7 +417,7 @@ public final class CommandFoundationTestMain {
                     || fileName.equals("HelpCommand.java")
                     || fileName.equals("LandCommand.java")
                     || fileName.equals("CommunicatorCommand.java")
-                    || fileName.equals("TradeCommand.java")) {
+                    || fileName.equals("SecureTradeCommand.java")) {
                 continue;
             }
             check(
@@ -425,7 +425,7 @@ public final class CommandFoundationTestMain {
                     "Command argument parsing is only permitted in "
                             + "FrameworkAdminCommand/MoneyCommand/BankCommand/"
                             + "CitizenCommand/HelpCommand/LandCommand/"
-                            + "CommunicatorCommand/TradeCommand: "
+                            + "CommunicatorCommand/SecureTradeCommand: "
                             + file.getFileName()
             );
         }

@@ -1,25 +1,22 @@
 package com.fontainerepublic.trade.securetrade;
 
+import com.fontainerepublic.trade.securetrade.platform.Services;
+
 import java.util.List;
 
 /**
- * Dimension/site policy helpers (FR-TRADE-003-A).
- *
- * <p>Adapted from Secure Trade's {@code TradeRules} (MIT, Copyright (c) 2026
- * Secure Trade Mod Authors). Unlike the upstream service-loader design, the
- * allowed/blocked dimension lists are passed in by the server-authoritative
- * caller, so the trade service remains the single authority.</p>
+ * Verbatim port of Navielon/SecureTrade's {@code TradeRules} (MIT,
+ * Copyright (c) 2026 Secure Trade Mod Authors; upstream commit
+ * {@code add98b377ffc39e5d73789a874a08c5e369790ce}).
  */
 public final class TradeRules {
     private TradeRules() {
     }
 
-    /** True when the dimension is permitted by the given policy lists. */
-    public static boolean isDimensionAllowed(
-            String dimensionId,
-            List<String> allowed,
-            List<String> blocked
-    ) {
+    public static boolean isDimensionAllowed(String dimensionId) {
+        List<String> allowed = Services.PLATFORM.getAllowedDimensions();
+        List<String> blocked = Services.PLATFORM.getBlockedDimensions();
+
         if (allowed != null && !allowed.isEmpty()) {
             return allowed.contains(dimensionId);
         }
