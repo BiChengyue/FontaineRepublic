@@ -6,6 +6,7 @@ import com.fontainerepublic.core.DataManager;
 import com.fontainerepublic.core.module.ModuleRegistry;
 import com.fontainerepublic.core.module.runtime.ModuleState;
 import com.fontainerepublic.core.module.test.TestModule;
+import com.fontainerepublic.common.item.FRItems;
 import com.fontainerepublic.common.network.NetworkBootstrap;
 import com.fontainerepublic.server.command.BankCommand;
 import com.fontainerepublic.server.command.CitizenCommand;
@@ -41,7 +42,6 @@ import com.fontainerepublic.server.landclaim.api.LandClaimService;
 import com.fontainerepublic.server.mail.MailModule;
 import com.fontainerepublic.server.mail.api.MailService;
 import com.fontainerepublic.server.network.NetworkRuntimeModule;
-import com.fontainerepublic.server.communicator.CommunicatorAuthority;
 import com.fontainerepublic.server.parliament.ParliamentCommand;
 import com.fontainerepublic.server.parliament.ParliamentModule;
 import com.fontainerepublic.server.parliament.api.ParliamentService;
@@ -97,11 +97,11 @@ public class FontaineRepublic {
         @SuppressWarnings("removal") // Forge 1.20.1 API surface (deprecated for removal on newer JDKs)
         var modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         modEventBus.addListener(this::onCommonSetup);
-        // FR-ITEM-002-A: no common DeferredRegister<Item> is registered. The
-        // Water Mirror is a vanilla minecraft:clock carrier authenticated by
-        // server-side NBT + HMAC, so a Forge client without FontaineRepublic
-        // can join (no custom item in the server registry snapshot).
-        MinecraftForge.EVENT_BUS.addListener(this::onMissingMappings);
+        // FR-ITEM-003: re-register the independent custom Message Water Mirror
+        // item. The FR client is now required (no-mod-client join is dropped),
+        // so the vanilla-clock HMAC carrier (FR-ITEM-002-A) is removed and the
+        // ordinary unstackable item is registered here on the common event bus.
+        FRItems.ITEMS.register(modEventBus);
         MinecraftForge.EVENT_BUS.addListener(this::onServerAboutToStart);
         MinecraftForge.EVENT_BUS.addListener(this::onServerStarting);
         MinecraftForge.EVENT_BUS.addListener(this::onServerStopping);
@@ -197,47 +197,12 @@ public class FontaineRepublic {
         LOGGER.info("[FontaineRepublic] Core initialized");
     }
 
-    /**
-     * FR-ITEM-002-A §9 Option A (Alpha invalidation/reissue): remap the removed
-     * {@code fontainerepublic:communicator} item id to the vanilla
-     * {@code minecraft:clock} carrier so existing worlds/player-data decode
-     * instead of failing registry validation. Remapped stacks become ordinary
-     * unsigned clocks and therefore fail device authentication — they never
-     * become authoritative Water Mirrors. Registered on the common event bus
-     * as a server-side world-load migration only; it is not a client authority
-     * hook.
-     */
-    private void onMissingMappings(
-            net.minecraftforge.registries.MissingMappingsEvent event
-    ) {
-        for (net.minecraftforge.registries.MissingMappingsEvent.Mapping<net.minecraft.world.item.Item> mapping
-                : event.getMappings(net.minecraft.core.registries.Registries.ITEM, MOD_ID)) {
-            if ("fontainerepublic:communicator".equals(mapping.getKey().toString())) {
-                net.minecraft.world.item.Item clock = net.minecraft.world.item.Items.CLOCK;
-                try {
-                    mapping.remap(clock);
-                    LOGGER.warn(
-                            "[FontaineRepublic] Remapped legacy fontainerepublic:communicator "
-                                    + "to minecraft:clock (unsigned Water Mirror invalidation)");
-                } catch (RuntimeException remapFailed) {
-                    LOGGER.error(
-                            "[FontaineRepublic] Failed to remap legacy communicator id",
-                            remapFailed
-                    );
-                }
-            }
-        }
-    }
-
     private void onServerAboutToStart(ServerAboutToStartEvent event) {
         coreManager.preValidate();
     }
 
     private void onServerStarting(ServerStartingEvent event) {
         DataManager.init(event.getServer());
-        // FR-ITEM-002-A: bootstrap the server-only Water Mirror HMAC key map
-        // from the persisted key (created + durably persisted on first run).
-        CommunicatorAuthority.authenticator(CommunicatorAuthority.loadOrCreateKey());
         coreManager.startRuntime();
         bindSubjectRegistryPlayerData();
         bindCitizenServices();

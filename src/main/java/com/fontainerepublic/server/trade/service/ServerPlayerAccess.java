@@ -1,7 +1,6 @@
 package com.fontainerepublic.server.trade.service;
 
-import com.fontainerepublic.common.item.CommunicatorAuthenticator;
-import com.fontainerepublic.server.communicator.CommunicatorAuthority;
+import com.fontainerepublic.common.item.FRItems;
 import com.fontainerepublic.server.trade.api.ServerTradePlayerAccess;
 import com.fontainerepublic.server.trade.xp.ExperiencePointMath;
 import net.minecraft.network.chat.Component;
@@ -18,9 +17,9 @@ import java.util.UUID;
 /**
  * Production server player surface of the trade module (FR-TRADE-001-A
  * §4/§5): resolves players through the live server, enforces the server-side
- * Water Mirror gate (main or off hand carries a signed vanilla clock carrier —
- * the authoritative HMAC + owner check, independent of any {@code client/}
- * class), touches the real inventories, and sends server chat feedback.
+ * Water Mirror gate (main or off hand carries the communicator item —
+ * independent of any {@code client/} class), touches the real inventories,
+ * and sends server chat feedback.
  * Inventory indices are the 36 main slots ({@code 0..35}); armor and off-hand
  * slots are never offered.
  */
@@ -47,12 +46,8 @@ public final class ServerPlayerAccess implements ServerTradePlayerAccess {
         if (player.isEmpty()) {
             return false;
         }
-        CommunicatorAuthenticator authenticator = CommunicatorAuthority.authenticator();
-        if (authenticator == null) {
-            return false;
-        }
-        return authenticator.authenticate(player.get().getMainHandItem(), playerId)
-                || authenticator.authenticate(player.get().getOffhandItem(), playerId);
+        return player.get().getMainHandItem().is(FRItems.COMMUNICATOR.get())
+                || player.get().getOffhandItem().is(FRItems.COMMUNICATOR.get());
     }
 
     @Override

@@ -94,8 +94,8 @@ public final class CommunicatorInteraction {
      *
      * <p>FR-ITEM-002-A §8 / Level-3 offhand-conflict fix: vanilla fires
      * {@code RightClickEmpty} only while the clicked hand's stack is empty.
-     * Because the communicator is a non-empty vanilla {@code minecraft:clock}
-     * (no vanilla {@code use} action), a pure air right-click with it in the
+     * Because the communicator is a non-empty custom item (no vanilla
+     * {@code use} action), a pure air right-click with it in the
      * main hand instead fires {@code RightClickItem}, and when a usable item
      * (shield / torch) sits in the offhand the offhand {@code use} would
      * otherwise consume the click and silently suppress the communicator. This

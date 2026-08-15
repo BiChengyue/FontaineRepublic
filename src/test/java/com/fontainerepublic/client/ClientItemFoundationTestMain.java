@@ -8,15 +8,13 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Dependency-free FR-ITEM-002 validation (Level 1-2).
+ * Dependency-free FR-ITEM-003 validation (Level 1-2).
  *
- * <p>Covers the vanilla-clock carrier contract (carrier item id, device NBT
- * tag, schema/kind constants, CustomModelData), the right-click interaction
- * pre-fill helper, and source-level assertions that no
- * {@code DeferredRegister<Item>} custom item remains and that the common item
- * package references no client classes. The HMAC authentication itself is
- * validated by {@code CommunicatorCarrierFoundationTestMain}; the UI gate and
- * live item registry are verified at Level 3 real-client.</p>
+ * <p>Covers the custom communicator item contract (registry id/path, display
+ * name) and source-level assertions that the {@code DeferredRegister<Item>}
+ * custom item is back (reversing FR-ITEM-002-A's removal) and that the common
+ * item package references no client classes. The UI gate and live item
+ * registry are verified at Level 3 real-client.</p>
  */
 public final class ClientItemFoundationTestMain {
 
@@ -24,60 +22,52 @@ public final class ClientItemFoundationTestMain {
     }
 
     public static void main(String[] args) throws Exception {
-        testCarrierConstants();
-        testNoCustomItemRemains();
+        testItemConstants();
+        testCustomItemIsRegistered();
         testPrefillTargetName();
         testLandRightClickCancelsBlockInteraction();
         testMainHandAirRightClickClaimsItemUse();
         testSideIsolationSourceScan();
         System.out.println(
-                "[FR-ITEM-002] Vanilla-clock carrier + UI gate foundation validation passed");
+                "[FR-ITEM-003] Custom communicator item + UI gate foundation validation passed");
     }
 
     // ------------------------------------------------------------------
-    // 1. carrier constants (vanilla clock + device NBT contract)
+    // 1. item constants (custom communicator item)
     // ------------------------------------------------------------------
 
-    private static void testCarrierConstants() {
-        check("clock".equals(FRItemIds.CARRIER_ITEM_ID),
-                "carrier item id is the vanilla clock");
-        check("minecraft:clock".equals(FRItemIds.CARRIER_ITEM_REGISTRY_NAME),
-                "carrier registry name is minecraft:clock");
-        check("FontaineRepublicDevice".equals(FRItemIds.DEVICE_TAG),
-                "device NBT tag is FontaineRepublicDevice");
-        check(FRItemIds.SCHEMA_VERSION == 1, "device schema version is 1");
-        check("message_water_mirror".equals(FRItemIds.DEVICE_KIND),
-                "device kind is message_water_mirror");
-        check(FRItemIds.CUSTOM_MODEL_DATA == 1, "custom model data is 1");
-        check(FRItemIds.SIGNATURE_LENGTH == 32,
-                "device signature is 32 bytes (HMAC-SHA-256)");
-        check(FRItemIds.MAX_KEY_ID_LENGTH == 32, "KeyId max length is 32");
+    private static void testItemConstants() {
+        check("communicator".equals(FRItemIds.COMMUNICATOR_ID),
+                "communicator item id is 'communicator'");
+        check("fontainerepublic:communicator".equals(FRItemIds.COMMUNICATOR_REGISTRY_NAME),
+                "communicator registry name is fontainerepublic:communicator");
+        check("fontainerepublic".equals(FRItemIds.COMMUNICATOR_ITEM.getNamespace()),
+                "communicator item namespace is fontainerepublic");
+        check("communicator".equals(FRItemIds.COMMUNICATOR_ITEM.getPath()),
+                "communicator item path is communicator");
+        check("传讯水镜".equals(FRItemIds.DISPLAY_NAME),
+                "display name is 传讯水镜");
     }
 
     // ------------------------------------------------------------------
-    // 2. no custom DeferredRegister<Item> remains (the release blocker)
+    // 2. the custom DeferredRegister<Item> is registered again (reversing
+    //    FR-ITEM-002-A's removal)
     // ------------------------------------------------------------------
 
-    private static void testNoCustomItemRemains() throws Exception {
+    private static void testCustomItemIsRegistered() throws Exception {
         Path root = Path.of(System.getProperty("fontainerepublic.projectDir", "."))
                 .toAbsolutePath().normalize();
-        Path removed = root.resolve(
+        Path items = root.resolve(
                 "src/main/java/com/fontainerepublic/common/item/FRItems.java");
-        check(!Files.exists(removed), "FRItems.java (DeferredRegister<Item>) is removed");
+        check(Files.exists(items), "FRItems.java (DeferredRegister<Item>) is present");
 
-        Path commonItem = root.resolve("src/main/java/com/fontainerepublic/common/item");
-        boolean foundDeferredItem = false;
-        try (var files = Files.walk(commonItem)) {
-            for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
-                String source = Files.readString(file, StandardCharsets.UTF_8);
-                if (source.contains("DeferredRegister<Item>")
-                        || source.contains("ForgeRegistries.ITEMS")) {
-                    foundDeferredItem = true;
-                }
-            }
-        }
-        check(!foundDeferredItem,
-                "no DeferredRegister<Item> / ForgeRegistries.ITEMS registration remains in common/item");
+        String source = Files.readString(items, StandardCharsets.UTF_8);
+        check(source.contains("DeferredRegister<Item>"),
+                "FRItems.java declares a DeferredRegister<Item>");
+        check(source.contains("ForgeRegistries.ITEMS"),
+                "FRItems.java targets ForgeRegistries.ITEMS");
+        check(source.contains("FRItemIds.COMMUNICATOR_ID"),
+                "FRItems.java registers under FRItemIds.COMMUNICATOR_ID");
     }
 
     // ------------------------------------------------------------------
@@ -161,7 +151,7 @@ public final class ClientItemFoundationTestMain {
     }
 
     // ------------------------------------------------------------------
-    // 6. FR-ITEM-002 offhand-conflict fix: the main-hand communicator's air
+    // 6. offhand-conflict fix: the main-hand communicator's air
     //    right-click must cancel RightClickItem with SUCCESS (so a usable
     //    offhand item cannot steal priority) and open the FR main menu.
     // ------------------------------------------------------------------
